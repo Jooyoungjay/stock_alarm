@@ -5,6 +5,45 @@ const alphaVantageUrl = 'https://www.alphavantage.co/query';
 
 const defaultProviders = ['naver', 'stooq', 'alphavantage', 'yahoo'];
 
+export async function fetchHistoricalHighSince(symbol, startDate, options = {}) {
+  const providers = normalizeProviders(options.providers);
+  const start = normalizeHistoricalDate(startDate);
+  const end = normalizeHistoricalDate(options.endDate || options.now || new Date());
+  const errors = [];
+
+  if (start > end) {
+    throw new Error('구매일은 오늘보다 이후일 수 없습니다.');
+  }
+
+  for (const provider of providers) {
+    if (shouldSkipHistoricalProvider(provider, symbol)) {
+      continue;
+    }
+
+    try {
+      if (provider === 'naver') {
+        return await fetchNaverHistoricalHigh(symbol, start, end, options);
+      }
+
+      if (provider === 'stooq') {
+        return await fetchStooqHistoricalHigh(symbol, start, end, options);
+      }
+
+      if (provider === 'yahoo') {
+        return await fetchYahooHistoricalHigh(symbol, start, end, options);
+      }
+    } catch (error) {
+      errors.push(`${provider}: ${error.message}`);
+    }
+  }
+
+  if (!errors.length) {
+    throw new Error('구매일 이후 최고가 조회 실패: 사용할 수 있는 일봉 provider가 없습니다.');
+  }
+
+  throw new Error(`구매일 이후 최고가 조회 실패: ${errors.join(' | ')}`);
+}
+
 export async function fetchQuote(symbol, options = {}) {
   const providers = normalizeProviders(options.providers);
   const errors = [];
@@ -60,6 +99,22 @@ function shouldSkipProvider(provider, symbol, options, providers) {
   }
 
   return false;
+}
+
+function shouldSkipHistoricalProvider(provider, symbol) {
+  if (provider === 'naver') {
+    return !isKoreanStockSymbol(symbol);
+  }
+
+  if (provider === 'stooq') {
+    return isKoreanStockSymbol(symbol);
+  }
+
+  if (provider === 'yahoo') {
+    return isKoreanStockSymbol(symbol);
+  }
+
+  return true;
 }
 
 export function normalizeProviders(value) {
@@ -141,6 +196,35 @@ export function parseStooqCsv(content, requestedSymbol) {
   };
 }
 
+export function parseStooqHistoricalCsv(content, requestedSymbol) {
+  const lines = String(content || '')
+    .trim()
+    .split(/\r?\n/)
+    .filter(Boolean);
+
+  if (lines.length < 2) {
+    throw new Error('Stooq 일봉 응답이 비어 있습니다.');
+  }
+
+  const headers = parseCsvLine(lines[0]);
+  const rows = lines.slice(1).map((line) => {
+    const values = parseCsvLine(line);
+    const row = Object.fromEntries(headers.map((header, index) => [header, values[index]]));
+
+    return {
+      date: row.Date,
+      high: Number(row.High)
+    };
+  });
+
+  return pickHighestDailyPrice(rows, {
+    symbol: requestedSymbol,
+    currency: '',
+    exchange: 'Stooq',
+    provider: 'stooq'
+  });
+}
+
 export function parseNaverQuote(payload, requestedSymbol) {
   const data = payload?.result?.areas?.flatMap((area) => area.datas || [])?.[0];
   const price = Number(data?.nv);
@@ -159,6 +243,50 @@ export function parseNaverQuote(payload, requestedSymbol) {
     provider: 'naver',
     regularMarketTime: payload?.result?.time ? new Date(payload.result.time).toISOString() : null
   };
+}
+
+export function parseNaverDailyChart(content, requestedSymbol) {
+  const rows = [];
+  const rowPattern =
+    /\[\s*['"]?(\d{8})['"]?\s*,\s*([0-9.]+)\s*,\s*([0-9.]+)\s*,\s*([0-9.]+)\s*,\s*([0-9.]+)/g;
+  let match = rowPattern.exec(String(content || ''));
+
+  while (match) {
+    rows.push({
+      date: toDashedDate(match[1]),
+      high: Number(match[3])
+    });
+    match = rowPattern.exec(String(content || ''));
+  }
+
+  return pickHighestDailyPrice(rows, {
+    symbol: requestedSymbol,
+    currency: 'KRW',
+    exchange: 'Naver Finance',
+    provider: 'naver'
+  });
+}
+
+export function parseYahooHistoricalChart(payload, requestedSymbol) {
+  if (payload?.chart?.error) {
+    throw new Error(payload.chart.error.description || 'Yahoo 일봉 조회 오류');
+  }
+
+  const result = payload?.chart?.result?.[0];
+  const timestamps = result?.timestamp || [];
+  const quote = result?.indicators?.quote?.[0] || {};
+  const highs = quote.high || [];
+  const rows = timestamps.map((timestamp, index) => ({
+    date: new Date(Number(timestamp) * 1000).toISOString().slice(0, 10),
+    high: Number(highs[index])
+  }));
+
+  return pickHighestDailyPrice(rows, {
+    symbol: requestedSymbol,
+    currency: result?.meta?.currency || '',
+    exchange: result?.meta?.fullExchangeName || result?.meta?.exchangeName || 'Yahoo',
+    provider: 'yahoo'
+  });
 }
 
 export function parseAlphaVantageQuote(payload, requestedSymbol) {
@@ -189,6 +317,41 @@ export function parseAlphaVantageQuote(payload, requestedSymbol) {
       ? new Date(`${quote['07. latest trading day']}T00:00:00Z`).toISOString()
       : null
   };
+}
+
+async function fetchNaverHistoricalHigh(symbol, start, end, options = {}) {
+  const naverSymbol = toNaverSymbol(symbol);
+  const url = new URL('https://api.finance.naver.com/siseJson.naver');
+  url.searchParams.set('symbol', naverSymbol);
+  url.searchParams.set('requestType', '1');
+  url.searchParams.set('startTime', compactDate(start));
+  url.searchParams.set('endTime', compactDate(end));
+  url.searchParams.set('timeframe', 'day');
+  const content = await fetchText(url, options);
+
+  return parseNaverDailyChart(content, symbol);
+}
+
+async function fetchStooqHistoricalHigh(symbol, start, end, options = {}) {
+  const stooqSymbol = toStooqSymbol(symbol);
+  const url = new URL('https://stooq.com/q/d/l/');
+  url.searchParams.set('s', stooqSymbol);
+  url.searchParams.set('d1', compactDate(start));
+  url.searchParams.set('d2', compactDate(end));
+  url.searchParams.set('i', 'd');
+  const content = await fetchText(url, options);
+
+  return parseStooqHistoricalCsv(content, symbol);
+}
+
+async function fetchYahooHistoricalHigh(symbol, start, end, options = {}) {
+  const url = new URL(`https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(symbol)}`);
+  url.searchParams.set('period1', String(toUnixSeconds(start)));
+  url.searchParams.set('period2', String(toUnixSeconds(addDays(end, 1))));
+  url.searchParams.set('interval', '1d');
+  const payload = await fetchJson(url, options);
+
+  return parseYahooHistoricalChart(payload, symbol);
 }
 
 async function fetchNaverQuote(symbol, options = {}) {
@@ -270,6 +433,79 @@ async function fetchText(url, options = {}) {
   }
 
   return response.text();
+}
+
+function pickHighestDailyPrice(rows, meta) {
+  const validRows = rows.filter((row) => Number.isFinite(Number(row.high)) && Number(row.high) > 0);
+
+  if (!validRows.length) {
+    throw new Error(`일봉 고가 정보를 찾을 수 없습니다: ${meta.symbol}`);
+  }
+
+  const best = validRows.reduce((highest, row) =>
+    Number(row.high) > Number(highest.high) ? row : highest
+  );
+
+  return {
+    symbol: meta.symbol,
+    highPrice: Number(best.high),
+    highPriceAt: toDateIso(best.date),
+    currency: meta.currency || '',
+    exchange: meta.exchange || '',
+    provider: meta.provider || '',
+    points: validRows.length
+  };
+}
+
+function normalizeHistoricalDate(value) {
+  if (value instanceof Date) {
+    return value.toISOString().slice(0, 10);
+  }
+
+  const raw = String(value || '').trim();
+  const match = raw.match(/^(\d{4})-?(\d{2})-?(\d{2})/);
+
+  if (!match) {
+    throw new Error('구매일 형식이 올바르지 않습니다.');
+  }
+
+  const dashed = `${match[1]}-${match[2]}-${match[3]}`;
+  const parsed = new Date(`${dashed}T00:00:00.000Z`);
+
+  if (!Number.isFinite(parsed.getTime()) || parsed.toISOString().slice(0, 10) !== dashed) {
+    throw new Error('구매일 형식이 올바르지 않습니다.');
+  }
+
+  return dashed;
+}
+
+function compactDate(value) {
+  return normalizeHistoricalDate(value).replaceAll('-', '');
+}
+
+function toDashedDate(value) {
+  const raw = String(value || '').trim();
+  const match = raw.match(/^(\d{4})(\d{2})(\d{2})$/);
+
+  if (!match) {
+    throw new Error('일봉 날짜 형식이 올바르지 않습니다.');
+  }
+
+  return `${match[1]}-${match[2]}-${match[3]}`;
+}
+
+function toDateIso(value) {
+  return `${normalizeHistoricalDate(value)}T00:00:00.000Z`;
+}
+
+function addDays(value, days) {
+  const date = new Date(`${normalizeHistoricalDate(value)}T00:00:00.000Z`);
+  date.setUTCDate(date.getUTCDate() + days);
+  return date.toISOString().slice(0, 10);
+}
+
+function toUnixSeconds(value) {
+  return Math.floor(new Date(`${normalizeHistoricalDate(value)}T00:00:00.000Z`).getTime() / 1000);
 }
 
 async function fetchWithTimeout(url, options = {}) {

@@ -4,6 +4,7 @@ import {
   calculateDrawdownPercent,
   calculateThresholdPrice,
   evaluateStock,
+  initializeHighFromPurchaseDate,
   runAlertCheck,
   runManualQuoteCheck
 } from '../src/alertEngine.js';
@@ -12,11 +13,14 @@ const baseStock = {
   id: 'stock-1',
   symbol: 'AAPL',
   displayName: 'Apple',
+  purchasePrice: 90,
+  purchaseDate: '2026-05-01',
   thresholdPercent: 5,
   alertCooldownMinutes: 30,
   active: true,
   highPrice: null,
   highPriceAt: null,
+  highPriceSource: '',
   lastPrice: null,
   lastCheckedAt: null,
   lastCheckStatus: 'pending',
@@ -82,6 +86,69 @@ test('new high updates the high price and suppresses alert', () => {
 test('drawdown and threshold helpers handle basic math', () => {
   assert.equal(calculateDrawdownPercent(200, 180), 10);
   assert.equal(calculateThresholdPrice(200, 7.5), 185);
+});
+
+test('purchase date initializes high price from historical daily data', async () => {
+  const store = createMemoryStore(baseStock);
+
+  const stock = await initializeHighFromPurchaseDate(
+    store,
+    { quoteTimeoutMs: 10000, quoteProviders: 'stooq' },
+    baseStock,
+    {
+      now: date('2026-05-11T00:00:00Z'),
+      fetchHistoricalHighSince: async (symbol, startDate) => {
+        assert.equal(symbol, 'AAPL');
+        assert.equal(startDate, '2026-05-01');
+
+        return {
+          symbol,
+          highPrice: 120,
+          highPriceAt: '2026-05-08T00:00:00.000Z',
+          currency: 'USD',
+          exchange: 'Stooq',
+          provider: 'stooq',
+          points: 6
+        };
+      }
+    }
+  );
+
+  assert.equal(stock.highPrice, 120);
+  assert.equal(stock.highPriceAt, '2026-05-08T00:00:00.000Z');
+  assert.equal(stock.highPriceSource, 'historical_daily');
+  assert.equal(stock.lastCheckStatus, 'high_initialized');
+  assert.equal(store.stocks[0].highPrice, 120);
+});
+
+test('purchase price becomes the initial high when it is above historical daily high', async () => {
+  const stockInput = {
+    ...baseStock,
+    purchasePrice: 130
+  };
+  const store = createMemoryStore(stockInput);
+
+  const stock = await initializeHighFromPurchaseDate(
+    store,
+    { quoteTimeoutMs: 10000, quoteProviders: 'stooq' },
+    stockInput,
+    {
+      now: date('2026-05-11T00:00:00Z'),
+      fetchHistoricalHighSince: async () => ({
+        symbol: 'AAPL',
+        highPrice: 120,
+        highPriceAt: '2026-05-08T00:00:00.000Z',
+        currency: 'USD',
+        exchange: 'Stooq',
+        provider: 'stooq',
+        points: 6
+      })
+    }
+  );
+
+  assert.equal(stock.highPrice, 130);
+  assert.equal(stock.highPriceAt, '2026-05-01T00:00:00.000Z');
+  assert.equal(stock.highPriceSource, 'purchase_price');
 });
 
 test('manual quote check sends an alert through the same alert path', async () => {

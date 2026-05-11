@@ -1,4 +1,4 @@
-import { fetchQuote } from './priceProvider.js';
+import { fetchHistoricalHighSince, fetchQuote } from './priceProvider.js';
 import { formatAlertMessage, isTelegramConfigured, sendTelegramMessage } from './telegram.js';
 
 export function calculateDrawdownPercent(highPrice, currentPrice) {
@@ -45,6 +45,7 @@ export function evaluateStock(stock, quote, now = new Date()) {
   if (!stock.highPrice || currentPrice > Number(stock.highPrice)) {
     nextStock.highPrice = currentPrice;
     nextStock.highPriceAt = timestamp;
+    nextStock.highPriceSource = quote.marketState === 'MANUAL_TEST' ? 'manual' : 'realtime';
 
     return {
       nextStock,
@@ -69,6 +70,63 @@ export function evaluateStock(stock, quote, now = new Date()) {
     drawdownPercent,
     thresholdPrice
   };
+}
+
+export async function initializeHighFromPurchaseDate(store, config, stock, options = {}) {
+  if (!stock.purchaseDate) {
+    return stock;
+  }
+
+  const highFetcher = options.fetchHistoricalHighSince || fetchHistoricalHighSince;
+  const now = options.now || new Date();
+  const historicalHigh = await highFetcher(stock.symbol, stock.purchaseDate, {
+    timeoutMs: config.quoteTimeoutMs,
+    providers: config.quoteProviders,
+    alphaVantageApiKey: config.alphaVantageApiKey,
+    endDate: now
+  });
+  const purchasePrice = Number(stock.purchasePrice);
+  const purchasePriceIsHigher =
+    Number.isFinite(purchasePrice) && purchasePrice > Number(historicalHigh.highPrice);
+  const baselineHigh = purchasePriceIsHigher
+    ? {
+        ...historicalHigh,
+        highPrice: purchasePrice,
+        highPriceAt: `${stock.purchaseDate}T00:00:00.000Z`,
+        source: 'purchase_price'
+      }
+    : {
+        ...historicalHigh,
+        source: 'historical_daily'
+      };
+  const currentHigh = Number(stock.highPrice);
+  const shouldUpdateHigh =
+    !Number.isFinite(currentHigh) || currentHigh <= 0 || baselineHigh.highPrice >= currentHigh;
+  const timestamp = now.toISOString();
+
+  if (!shouldUpdateHigh) {
+    return store.replaceStock({
+      ...stock,
+      lastCheckStatus: 'high_initialized',
+      lastError: '',
+      lastErrorAt: null,
+      updatedAt: timestamp
+    });
+  }
+
+  return store.replaceStock({
+    ...stock,
+    highPrice: baselineHigh.highPrice,
+    highPriceAt: baselineHigh.highPriceAt,
+    highPriceSource: baselineHigh.source,
+    currency: baselineHigh.currency || stock.currency || '',
+    exchange: baselineHigh.exchange || stock.exchange || '',
+    quoteProvider: baselineHigh.provider || stock.quoteProvider || '',
+    lastCheckStatus: 'high_initialized',
+    lastError: '',
+    lastErrorAt: null,
+    updatedAt: timestamp
+  });
 }
 
 async function markStockError(store, stock, error, now) {

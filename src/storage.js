@@ -57,11 +57,14 @@ function normalizeStock(input, defaults) {
     id: randomUUID(),
     symbol,
     displayName: String(input.displayName || '').trim(),
+    purchasePrice: normalizeOptionalPositiveNumber(input.purchasePrice, '매수가는 0보다 큰 숫자여야 합니다.'),
+    purchaseDate: normalizeOptionalDate(input.purchaseDate),
     thresholdPercent,
     alertCooldownMinutes,
     active: true,
     highPrice: null,
     highPriceAt: null,
+    highPriceSource: '',
     lastPrice: null,
     lastCheckedAt: null,
     lastCheckStatus: 'pending',
@@ -92,6 +95,17 @@ function applyStockPatch(stock, patch) {
     next.notes = String(patch.notes || '').trim();
   }
 
+  if (patch.purchasePrice !== undefined) {
+    next.purchasePrice = normalizeOptionalPositiveNumber(
+      patch.purchasePrice,
+      '매수가는 0보다 큰 숫자여야 합니다.'
+    );
+  }
+
+  if (patch.purchaseDate !== undefined) {
+    next.purchaseDate = normalizeOptionalDate(patch.purchaseDate);
+  }
+
   if (patch.thresholdPercent !== undefined) {
     const thresholdPercent = Number(patch.thresholdPercent);
 
@@ -119,6 +133,7 @@ function applyStockPatch(stock, patch) {
   if (patch.resetHighPrice) {
     next.highPrice = null;
     next.highPriceAt = null;
+    next.highPriceSource = '';
     next.lastAlertAt = null;
   }
 
@@ -126,13 +141,58 @@ function applyStockPatch(stock, patch) {
 }
 
 function normalizeStoredStock(stock) {
+  const purchasePrice = Number(stock.purchasePrice);
+
   return {
     ...stock,
+    purchasePrice:
+      stock.purchasePrice === undefined || stock.purchasePrice === null || stock.purchasePrice === ''
+        ? null
+        : Number.isFinite(purchasePrice)
+          ? purchasePrice
+          : null,
+    purchaseDate: stock.purchaseDate || '',
+    highPriceSource: stock.highPriceSource || '',
     lastCheckStatus: stock.lastCheckStatus || (stock.lastCheckedAt ? 'checked' : 'pending'),
     lastError: stock.lastError || '',
     lastErrorAt: stock.lastErrorAt || null,
     quoteProvider: stock.quoteProvider || ''
   };
+}
+
+function normalizeOptionalPositiveNumber(value, errorMessage) {
+  if (value === undefined || value === null || value === '') {
+    return null;
+  }
+
+  const number = Number(value);
+
+  if (!Number.isFinite(number) || number <= 0) {
+    throw new Error(errorMessage);
+  }
+
+  return number;
+}
+
+function normalizeOptionalDate(value) {
+  if (value === undefined || value === null || value === '') {
+    return '';
+  }
+
+  const raw = String(value).trim();
+  const match = raw.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+
+  if (!match) {
+    throw new Error('구매일 형식이 올바르지 않습니다.');
+  }
+
+  const parsed = new Date(`${raw}T00:00:00.000Z`);
+
+  if (!Number.isFinite(parsed.getTime()) || parsed.toISOString().slice(0, 10) !== raw) {
+    throw new Error('구매일 형식이 올바르지 않습니다.');
+  }
+
+  return raw;
 }
 
 export class JsonStore {

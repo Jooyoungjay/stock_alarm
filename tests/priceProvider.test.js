@@ -5,8 +5,11 @@ import {
   isKoreanStockSymbol,
   normalizeProviders,
   parseAlphaVantageQuote,
+  parseNaverDailyChart,
   parseNaverQuote,
   parseStooqCsv,
+  parseStooqHistoricalCsv,
+  parseYahooHistoricalChart,
   toNaverSymbol,
   toStooqSymbol
 } from '../src/priceProvider.js';
@@ -51,6 +54,24 @@ test('Stooq CSV quote is parsed into a normalized quote', () => {
   assert.equal(quote.provider, 'stooq');
 });
 
+test('Stooq historical CSV is parsed into a highest daily price', () => {
+  const high = parseStooqHistoricalCsv(
+    [
+      'Date,Open,High,Low,Close,Volume',
+      '2026-05-07,285,290,282,288,1000',
+      '2026-05-08,288,294.76,286,293.32,2000',
+      '2026-05-11,292,293,289,290,1500'
+    ].join('\n'),
+    'AAPL'
+  );
+
+  assert.equal(high.symbol, 'AAPL');
+  assert.equal(high.highPrice, 294.76);
+  assert.equal(high.highPriceAt, '2026-05-08T00:00:00.000Z');
+  assert.equal(high.provider, 'stooq');
+  assert.equal(high.points, 3);
+});
+
 test('Naver quote response is parsed into a normalized quote', () => {
   const quote = parseNaverQuote(
     {
@@ -78,6 +99,56 @@ test('Naver quote response is parsed into a normalized quote', () => {
   assert.equal(quote.price, 287750);
   assert.equal(quote.currency, 'KRW');
   assert.equal(quote.provider, 'naver');
+});
+
+test('Naver daily chart is parsed into a highest daily price', () => {
+  const high = parseNaverDailyChart(
+    [
+      "['날짜', '시가', '고가', '저가', '종가', '거래량']",
+      "['20260507', 280000, 283000, 279000, 282000, 1000]",
+      "['20260508', 282000, 287500, 281000, 286000, 2000]",
+      "['20260511', 286000, 286500, 280000, 284500, 1500]"
+    ].join('\n'),
+    '005930'
+  );
+
+  assert.equal(high.symbol, '005930');
+  assert.equal(high.highPrice, 287500);
+  assert.equal(high.highPriceAt, '2026-05-08T00:00:00.000Z');
+  assert.equal(high.currency, 'KRW');
+  assert.equal(high.provider, 'naver');
+});
+
+test('Yahoo historical chart is parsed into a highest daily price', () => {
+  const high = parseYahooHistoricalChart(
+    {
+      chart: {
+        result: [
+          {
+            meta: {
+              currency: 'USD',
+              fullExchangeName: 'NasdaqGS'
+            },
+            timestamp: [1777642200, 1777901400, 1777987800],
+            indicators: {
+              quote: [
+                {
+                  high: [290.12, 294.76, 291.5]
+                }
+              ]
+            }
+          }
+        ]
+      }
+    },
+    'AAPL'
+  );
+
+  assert.equal(high.symbol, 'AAPL');
+  assert.equal(high.highPrice, 294.76);
+  assert.equal(high.highPriceAt, '2026-05-04T00:00:00.000Z');
+  assert.equal(high.currency, 'USD');
+  assert.equal(high.provider, 'yahoo');
 });
 
 test('Alpha Vantage global quote is parsed into a normalized quote', () => {

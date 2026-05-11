@@ -3,7 +3,7 @@ import fs from 'node:fs/promises';
 import path from 'node:path';
 import { config } from './config.js';
 import { JsonStore } from './storage.js';
-import { runAlertCheck, runManualQuoteCheck } from './alertEngine.js';
+import { initializeHighFromPurchaseDate, runAlertCheck, runManualQuoteCheck } from './alertEngine.js';
 import { fetchQuote } from './priceProvider.js';
 import { isTelegramConfigured, sendTelegramMessage } from './telegram.js';
 import { normalizeSymbolInput, searchSymbols } from './symbols.js';
@@ -75,6 +75,27 @@ async function runCheckOnce() {
   }
 }
 
+async function initializePurchaseHigh(stock) {
+  if (!stock?.purchaseDate) {
+    return stock;
+  }
+
+  try {
+    return await initializeHighFromPurchaseDate(store, config, stock);
+  } catch (error) {
+    const timestamp = new Date().toISOString();
+    const updated = await store.replaceStock({
+      ...stock,
+      lastCheckStatus: 'error',
+      lastError: `구매일 이후 최고가 계산 실패: ${error.message}`,
+      lastErrorAt: timestamp,
+      updatedAt: timestamp
+    });
+
+    return updated || stock;
+  }
+}
+
 async function handleApi(request, response, url) {
   const segments = url.pathname.split('/').filter(Boolean);
 
@@ -130,7 +151,8 @@ async function handleApi(request, response, url) {
 
   if (request.method === 'POST' && url.pathname === '/api/stocks') {
     const body = await readJsonBody(request);
-    const stock = await store.addStock(body);
+    let stock = await store.addStock(body);
+    stock = await initializePurchaseHigh(stock);
     sendJson(response, 201, { stock });
     return;
   }
@@ -148,7 +170,12 @@ async function handleApi(request, response, url) {
 
     if (request.method === 'PATCH') {
       const body = await readJsonBody(request);
-      const stock = await store.updateStock(id, body);
+      let stock = await store.updateStock(id, body);
+
+      if (body.resetHighPrice || body.purchaseDate !== undefined) {
+        stock = await initializePurchaseHigh(stock);
+      }
+
       sendJson(response, 200, { stock });
       return;
     }

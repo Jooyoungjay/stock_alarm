@@ -24,6 +24,8 @@ const elements = {
 let symbolSearchTimer = null;
 let symbolSearchRequestId = 0;
 
+elements.form.elements.purchaseDate.max = getTodayInputValue();
+
 document.querySelectorAll('.symbol-helper button').forEach((button) => {
   button.addEventListener('click', () => {
     elements.form.elements.symbol.value = button.dataset.symbol || '';
@@ -60,6 +62,7 @@ elements.form.addEventListener('submit', async (event) => {
   const formData = new FormData(elements.form);
   const payload = Object.fromEntries(formData.entries());
 
+  payload.purchasePrice = payload.purchasePrice ? Number(payload.purchasePrice) : null;
   payload.thresholdPercent = Number(payload.thresholdPercent);
   payload.alertCooldownMinutes = Number(payload.alertCooldownMinutes);
 
@@ -292,14 +295,16 @@ function renderStocks() {
         <div class="stock-title">
           <div class="stock-name">${escapeHtml(stock.displayName || stock.symbol)}</div>
           <div class="stock-symbol">${escapeHtml(stock.symbol)} ${stock.active ? '' : '비활성'}</div>
+          ${renderPositionSummary(stock)}
         </div>
         <div class="metric">
           <span class="metric-label">현재가</span>
           <span class="metric-value">${formatMoney(stock.lastPrice, stock.currency)}</span>
         </div>
         <div class="metric">
-          <span class="metric-label">최고가</span>
+          <span class="metric-label">${getHighPriceLabel(stock)}</span>
           <span class="metric-value">${formatMoney(stock.highPrice, stock.currency)}</span>
+          <span class="metric-detail">${formatHighPriceAt(stock)}</span>
         </div>
         <div class="metric">
           <span class="metric-label">기준가</span>
@@ -312,7 +317,7 @@ function renderStocks() {
         <div class="metric status-metric">
           <span class="metric-label">상태</span>
           <span class="status-badge ${getStockStatusClass(stock)}">${getStockStatusLabel(stock)}</span>
-          <span class="metric-detail">${formatLastChecked(stock.lastCheckedAt)}</span>
+          <span class="metric-detail">${formatStockStatusDetail(stock)}</span>
           ${stock.quoteProvider ? `<span class="metric-detail">시세 ${getProviderLabel(stock.quoteProvider)}</span>` : ''}
           ${stock.lastError ? `<span class="metric-error">${escapeHtml(stock.lastError)}</span>` : ''}
         </div>
@@ -329,7 +334,7 @@ function renderStocks() {
         actionButton(stock.active ? '중지' : '재개', 'text-button', () =>
           patchStock(stock.id, { active: !stock.active })
         ),
-        actionButton('최고가 초기화', 'secondary-button', () =>
+        actionButton(stock.purchaseDate ? '최고가 재계산' : '최고가 초기화', 'secondary-button', () =>
           patchStock(stock.id, { resetHighPrice: true })
         ),
         actionButton('삭제', 'danger-button', () => deleteStock(stock.id))
@@ -352,6 +357,14 @@ function editStockForm(stock) {
     <label>
       <span>표시 이름</span>
       <input name="displayName" value="${escapeHtml(stock.displayName || '')}" autocomplete="off" />
+    </label>
+    <label>
+      <span>매수가</span>
+      <input name="purchasePrice" type="text" inputmode="decimal" pattern="[0-9]*[.]?[0-9]*" value="${escapeHtml(stock.purchasePrice || '')}" required />
+    </label>
+    <label>
+      <span>구매일</span>
+      <input name="purchaseDate" type="date" max="${getTodayInputValue()}" value="${escapeHtml(stock.purchaseDate || '')}" required />
     </label>
     <label>
       <span>하락률 %</span>
@@ -381,6 +394,7 @@ function editStockForm(stock) {
     const formData = new FormData(form);
     const payload = Object.fromEntries(formData.entries());
 
+    payload.purchasePrice = payload.purchasePrice ? Number(payload.purchasePrice) : null;
     payload.thresholdPercent = Number(payload.thresholdPercent);
     payload.alertCooldownMinutes = Number(payload.alertCooldownMinutes);
 
@@ -490,6 +504,7 @@ function renderManualTestMessage(result) {
   const labels = {
     alert: '테스트 가격으로 알림을 보냈습니다.',
     high_updated: '테스트 가격이 새 최고가로 저장됐습니다.',
+    high_initialized: '구매일 이후 최고가를 계산했습니다.',
     checked: '테스트 가격을 확인했습니다. 아직 알림 기준에는 닿지 않았습니다.',
     skipped: '비활성 종목이라 테스트 확인을 건너뛰었습니다.'
   };
@@ -505,6 +520,7 @@ function getStockStatusLabel(stock) {
   const labels = {
     alert: '알림 전송',
     high_updated: '새 최고가',
+    high_initialized: '최고가 계산',
     checked: '정상',
     error: '조회 실패',
     pending: '대기'
@@ -535,6 +551,14 @@ function formatLastChecked(value) {
   }
 
   return `마지막 확인 ${formatDate(value)}`;
+}
+
+function formatStockStatusDetail(stock) {
+  if (stock.lastCheckStatus === 'high_initialized' && stock.highPriceAt) {
+    return `최고가 기준 ${formatDateOnly(stock.highPriceAt)}`;
+  }
+
+  return formatLastChecked(stock.lastCheckedAt);
 }
 
 function formatProviderList(value) {
@@ -569,6 +593,36 @@ function getSuggestedTestPrice(stock) {
   }
 
   return null;
+}
+
+function renderPositionSummary(stock) {
+  if (!stock.purchaseDate && !stock.purchasePrice) {
+    return '';
+  }
+
+  const parts = [];
+
+  if (stock.purchaseDate) {
+    parts.push(`매수일 ${formatDateOnly(stock.purchaseDate)}`);
+  }
+
+  if (stock.purchasePrice) {
+    parts.push(`매수가 ${formatMoney(stock.purchasePrice, stock.currency)}`);
+  }
+
+  return `<div class="stock-symbol">${escapeHtml(parts.join(' · '))}</div>`;
+}
+
+function getHighPriceLabel(stock) {
+  return stock.purchaseDate ? '구매일 이후 최고가' : '감시 최고가';
+}
+
+function formatHighPriceAt(stock) {
+  if (!stock.highPriceAt) {
+    return '';
+  }
+
+  return `${formatDateOnly(stock.highPriceAt)} 기준`;
 }
 
 function actionButton(text, className, onClick) {
@@ -648,6 +702,26 @@ function formatDate(value) {
   }
 
   return new Date(value).toLocaleString('ko-KR');
+}
+
+function formatDateOnly(value) {
+  if (!value) {
+    return '-';
+  }
+
+  const match = String(value).match(/^(\d{4})-(\d{2})-(\d{2})/);
+
+  if (match) {
+    return `${match[1]}.${match[2]}.${match[3]}`;
+  }
+
+  return formatDate(value);
+}
+
+function getTodayInputValue() {
+  const today = new Date();
+  today.setMinutes(today.getMinutes() - today.getTimezoneOffset());
+  return today.toISOString().slice(0, 10);
 }
 
 function parseFiniteNumber(value) {
