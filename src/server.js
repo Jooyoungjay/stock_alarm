@@ -3,8 +3,13 @@ import fs from 'node:fs/promises';
 import path from 'node:path';
 import { config } from './config.js';
 import { JsonStore } from './storage.js';
-import { initializeHighFromPurchaseDate, runAlertCheck, runManualQuoteCheck } from './alertEngine.js';
-import { fetchQuote } from './priceProvider.js';
+import {
+  buildRegistrationPreview,
+  initializeHighFromPurchaseDate,
+  runAlertCheck,
+  runManualQuoteCheck
+} from './alertEngine.js';
+import { fetchHistoricalHighSince, fetchQuote } from './priceProvider.js';
 import { isTelegramConfigured, sendTelegramMessage } from './telegram.js';
 import { normalizeSymbolInput, searchSymbols } from './symbols.js';
 
@@ -139,13 +144,35 @@ async function handleApi(request, response, url) {
       return;
     }
 
-    const quote = await fetchQuote(symbol, {
+    const quoteOptions = {
       timeoutMs: config.quoteTimeoutMs,
       providers: config.quoteProviders,
       alphaVantageApiKey: config.alphaVantageApiKey
-    });
+    };
+    const quote = await fetchQuote(symbol, quoteOptions);
+    const purchaseDate = String(url.searchParams.get('purchaseDate') || '').trim();
+    let historicalHigh = null;
 
-    sendJson(response, 200, { quote });
+    if (purchaseDate) {
+      historicalHigh = await fetchHistoricalHighSince(symbol, purchaseDate, {
+        ...quoteOptions,
+        endDate: new Date()
+      });
+    }
+
+    sendJson(
+      response,
+      200,
+      buildRegistrationPreview(
+        {
+          purchasePrice: url.searchParams.get('purchasePrice'),
+          purchaseDate,
+          thresholdPercent: url.searchParams.get('thresholdPercent')
+        },
+        quote,
+        historicalHigh
+      )
+    );
     return;
   }
 

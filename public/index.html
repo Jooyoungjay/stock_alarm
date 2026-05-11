@@ -48,7 +48,7 @@
           <div class="field-grid">
             <label>
               <span>매수가</span>
-              <input name="purchasePrice" type="number" min="0.01" step="0.01" placeholder="80000" required />
+              <input name="purchasePrice" type="text" inputmode="decimal" pattern="[0-9]*[.]?[0-9]*" placeholder="80000" required />
             </label>
 
             <label>
@@ -77,7 +77,7 @@
           <div id="quotePreview" class="quote-preview" aria-live="polite"></div>
 
           <div class="form-actions">
-            <button id="previewQuoteButton" type="button" class="secondary-button">시세 미리 확인</button>
+            <button id="previewQuoteButton" type="button" class="secondary-button">기준 미리 확인</button>
             <button type="submit" class="primary-button">등록</button>
           </div>
         </form>

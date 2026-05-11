@@ -142,7 +142,13 @@ async function previewQuote(button) {
   hideSymbolSuggestions();
 
   await withBusy(button, async () => {
-    const result = await api(`/api/quote-preview?symbol=${encodeURIComponent(symbol)}`);
+    const params = new URLSearchParams({
+      symbol,
+      purchasePrice: elements.form.elements.purchasePrice.value,
+      purchaseDate: elements.form.elements.purchaseDate.value,
+      thresholdPercent: elements.form.elements.thresholdPercent.value
+    });
+    const result = await api(`/api/quote-preview?${params.toString()}`);
     const quote = result.quote;
     elements.form.elements.symbol.value = quote.symbol;
 
@@ -154,7 +160,7 @@ async function previewQuote(button) {
       elements.form.elements.displayName.value = quote.name;
     }
 
-    renderQuotePreview(quote);
+    renderQuotePreview(result);
   });
 }
 
@@ -249,19 +255,62 @@ async function withBusy(button, callback) {
   }
 }
 
-function renderQuotePreview(quote) {
-  if (!quote) {
+function renderQuotePreview(preview) {
+  if (!preview) {
     elements.quotePreview.className = 'quote-preview';
     elements.quotePreview.textContent = '';
     return;
   }
 
+  const quote = preview.quote || preview;
+  const position = preview.position;
+  const previewCurrency = position?.currency || quote.currency;
+  const statusClass = position?.alertNow ? 'down' : 'ok';
+  const statusText = position
+    ? position.alertNow
+      ? '현재 알림 기준 이하'
+      : `기준가까지 ${formatMoney(position.distanceToThreshold, position.currency)}`
+    : getProviderLabel(quote.provider);
+
   elements.quotePreview.className = 'quote-preview show';
   elements.quotePreview.innerHTML = `
-    <span class="quote-preview-name">${escapeHtml(quote.name || quote.symbol)}</span>
-    <span>${escapeHtml(quote.symbol)}</span>
-    <span>${formatMoney(quote.price, quote.currency)}</span>
-    <span>${getProviderLabel(quote.provider)}</span>
+    <div class="quote-preview-header">
+      <span class="quote-preview-name">${escapeHtml(quote.name || quote.symbol)}</span>
+      <span class="quote-preview-meta">${escapeHtml(quote.symbol)} · ${getProviderLabel(quote.provider)}</span>
+    </div>
+    <div class="quote-preview-grid">
+      ${renderPreviewItem('현재가', formatMoney(quote.price, previewCurrency))}
+      ${position ? renderPreviewItem('매수가', formatMoney(position.purchasePrice, position.currency)) : ''}
+      ${
+        position
+          ? renderPreviewItem(
+              '구매일 이후 최고가',
+              formatMoney(position.highPrice, position.currency),
+              `${formatDateOnly(position.highPriceAt)} 기준 · ${getHighSourceLabel(position.highPriceSource)}`
+            )
+          : ''
+      }
+      ${
+        position
+          ? renderPreviewItem(
+              `알림 기준가 -${Number(position.thresholdPercent).toFixed(1)}%`,
+              formatMoney(position.thresholdPrice, position.currency)
+            )
+          : ''
+      }
+      ${position ? renderPreviewItem('현재 하락률', `-${Number(position.drawdownPercent || 0).toFixed(2)}%`, '', statusClass) : ''}
+      ${renderPreviewItem('상태', statusText, position ? formatDistancePercent(position) : '', statusClass)}
+    </div>
+  `;
+}
+
+function renderPreviewItem(label, value, detail = '', valueClass = '') {
+  return `
+    <div class="quote-preview-item">
+      <span class="quote-preview-label">${escapeHtml(label)}</span>
+      <span class="quote-preview-value ${escapeHtml(valueClass)}">${escapeHtml(value)}</span>
+      ${detail ? `<span class="quote-preview-detail">${escapeHtml(detail)}</span>` : ''}
+    </div>
   `;
 }
 
@@ -617,12 +666,37 @@ function getHighPriceLabel(stock) {
   return stock.purchaseDate ? '구매일 이후 최고가' : '감시 최고가';
 }
 
+function getHighSourceLabel(source) {
+  const labels = {
+    historical_daily: '일봉',
+    purchase_price: '매수가',
+    realtime: '현재가',
+    manual: '수동'
+  };
+
+  return labels[source] || '계산';
+}
+
 function formatHighPriceAt(stock) {
   if (!stock.highPriceAt) {
     return '';
   }
 
   return `${formatDateOnly(stock.highPriceAt)} 기준`;
+}
+
+function formatDistancePercent(position) {
+  const value = Number(position.distanceToThresholdPercent);
+
+  if (!Number.isFinite(value)) {
+    return '';
+  }
+
+  if (position.alertNow) {
+    return `기준가보다 ${Math.abs(value).toFixed(2)}% 낮음`;
+  }
+
+  return `현재가 기준 ${value.toFixed(2)}% 여유`;
 }
 
 function actionButton(text, className, onClick) {

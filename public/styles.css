@@ -285,8 +285,7 @@ textarea:focus {
 
 .quote-preview {
   display: none;
-  grid-template-columns: minmax(0, 1.2fr) minmax(80px, 0.7fr);
-  gap: 6px 10px;
+  gap: 10px;
   padding: 10px 12px;
   border: 1px solid #cce8e3;
   border-radius: 6px;
@@ -299,12 +298,59 @@ textarea:focus {
   display: grid;
 }
 
-.quote-preview span {
+.quote-preview-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding-bottom: 8px;
+  border-bottom: 1px solid #cce8e3;
+}
+
+.quote-preview-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+}
+
+.quote-preview-item {
+  display: grid;
+  gap: 3px;
+  min-width: 0;
+}
+
+.quote-preview span,
+.quote-preview-item {
   overflow-wrap: anywhere;
 }
 
 .quote-preview-name {
   font-weight: 800;
+}
+
+.quote-preview-meta,
+.quote-preview-label,
+.quote-preview-detail {
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.3;
+}
+
+.quote-preview-label {
+  font-weight: 700;
+}
+
+.quote-preview-value {
+  font-size: 14px;
+  font-weight: 800;
+}
+
+.quote-preview-value.ok {
+  color: var(--ok);
+}
+
+.quote-preview-value.down {
+  color: var(--danger);
 }
 
 .primary-button,
@@ -606,6 +652,7 @@ textarea:focus {
   }
 
   .field-grid,
+  .quote-preview-grid,
   .form-actions,
   .stock-row,
   .stock-edit-form,

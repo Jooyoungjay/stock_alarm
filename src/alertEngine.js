@@ -23,6 +23,80 @@ export function calculateThresholdPrice(highPrice, thresholdPercent) {
   return high * (1 - threshold / 100);
 }
 
+export function buildPurchaseHighBaseline(stock, historicalHigh) {
+  const purchasePrice = Number(stock.purchasePrice);
+  const purchasePriceIsHigher =
+    Number.isFinite(purchasePrice) && purchasePrice > Number(historicalHigh.highPrice);
+
+  if (purchasePriceIsHigher) {
+    return {
+      ...historicalHigh,
+      highPrice: purchasePrice,
+      highPriceAt: `${stock.purchaseDate}T00:00:00.000Z`,
+      source: 'purchase_price'
+    };
+  }
+
+  return {
+    ...historicalHigh,
+    source: 'historical_daily'
+  };
+}
+
+export function buildRegistrationPreview(input, quote, historicalHigh = null) {
+  const thresholdPercent = Number(input.thresholdPercent);
+  const currentPrice = Number(quote.price);
+
+  if (!Number.isFinite(currentPrice) || currentPrice <= 0) {
+    throw new Error('현재가가 올바르지 않습니다.');
+  }
+
+  if (!historicalHigh) {
+    return {
+      quote,
+      position: null
+    };
+  }
+
+  const purchasePrice = Number(input.purchasePrice);
+
+  if (!Number.isFinite(purchasePrice) || purchasePrice <= 0) {
+    throw new Error('매수가는 0보다 큰 숫자여야 합니다.');
+  }
+
+  if (!Number.isFinite(thresholdPercent) || thresholdPercent <= 0 || thresholdPercent >= 100) {
+    throw new Error('하락률은 0보다 크고 100보다 작은 숫자여야 합니다.');
+  }
+
+  const baseline = buildPurchaseHighBaseline(input, historicalHigh);
+  const thresholdPrice = calculateThresholdPrice(baseline.highPrice, thresholdPercent);
+  const drawdownPercent = calculateDrawdownPercent(baseline.highPrice, currentPrice);
+  const distanceToThreshold = thresholdPrice === null ? null : currentPrice - thresholdPrice;
+  const distanceToThresholdPercent =
+    thresholdPrice === null || currentPrice <= 0 ? null : (distanceToThreshold / currentPrice) * 100;
+
+  return {
+    quote,
+    position: {
+      purchasePrice: Number(input.purchasePrice),
+      purchaseDate: input.purchaseDate,
+      highPrice: baseline.highPrice,
+      highPriceAt: baseline.highPriceAt,
+      highPriceSource: baseline.source,
+      historicalHighPrice: historicalHigh.highPrice,
+      historicalHighAt: historicalHigh.highPriceAt,
+      thresholdPercent,
+      thresholdPrice,
+      drawdownPercent,
+      distanceToThreshold,
+      distanceToThresholdPercent,
+      alertNow: thresholdPrice !== null && currentPrice <= thresholdPrice,
+      currency: baseline.currency || quote.currency || '',
+      provider: baseline.provider || ''
+    }
+  };
+}
+
 export function evaluateStock(stock, quote, now = new Date()) {
   const timestamp = now.toISOString();
   const currentPrice = Number(quote.price);
@@ -85,20 +159,7 @@ export async function initializeHighFromPurchaseDate(store, config, stock, optio
     alphaVantageApiKey: config.alphaVantageApiKey,
     endDate: now
   });
-  const purchasePrice = Number(stock.purchasePrice);
-  const purchasePriceIsHigher =
-    Number.isFinite(purchasePrice) && purchasePrice > Number(historicalHigh.highPrice);
-  const baselineHigh = purchasePriceIsHigher
-    ? {
-        ...historicalHigh,
-        highPrice: purchasePrice,
-        highPriceAt: `${stock.purchaseDate}T00:00:00.000Z`,
-        source: 'purchase_price'
-      }
-    : {
-        ...historicalHigh,
-        source: 'historical_daily'
-      };
+  const baselineHigh = buildPurchaseHighBaseline(stock, historicalHigh);
   const currentHigh = Number(stock.highPrice);
   const shouldUpdateHigh =
     !Number.isFinite(currentHigh) || currentHigh <= 0 || baselineHigh.highPrice >= currentHigh;

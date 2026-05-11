@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
+  buildRegistrationPreview,
   calculateDrawdownPercent,
   calculateThresholdPrice,
   evaluateStock,
@@ -149,6 +150,68 @@ test('purchase price becomes the initial high when it is above historical daily 
   assert.equal(stock.highPrice, 130);
   assert.equal(stock.highPriceAt, '2026-05-01T00:00:00.000Z');
   assert.equal(stock.highPriceSource, 'purchase_price');
+});
+
+test('registration preview calculates threshold and drawdown before saving', () => {
+  const preview = buildRegistrationPreview(
+    {
+      purchasePrice: 90,
+      purchaseDate: '2026-05-01',
+      thresholdPercent: 5
+    },
+    {
+      symbol: 'AAPL',
+      price: 114,
+      currency: 'USD',
+      provider: 'yahoo'
+    },
+    {
+      symbol: 'AAPL',
+      highPrice: 120,
+      highPriceAt: '2026-05-08T00:00:00.000Z',
+      currency: 'USD',
+      exchange: 'NasdaqGS',
+      provider: 'yahoo',
+      points: 6
+    }
+  );
+
+  assert.equal(preview.quote.symbol, 'AAPL');
+  assert.equal(preview.position.highPrice, 120);
+  assert.equal(preview.position.thresholdPrice, 114);
+  assert.equal(preview.position.drawdownPercent, 5);
+  assert.equal(preview.position.alertNow, true);
+});
+
+test('registration preview uses purchase price when it is the highest baseline', () => {
+  const preview = buildRegistrationPreview(
+    {
+      purchasePrice: 130,
+      purchaseDate: '2026-05-01',
+      thresholdPercent: 10
+    },
+    {
+      symbol: 'AAPL',
+      price: 120,
+      currency: 'USD',
+      provider: 'yahoo'
+    },
+    {
+      symbol: 'AAPL',
+      highPrice: 125,
+      highPriceAt: '2026-05-08T00:00:00.000Z',
+      currency: 'USD',
+      exchange: 'NasdaqGS',
+      provider: 'yahoo',
+      points: 6
+    }
+  );
+
+  assert.equal(preview.position.highPrice, 130);
+  assert.equal(preview.position.highPriceAt, '2026-05-01T00:00:00.000Z');
+  assert.equal(preview.position.highPriceSource, 'purchase_price');
+  assert.equal(preview.position.thresholdPrice, 117);
+  assert.equal(preview.position.alertNow, false);
 });
 
 test('manual quote check sends an alert through the same alert path', async () => {
