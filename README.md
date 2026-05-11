@@ -67,6 +67,7 @@ TELEGRAM_CHAT_ID=
 /check
 /backup
 /backups
+/restore 1
 /pause 336260
 /resume 336260
 /delete 336260
@@ -92,12 +93,16 @@ TELEGRAM_CHAT_ID=
 
 앱은 `data/store.json`을 핵심 데이터 파일로 사용합니다. 서버 시작 시와 종목 추가/수정/삭제 시점에 `data/backups/` 폴더로 자동 백업을 남깁니다.
 
-텔레그램에서 수동 백업도 만들 수 있습니다.
+텔레그램에서 수동 백업과 복구도 실행할 수 있습니다.
 
 ```text
 /backup
 /backups
+/restore 1
+/restore store-20260511-082342-355-server-start-c6b8dcd7.json
 ```
+
+`/restore`는 복구 전에 현재 상태를 `before-restore` 백업으로 한 번 더 저장합니다. `/restore 1`처럼 번호를 입력하면 `/backups` 목록의 1번 백업을 복구합니다.
 
 보관 개수는 기본 30개입니다. `.env`에서 아래 값으로 조정할 수 있습니다.
 

@@ -95,6 +95,94 @@ export async function listBackups(dataDir, options = {}) {
     .slice(0, limit);
 }
 
+export async function restoreBackup(dataDir, target, options = {}) {
+  const maxBackups = normalizeBackupLimit(options.maxBackups);
+  const backup = await resolveBackup(dataDir, target);
+  const content = await fs.readFile(backup.path, 'utf8');
+
+  validateStoreContent(content);
+
+  const safetyBackup =
+    options.safetyBackup === false
+      ? null
+      : await createBackup(dataDir, {
+          reason: 'before-restore',
+          maxBackups
+        });
+
+  const storePath = path.join(dataDir, 'store.json');
+  const tempPath = `${storePath}.restore.tmp`;
+
+  await fs.writeFile(tempPath, ensureTrailingNewline(content), 'utf8');
+  await fs.rename(tempPath, storePath);
+
+  return {
+    restored: true,
+    backup,
+    safetyBackup
+  };
+}
+
+export async function resolveBackup(dataDir, target) {
+  const rawTarget = String(target || '').trim();
+
+  if (!rawTarget) {
+    throw new Error('복구할 백업 파일명 또는 번호를 입력하세요.');
+  }
+
+  if (/^\d+$/.test(rawTarget)) {
+    const index = Number(rawTarget) - 1;
+    const backups = await listBackups(dataDir, { limit: 1000 });
+
+    if (!Number.isInteger(index) || index < 0 || index >= backups.length) {
+      throw new Error(`백업 번호를 찾을 수 없습니다: ${rawTarget}`);
+    }
+
+    return backups[index];
+  }
+
+  if (
+    path.isAbsolute(rawTarget) ||
+    rawTarget !== path.basename(rawTarget) ||
+    rawTarget.includes('..') ||
+    !rawTarget.endsWith('.json')
+  ) {
+    throw new Error('백업 파일명만 입력할 수 있습니다.');
+  }
+
+  const backupDir = getBackupDir(dataDir);
+  const backupPath = path.join(backupDir, rawTarget);
+  const relative = path.relative(backupDir, backupPath);
+
+  if (relative.startsWith('..') || path.isAbsolute(relative)) {
+    throw new Error('백업 파일명만 입력할 수 있습니다.');
+  }
+
+  let stat;
+
+  try {
+    stat = await fs.stat(backupPath);
+  } catch (error) {
+    if (error.code === 'ENOENT') {
+      throw new Error(`백업 파일을 찾을 수 없습니다: ${rawTarget}`);
+    }
+
+    throw error;
+  }
+
+  if (!stat.isFile()) {
+    throw new Error(`백업 파일을 찾을 수 없습니다: ${rawTarget}`);
+  }
+
+  return {
+    name: rawTarget,
+    path: backupPath,
+    size: stat.size,
+    createdAt: stat.mtime.toISOString(),
+    reason: parseBackupReason(rawTarget)
+  };
+}
+
 export async function pruneBackups(dataDir, options = {}) {
   const maxBackups = normalizeBackupLimit(options.maxBackups);
   const backups = await listBackups(dataDir, { limit: 10000 });
@@ -113,6 +201,38 @@ export async function pruneBackups(dataDir, options = {}) {
   return {
     removed: staleBackups.length
   };
+}
+
+function validateStoreContent(content) {
+  let data;
+
+  try {
+    data = JSON.parse(content);
+  } catch {
+    throw new Error('백업 파일의 JSON 형식이 올바르지 않습니다.');
+  }
+
+  if (!data || typeof data !== 'object' || Array.isArray(data)) {
+    throw new Error('백업 파일의 데이터 구조가 올바르지 않습니다.');
+  }
+
+  if (!Array.isArray(data.stocks)) {
+    throw new Error('백업 파일에 stocks 배열이 없습니다.');
+  }
+
+  if (!Array.isArray(data.alerts)) {
+    throw new Error('백업 파일에 alerts 배열이 없습니다.');
+  }
+
+  if (data.meta !== undefined && (!data.meta || typeof data.meta !== 'object' || Array.isArray(data.meta))) {
+    throw new Error('백업 파일의 meta 구조가 올바르지 않습니다.');
+  }
+
+  return data;
+}
+
+function ensureTrailingNewline(value) {
+  return value.endsWith('\n') ? value : `${value}\n`;
 }
 
 function normalizeBackupLimit(value) {

@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
-import { createBackup, getBackupDir, listBackups } from '../src/backups.js';
+import { createBackup, getBackupDir, listBackups, resolveBackup, restoreBackup } from '../src/backups.js';
 import { JsonStore } from '../src/storage.js';
 
 test('createBackup copies store.json into the backups directory', async () => {
@@ -73,6 +73,66 @@ test('JsonStore creates automatic backups for stock mutations when enabled', asy
   assert.ok(reasons.includes('after-add-stock'));
   assert.ok(reasons.includes('before-update-stock'));
   assert.ok(reasons.includes('after-delete-stock'));
+});
+
+test('restoreBackup restores a validated backup and creates a safety backup first', async () => {
+  const dataDir = await createDataDir();
+  await fs.writeFile(
+    path.join(dataDir, 'store.json'),
+    JSON.stringify({ stocks: [{ symbol: 'OLD' }], alerts: [], meta: {} }, null, 2),
+    'utf8'
+  );
+  const backup = await createBackup(dataDir, { reason: 'manual', maxBackups: 10 });
+
+  await fs.writeFile(
+    path.join(dataDir, 'store.json'),
+    JSON.stringify({ stocks: [{ symbol: 'NEW' }], alerts: [], meta: {} }, null, 2),
+    'utf8'
+  );
+
+  const result = await restoreBackup(dataDir, backup.name, { maxBackups: 10 });
+  const restored = JSON.parse(await fs.readFile(path.join(dataDir, 'store.json'), 'utf8'));
+  const backups = await listBackups(dataDir, { limit: 20 });
+
+  assert.equal(result.restored, true);
+  assert.equal(result.backup.name, backup.name);
+  assert.equal(result.safetyBackup.created, true);
+  assert.equal(restored.stocks[0].symbol, 'OLD');
+  assert.ok(backups.some((item) => item.reason === 'before-restore'));
+});
+
+test('restoreBackup can resolve a backup by recent-list number', async () => {
+  const dataDir = await createDataDir();
+  await fs.writeFile(
+    path.join(dataDir, 'store.json'),
+    JSON.stringify({ stocks: [{ symbol: 'FIRST' }], alerts: [], meta: {} }, null, 2),
+    'utf8'
+  );
+  await createBackup(dataDir, { reason: 'first', maxBackups: 10 });
+  await delay(5);
+  await fs.writeFile(
+    path.join(dataDir, 'store.json'),
+    JSON.stringify({ stocks: [{ symbol: 'SECOND' }], alerts: [], meta: {} }, null, 2),
+    'utf8'
+  );
+  await createBackup(dataDir, { reason: 'second', maxBackups: 10 });
+
+  const resolved = await resolveBackup(dataDir, '1');
+
+  assert.equal(resolved.reason, 'second');
+});
+
+test('restoreBackup rejects unsafe paths and invalid store payloads', async () => {
+  const dataDir = await createDataDir();
+  await fs.writeFile(path.join(dataDir, 'store.json'), '{"stocks":[],"alerts":[],"meta":{}}\n', 'utf8');
+  await assert.rejects(() => resolveBackup(dataDir, '../store.json'), /파일명만/);
+
+  const backupDir = getBackupDir(dataDir);
+  await fs.mkdir(backupDir, { recursive: true });
+  const invalidName = 'store-20260511-120000-000-invalid-12345678.json';
+  await fs.writeFile(path.join(backupDir, invalidName), '{"stocks":[],"meta":{}}\n', 'utf8');
+
+  await assert.rejects(() => restoreBackup(dataDir, invalidName), /alerts 배열/);
 });
 
 async function createDataDir() {

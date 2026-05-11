@@ -133,6 +133,35 @@ test('handleTelegramMessage supports backup commands', async () => {
   assert.match(sent[1], /telegram-manual/);
 });
 
+test('handleTelegramMessage supports restore command', async () => {
+  const store = await createStore();
+  const sent = [];
+  const options = {
+    sendTelegramMessage: async (_config, text) => {
+      sent.push(text);
+    },
+    restoreBackup: async (_dataDir, target, restoreOptions) => {
+      assert.equal(target, '1');
+      assert.equal(restoreOptions.maxBackups, undefined);
+      return {
+        restored: true,
+        backup: {
+          name: 'store-20260511-120000-000-manual-12345678.json'
+        },
+        safetyBackup: {
+          created: true,
+          name: 'store-20260511-120001-000-before-restore-87654321.json'
+        }
+      };
+    }
+  };
+
+  await handleTelegramMessage(store, config, message('/restore 1'), options);
+
+  assert.match(sent[0], /백업을 복구했습니다/);
+  assert.match(sent[0], /복구 전 안전 백업/);
+});
+
 async function createStore() {
   const dataDir = await fs.mkdtemp(path.join(os.tmpdir(), 'stock-alarm-test-'));
   return new JsonStore(dataDir, {

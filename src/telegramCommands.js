@@ -1,5 +1,5 @@
 import { buildAlertRule, initializeHighFromPurchaseDate, runAlertCheck } from './alertEngine.js';
-import { createBackup, listBackups } from './backups.js';
+import { createBackup, listBackups, restoreBackup } from './backups.js';
 import { ALERT_TYPES } from './storage.js';
 import {
   fetchTelegramUpdates,
@@ -19,6 +19,7 @@ const helpMessage = [
   '/delete <종목코드> - 종목 삭제',
   '/backup - 현재 데이터 백업 생성',
   '/backups - 최근 백업 목록',
+  '/restore <백업파일명|번호> - 백업 복구',
   '',
   '등록 예시',
   '/add 336260 두산퓨얼셀 88779 2026-05-11 high 10',
@@ -156,6 +157,8 @@ async function executeCommand(store, config, command, options) {
       return createBackupFromCommand(store, config, options);
     case 'backups':
       return listBackupsFromCommand(store, config, command, options);
+    case 'restore':
+      return restoreBackupFromCommand(store, config, command, options);
     case 'check':
       return runManualCheck(store, config, options);
     default:
@@ -204,6 +207,23 @@ async function listBackupsFromCommand(_store, config, command, options) {
         `${index + 1}. ${backup.name}\n   ${formatDate(backup.createdAt)} · ${formatBytes(backup.size)}`
     )
   ].join('\n');
+}
+
+async function restoreBackupFromCommand(_store, config, command, options) {
+  const target = command.args[0];
+  const backupRestorer = options.restoreBackup || restoreBackup;
+  const result = await backupRestorer(config.dataDir, target, {
+    maxBackups: config.backupRetention
+  });
+
+  return [
+    '백업을 복구했습니다.',
+    `복구 파일: ${result.backup.name}`,
+    result.safetyBackup?.created ? `복구 전 안전 백업: ${result.safetyBackup.name}` : '',
+    '서버가 다음 확인 주기부터 복구된 데이터를 사용합니다.'
+  ]
+    .filter(Boolean)
+    .join('\n');
 }
 
 async function addStockFromCommand(store, config, command, options) {
@@ -536,6 +556,15 @@ function getShortUsage(commandName) {
       '/add 336260 두산퓨얼셀 88779 2026-05-11 high 10',
       '/add 336260 두산퓨얼셀 88779 2026-05-11 loss 5',
       '/add 336260 두산퓨얼셀 88779 2026-05-11 target 93000'
+    ].join('\n');
+  }
+
+  if (commandName === 'restore') {
+    return [
+      '예시:',
+      '/backups',
+      '/restore 1',
+      '/restore store-20260511-082342-355-server-start-c6b8dcd7.json'
     ].join('\n');
   }
 
