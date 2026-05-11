@@ -82,7 +82,14 @@ function normalizeStock(input, defaults) {
     lastCheckStatus: 'pending',
     lastError: '',
     lastErrorAt: null,
+    alertState: 'clear',
+    alertStartedAt: null,
+    alertRecoveredAt: null,
+    alertRepeatCount: 0,
     lastAlertAt: null,
+    lastAlertPrice: null,
+    lastAlertThresholdPrice: null,
+    lastAlertMetricPercent: null,
     currency: '',
     exchange: '',
     marketState: '',
@@ -101,6 +108,7 @@ function applyStockPatch(stock, patch) {
     ...stock,
     updatedAt: new Date().toISOString()
   };
+  let alertConditionChanged = false;
 
   if (patch.displayName !== undefined) {
     next.displayName = String(patch.displayName || '').trim();
@@ -115,18 +123,22 @@ function applyStockPatch(stock, patch) {
       patch.purchasePrice,
       '매수가는 0보다 큰 숫자여야 합니다.'
     );
+    alertConditionChanged = true;
   }
 
   if (patch.purchaseDate !== undefined) {
     next.purchaseDate = normalizeOptionalDate(patch.purchaseDate);
+    alertConditionChanged = true;
   }
 
   if (patch.alertType !== undefined) {
     next.alertType = normalizeAlertType(patch.alertType);
+    alertConditionChanged = true;
   }
 
   if (patch.thresholdPercent !== undefined) {
     next.thresholdPercent = normalizeThresholdPercent(patch.thresholdPercent);
+    alertConditionChanged = true;
   }
 
   if (patch.targetPrice !== undefined) {
@@ -134,6 +146,7 @@ function applyStockPatch(stock, patch) {
       patch.targetPrice,
       '직접 기준가는 0보다 큰 숫자여야 합니다.'
     );
+    alertConditionChanged = true;
   }
 
   if (patch.alertCooldownMinutes !== undefined) {
@@ -155,6 +168,11 @@ function applyStockPatch(stock, patch) {
     next.highPriceAt = null;
     next.highPriceSource = '';
     next.lastAlertAt = null;
+    alertConditionChanged = true;
+  }
+
+  if (alertConditionChanged) {
+    resetAlertState(next);
   }
 
   validateAlertTypeFields(next);
@@ -195,8 +213,43 @@ function normalizeStoredStock(stock) {
     lastCheckStatus: stock.lastCheckStatus || (stock.lastCheckedAt ? 'checked' : 'pending'),
     lastError: stock.lastError || '',
     lastErrorAt: stock.lastErrorAt || null,
-    quoteProvider: stock.quoteProvider || ''
+    quoteProvider: stock.quoteProvider || '',
+    alertState: normalizeAlertState(stock.alertState),
+    alertStartedAt: stock.alertStartedAt || null,
+    alertRecoveredAt: stock.alertRecoveredAt || null,
+    alertRepeatCount: normalizeNonNegativeInteger(stock.alertRepeatCount),
+    lastAlertPrice: normalizeOptionalStoredNumber(stock.lastAlertPrice),
+    lastAlertThresholdPrice: normalizeOptionalStoredNumber(stock.lastAlertThresholdPrice),
+    lastAlertMetricPercent: normalizeOptionalStoredNumber(stock.lastAlertMetricPercent)
   };
+}
+
+function resetAlertState(stock) {
+  stock.alertState = 'clear';
+  stock.alertStartedAt = null;
+  stock.alertRecoveredAt = null;
+  stock.alertRepeatCount = 0;
+  stock.lastAlertPrice = null;
+  stock.lastAlertThresholdPrice = null;
+  stock.lastAlertMetricPercent = null;
+}
+
+function normalizeAlertState(value) {
+  return value === 'triggered' ? 'triggered' : 'clear';
+}
+
+function normalizeNonNegativeInteger(value) {
+  const number = Number(value);
+  return Number.isInteger(number) && number >= 0 ? number : 0;
+}
+
+function normalizeOptionalStoredNumber(value) {
+  if (value === undefined || value === null || value === '') {
+    return null;
+  }
+
+  const number = Number(value);
+  return Number.isFinite(number) ? number : null;
 }
 
 export function normalizeAlertType(value) {

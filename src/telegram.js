@@ -16,6 +16,7 @@ export function formatAlertMessage(stock, quote, drawdownPercent, thresholdPrice
   const alertTypeLabel = alertRule.alertTypeLabel || '최고가 대비 하락률';
   const thresholdLabel = alertRule.thresholdLabel || '알림 기준';
   const metricLabel = alertRule.metricLabel || '하락률';
+  const repeatCount = Number(alertRule.alertRepeatCount || 0);
   const highLabel = stock.purchaseDate
     ? `구매일 이후 최고가: ${high}${currency} (${formatDateOnly(stock.highPriceAt)} 기준)`
     : `감시 최고가: ${high}${currency}`;
@@ -28,8 +29,11 @@ export function formatAlertMessage(stock, quote, drawdownPercent, thresholdPrice
     highLabel,
     `${thresholdLabel}: ${threshold}${currency} 이하`,
     `${metricLabel}: -${drawdown}%`,
+    repeatCount > 0 ? `알림 회차: ${repeatCount}회` : '',
     `반복 간격: ${stock.alertCooldownMinutes}분`
-  ].join('\n');
+  ]
+    .filter(Boolean)
+    .join('\n');
 }
 
 export async function fetchTelegramUpdates(config, offset = null, options = {}) {

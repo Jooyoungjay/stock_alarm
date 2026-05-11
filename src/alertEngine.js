@@ -240,16 +240,43 @@ export function evaluateStock(stock, quote, now = new Date()) {
   const alertRule = buildAlertRule(nextStock, currentPrice);
   const suppressAlertForNewHigh =
     highUpdated && alertRule.alertType === ALERT_TYPES.HIGH_DRAWDOWN;
+  const isAlertConditionActive = !suppressAlertForNewHigh && alertRule.isBelowThreshold;
+  const previousAlertState = stock.alertState === 'triggered' ? 'triggered' : 'clear';
+  const recovered = previousAlertState === 'triggered' && !isAlertConditionActive;
   const lastAlertAt = stock.lastAlertAt ? new Date(stock.lastAlertAt).getTime() : 0;
   const cooldownMs = Number(stock.alertCooldownMinutes || 1) * 60 * 1000;
   const cooldownElapsed = !lastAlertAt || now.getTime() - lastAlertAt >= cooldownMs;
+  const alertDue = Boolean(stock.active && isAlertConditionActive && cooldownElapsed);
+  const previousRepeatCount = normalizeRepeatCount(stock.alertRepeatCount);
+  const nextAlertRepeatCount = alertDue
+    ? previousAlertState === 'triggered'
+      ? previousRepeatCount + 1
+      : 1
+    : previousRepeatCount;
+
+  if (isAlertConditionActive) {
+    nextStock.alertState = 'triggered';
+    nextStock.alertStartedAt =
+      previousAlertState === 'triggered' ? stock.alertStartedAt || timestamp : timestamp;
+    nextStock.alertRecoveredAt = previousAlertState === 'triggered' ? stock.alertRecoveredAt || null : null;
+    nextStock.alertRepeatCount = nextAlertRepeatCount;
+  } else {
+    nextStock.alertState = 'clear';
+    nextStock.alertStartedAt = null;
+    nextStock.alertRepeatCount = 0;
+
+    if (recovered) {
+      nextStock.alertRecoveredAt = timestamp;
+    }
+  }
 
   return {
     nextStock,
-    alertDue: Boolean(
-      stock.active && !suppressAlertForNewHigh && alertRule.isBelowThreshold && cooldownElapsed
-    ),
+    alertDue,
     highUpdated,
+    recovered,
+    isAlertConditionActive,
+    alertRepeatCount: nextAlertRepeatCount,
     drawdownPercent: alertRule.metricPercent,
     thresholdPrice: alertRule.thresholdPrice,
     alertType: alertRule.alertType,
@@ -259,6 +286,11 @@ export function evaluateStock(stock, quote, now = new Date()) {
     thresholdLabel: alertRule.thresholdLabel,
     metricLabel: alertRule.metricLabel
   };
+}
+
+function normalizeRepeatCount(value) {
+  const number = Number(value);
+  return Number.isInteger(number) && number >= 0 ? number : 0;
 }
 
 export async function initializeHighFromPurchaseDate(store, config, stock, options = {}) {
@@ -345,7 +377,13 @@ async function processStockQuote(store, config, stock, quote, options = {}) {
     let deliveryStatus = 'none';
     let deliveryError = '';
     let alert = null;
-    const status = evaluation.alertDue ? 'alert' : evaluation.highUpdated ? 'high_updated' : 'checked';
+    const status = evaluation.alertDue
+      ? 'alert'
+      : evaluation.recovered
+        ? 'recovered'
+        : evaluation.highUpdated
+          ? 'high_updated'
+          : 'checked';
 
     if (evaluation.alertDue) {
       const message = formatAlertMessage(
@@ -371,7 +409,11 @@ async function processStockQuote(store, config, stock, quote, options = {}) {
 
       nextStock = {
         ...nextStock,
-        lastAlertAt: now.toISOString()
+        lastAlertAt: now.toISOString(),
+        lastAlertPrice: quote.price,
+        lastAlertThresholdPrice: evaluation.thresholdPrice,
+        lastAlertMetricPercent: evaluation.drawdownPercent,
+        alertRepeatCount: evaluation.alertRepeatCount
       };
 
       alert = await store.appendAlert({
@@ -386,6 +428,9 @@ async function processStockQuote(store, config, stock, quote, options = {}) {
         thresholdPrice: evaluation.thresholdPrice,
         metricLabel: evaluation.metricLabel,
         drawdownPercent: evaluation.drawdownPercent,
+        alertState: nextStock.alertState,
+        alertRepeatCount: evaluation.alertRepeatCount,
+        lastRecoveredAt: nextStock.alertRecoveredAt,
         deliveryStatus,
         deliveryError,
         message,
@@ -408,6 +453,9 @@ async function processStockQuote(store, config, stock, quote, options = {}) {
       highPrice: nextStock.highPrice,
       alertType: evaluation.alertType,
       alertTypeLabel: evaluation.alertTypeLabel,
+      alertState: nextStock.alertState,
+      alertRepeatCount: nextStock.alertRepeatCount,
+      recovered: evaluation.recovered,
       drawdownPercent: evaluation.drawdownPercent,
       thresholdPrice: evaluation.thresholdPrice,
       metricLabel: evaluation.metricLabel,

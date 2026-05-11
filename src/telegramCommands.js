@@ -333,6 +333,7 @@ async function runManualCheck(store, config, options) {
     `전체: ${result.results.length}개`,
     counts.alert ? `알림: ${counts.alert}개` : '',
     counts.checked ? `정상: ${counts.checked}개` : '',
+    counts.recovered ? `회복: ${counts.recovered}개` : '',
     counts.high_updated ? `새 최고가: ${counts.high_updated}개` : '',
     counts.error ? `오류: ${counts.error}개` : ''
   ]
@@ -378,10 +379,24 @@ function formatStockLine(stock) {
     stock.purchaseDate ? `매수일: ${stock.purchaseDate}` : '',
     stock.purchasePrice ? `매수가: ${formatNumber(stock.purchasePrice)}` : '',
     Number.isFinite(currentPrice) ? `현재가: ${formatNumber(currentPrice)}${stock.currency ? ` ${stock.currency}` : ''}` : '',
+    formatAlertStateLine(stock),
     formatThresholdLine(stock)
   ];
 
   return line.filter(Boolean).join('\n');
+}
+
+function formatAlertStateLine(stock) {
+  if (stock.alertState === 'triggered') {
+    const count = Number(stock.alertRepeatCount || 0);
+    return `상태: 알림 기준 이하${count ? ` (${count}회차)` : ''}`;
+  }
+
+  if (stock.alertRecoveredAt) {
+    return `상태: 회복 (${formatDateOnly(stock.alertRecoveredAt)})`;
+  }
+
+  return '상태: 정상';
 }
 
 function formatThresholdLine(stock) {
@@ -416,6 +431,16 @@ function formatNumber(value) {
   return number.toLocaleString('ko-KR', {
     maximumFractionDigits: number >= 1000 ? 0 : 2
   });
+}
+
+function formatDateOnly(value) {
+  const match = String(value || '').match(/^(\d{4})-(\d{2})-(\d{2})/);
+
+  if (!match) {
+    return '-';
+  }
+
+  return `${match[1]}.${match[2]}.${match[3]}`;
 }
 
 function getShortUsage(commandName) {

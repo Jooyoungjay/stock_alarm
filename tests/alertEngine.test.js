@@ -57,6 +57,8 @@ test('drop below threshold creates an alert when cooldown allows it', () => {
   assert.equal(result.highUpdated, false);
   assert.equal(result.drawdownPercent, 6);
   assert.equal(result.thresholdPrice, 95);
+  assert.equal(result.nextStock.alertState, 'triggered');
+  assert.equal(result.alertRepeatCount, 1);
 });
 
 test('purchase-loss alert uses purchase price as the alert basis', () => {
@@ -103,6 +105,43 @@ test('cooldown blocks repeated alerts', () => {
 
   assert.equal(result.alertDue, false);
   assert.equal(result.drawdownPercent, 10);
+  assert.equal(result.nextStock.alertState, 'triggered');
+  assert.equal(result.alertRepeatCount, 0);
+});
+
+test('repeated alert increments the repeat count after cooldown', () => {
+  const stock = {
+    ...baseStock,
+    highPrice: 100,
+    alertState: 'triggered',
+    alertStartedAt: '2026-05-11T00:00:00.000Z',
+    alertRepeatCount: 1,
+    lastAlertAt: '2026-05-11T00:00:00.000Z'
+  };
+  const result = evaluateStock(stock, { price: 94, currency: 'USD' }, date('2026-05-11T00:40:00Z'));
+
+  assert.equal(result.alertDue, true);
+  assert.equal(result.alertRepeatCount, 2);
+  assert.equal(result.nextStock.alertState, 'triggered');
+  assert.equal(result.nextStock.alertStartedAt, '2026-05-11T00:00:00.000Z');
+});
+
+test('price recovery clears the alert state', () => {
+  const stock = {
+    ...baseStock,
+    highPrice: 100,
+    alertState: 'triggered',
+    alertStartedAt: '2026-05-11T00:00:00.000Z',
+    alertRepeatCount: 2,
+    lastAlertAt: '2026-05-11T00:30:00.000Z'
+  };
+  const result = evaluateStock(stock, { price: 98, currency: 'USD' }, date('2026-05-11T00:45:00Z'));
+
+  assert.equal(result.alertDue, false);
+  assert.equal(result.recovered, true);
+  assert.equal(result.nextStock.alertState, 'clear');
+  assert.equal(result.nextStock.alertRepeatCount, 0);
+  assert.equal(result.nextStock.alertRecoveredAt, '2026-05-11T00:45:00.000Z');
 });
 
 test('new high updates the high price and suppresses alert', () => {
@@ -334,7 +373,49 @@ test('manual quote check sends an alert through the same alert path', async () =
   assert.equal(store.stocks[0].lastCheckStatus, 'alert');
   assert.equal(store.stocks[0].lastError, '');
   assert.equal(store.stocks[0].lastAlertAt, '2026-05-11T00:40:00.000Z');
+  assert.equal(store.stocks[0].alertState, 'triggered');
+  assert.equal(store.stocks[0].alertRepeatCount, 1);
+  assert.equal(store.alerts[0].alertRepeatCount, 1);
   assert.equal(sentMessages.length, 1);
+});
+
+test('manual quote check marks recovery without sending an alert', async () => {
+  const store = createMemoryStore({
+    ...baseStock,
+    highPrice: 100,
+    highPriceAt: '2026-05-11T00:01:00.000Z',
+    alertState: 'triggered',
+    alertStartedAt: '2026-05-11T00:00:00.000Z',
+    alertRepeatCount: 2,
+    lastAlertAt: '2026-05-11T00:30:00.000Z'
+  });
+  const sentMessages = [];
+
+  const result = await runManualQuoteCheck(
+    store,
+    {
+      telegramBotToken: 'token',
+      telegramChatId: 'chat',
+      quoteTimeoutMs: 10000
+    },
+    'stock-1',
+    { price: 98 },
+    {
+      now: date('2026-05-11T00:45:00Z'),
+      sendTelegramMessage: async (_config, message) => {
+        sentMessages.push(message);
+        return { ok: true };
+      }
+    }
+  );
+
+  assert.equal(result.results[0].status, 'recovered');
+  assert.equal(result.results[0].recovered, true);
+  assert.equal(store.alerts.length, 0);
+  assert.equal(store.stocks[0].alertState, 'clear');
+  assert.equal(store.stocks[0].alertRepeatCount, 0);
+  assert.equal(store.stocks[0].alertRecoveredAt, '2026-05-11T00:45:00.000Z');
+  assert.equal(sentMessages.length, 0);
 });
 
 test('quote fetch errors are persisted on the stock', async () => {

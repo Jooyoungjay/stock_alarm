@@ -609,6 +609,7 @@ function renderAlerts() {
         <div class="metric">
           <span class="metric-label">${escapeHtml(alert.metricLabel || '하락률')}</span>
           <span class="metric-value down">${formatAlertMetricPercent(alert.drawdownPercent)}</span>
+          ${alert.alertRepeatCount ? `<span class="metric-detail">${Number(alert.alertRepeatCount)}회차</span>` : ''}
         </div>
         <div class="metric">
           <span class="metric-label">전송</span>
@@ -631,6 +632,7 @@ function renderManualTestMessage(result) {
 
   const labels = {
     alert: '테스트 가격으로 알림을 보냈습니다.',
+    recovered: '테스트 가격이 알림 기준 위로 회복됐습니다.',
     high_updated: '테스트 가격이 새 최고가로 저장됐습니다.',
     high_initialized: '구매일 이후 최고가를 계산했습니다.',
     checked: '테스트 가격을 확인했습니다. 아직 알림 기준에는 닿지 않았습니다.',
@@ -647,12 +649,17 @@ function getStockStatusLabel(stock) {
 
   const labels = {
     alert: '알림 전송',
+    recovered: '회복됨',
     high_updated: '새 최고가',
     high_initialized: '최고가 계산',
     checked: '정상',
     error: '조회 실패',
     pending: '대기'
   };
+
+  if (stock.alertState === 'triggered' && stock.lastCheckStatus !== 'alert') {
+    return '알림 상태';
+  }
 
   return labels[stock.lastCheckStatus] || '대기';
 }
@@ -664,11 +671,16 @@ function getStockStatusClass(stock) {
 
   const classes = {
     alert: 'alert',
+    recovered: 'ok',
     high_updated: 'ok',
     checked: 'ok',
     error: 'error',
     pending: 'muted'
   };
+
+  if (stock.alertState === 'triggered' && stock.lastCheckStatus !== 'error') {
+    return 'alert';
+  }
 
   return classes[stock.lastCheckStatus] || 'muted';
 }
@@ -684,6 +696,15 @@ function formatLastChecked(value) {
 function formatStockStatusDetail(stock) {
   if (stock.lastCheckStatus === 'high_initialized' && stock.highPriceAt) {
     return `최고가 기준 ${formatDateOnly(stock.highPriceAt)}`;
+  }
+
+  if (stock.alertState === 'triggered') {
+    const count = Number(stock.alertRepeatCount || 0);
+    return `알림 진입 ${formatDate(stock.alertStartedAt)}${count ? ` · ${count}회차` : ''}`;
+  }
+
+  if (stock.lastCheckStatus === 'recovered' && stock.alertRecoveredAt) {
+    return `회복 ${formatDate(stock.alertRecoveredAt)}`;
   }
 
   return formatLastChecked(stock.lastCheckedAt);
