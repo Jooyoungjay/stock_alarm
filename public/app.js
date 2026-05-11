@@ -18,7 +18,9 @@ const elements = {
   symbolSuggestions: document.querySelector('#symbolSuggestions'),
   previewQuoteButton: document.querySelector('#previewQuoteButton'),
   checkNowButton: document.querySelector('#checkNowButton'),
-  testTelegramButton: document.querySelector('#testTelegramButton')
+  testTelegramButton: document.querySelector('#testTelegramButton'),
+  tabSections: document.querySelectorAll('.tab-section'),
+  mobileNavButtons: document.querySelectorAll('.nav-item')
 };
 
 let symbolSearchTimer = null;
@@ -29,6 +31,8 @@ elements.form.elements.purchaseDate.max = getTodayInputValue();
 document.querySelectorAll('.symbol-helper button').forEach((button) => {
   button.addEventListener('click', () => {
     elements.form.elements.symbol.value = button.dataset.symbol || '';
+    document.querySelectorAll('.symbol-helper button').forEach((item) => item.classList.remove('active'));
+    button.classList.add('active');
 
     if (!elements.form.elements.displayName.value) {
       elements.form.elements.displayName.value = button.dataset.name || '';
@@ -38,6 +42,12 @@ document.querySelectorAll('.symbol-helper button').forEach((button) => {
     renderQuotePreview(null);
   });
 });
+
+elements.mobileNavButtons.forEach((button) => {
+  button.addEventListener('click', () => switchMobileTab(button.dataset.tab));
+});
+
+window.addEventListener('resize', syncResponsiveTabs);
 
 elements.form.elements.symbol.addEventListener('input', () => {
   renderQuotePreview(null);
@@ -315,12 +325,14 @@ function renderPreviewItem(label, value, detail = '', valueClass = '') {
 }
 
 function renderStatus(data) {
-  elements.telegramStatus.textContent = data.telegramConfigured ? 'Telegram 연결됨' : 'Telegram 미설정';
-  elements.telegramStatus.className = `status-pill ${data.telegramConfigured ? 'ok' : 'warn'}`;
+  elements.telegramStatus.innerHTML = data.telegramConfigured
+    ? '<span class="dot"></span>Telegram 연결됨'
+    : 'Telegram 미설정';
+  elements.telegramStatus.className = `status-chip ${data.telegramConfigured ? 'connected' : 'warn'}`;
   elements.quoteStatus.textContent = `시세 ${formatProviderList(data.quoteProviders)}`;
-  elements.quoteStatus.className = 'status-pill muted';
+  elements.quoteStatus.className = 'status-chip pipeline';
   elements.pollStatus.textContent = `${data.pollIntervalSeconds || 60}초 주기`;
-  elements.pollStatus.className = 'status-pill muted';
+  elements.pollStatus.className = 'status-chip timer';
 }
 
 function renderStocks() {
@@ -341,34 +353,37 @@ function renderStocks() {
       const isTriggered = thresholdPrice !== null && lastPrice !== null && lastPrice <= thresholdPrice;
 
       row.innerHTML = `
-        <div class="stock-title">
-          <div class="stock-name">${escapeHtml(stock.displayName || stock.symbol)}</div>
-          <div class="stock-symbol">${escapeHtml(stock.symbol)} ${stock.active ? '' : '비활성'}</div>
-          ${renderPositionSummary(stock)}
+        <div class="stock-top">
+          <div class="stock-title stock-info">
+            <div class="stock-name">${escapeHtml(stock.displayName || stock.symbol)}</div>
+            <div class="stock-symbol">${escapeHtml(stock.symbol)} ${stock.active ? '' : '비활성'}</div>
+            ${renderPositionSummary(stock)}
+          </div>
+          <div class="metric price-block">
+            <span class="metric-label price-label">현재가</span>
+            <span class="metric-value price-value">${formatMoney(stock.lastPrice, stock.currency)}</span>
+          </div>
+          <div class="metric price-block">
+            <span class="metric-label price-label">${getHighPriceLabel(stock)}</span>
+            <span class="metric-value price-value">${formatMoney(stock.highPrice, stock.currency)}</span>
+            <span class="metric-detail price-unit">${formatHighPriceAt(stock)}</span>
+          </div>
+          <div class="metric price-block">
+            <span class="metric-label price-label">기준가</span>
+            <span class="metric-value price-value">${formatMoney(thresholdPrice, stock.currency)}</span>
+          </div>
+          <div class="metric change-block">
+            <span class="metric-label price-label">하락률</span>
+            <span class="metric-value change-pct ${isTriggered ? 'down' : 'up'}">-${drawdown.toFixed(2)}%</span>
+          </div>
         </div>
-        <div class="metric">
-          <span class="metric-label">현재가</span>
-          <span class="metric-value">${formatMoney(stock.lastPrice, stock.currency)}</span>
-        </div>
-        <div class="metric">
-          <span class="metric-label">${getHighPriceLabel(stock)}</span>
-          <span class="metric-value">${formatMoney(stock.highPrice, stock.currency)}</span>
-          <span class="metric-detail">${formatHighPriceAt(stock)}</span>
-        </div>
-        <div class="metric">
-          <span class="metric-label">기준가</span>
-          <span class="metric-value">${formatMoney(thresholdPrice, stock.currency)}</span>
-        </div>
-        <div class="metric">
-          <span class="metric-label">하락률</span>
-          <span class="metric-value ${isTriggered ? 'down' : 'ok'}">-${drawdown.toFixed(2)}%</span>
-        </div>
-        <div class="metric status-metric">
-          <span class="metric-label">상태</span>
-          <span class="status-badge ${getStockStatusClass(stock)}">${getStockStatusLabel(stock)}</span>
-          <span class="metric-detail">${formatStockStatusDetail(stock)}</span>
-          ${stock.quoteProvider ? `<span class="metric-detail">시세 ${getProviderLabel(stock.quoteProvider)}</span>` : ''}
-          ${stock.lastError ? `<span class="metric-error">${escapeHtml(stock.lastError)}</span>` : ''}
+        <div class="stock-bottom">
+          <div class="status-block">
+            <span class="status-badge ${getStockStatusClass(stock)}"><span class="dot"></span>${getStockStatusLabel(stock)}</span>
+            <span class="status-time">${formatStockStatusDetail(stock)}</span>
+            ${stock.quoteProvider ? `<span class="status-src">시세 ${getProviderLabel(stock.quoteProvider)}</span>` : ''}
+            ${stock.lastError ? `<span class="metric-error">${escapeHtml(stock.lastError)}</span>` : ''}
+          </div>
         </div>
       `;
 
@@ -376,19 +391,19 @@ function renderStocks() {
       actions.className = 'stock-actions';
       actions.append(
         manualTestForm(stock),
-        actionButton(state.editingStockId === stock.id ? '편집 닫기' : '편집', 'secondary-button', () => {
+        actionButton(state.editingStockId === stock.id ? '편집 닫기' : '편집', 'btn btn-ghost btn-sm secondary-button', () => {
           state.editingStockId = state.editingStockId === stock.id ? null : stock.id;
           renderStocks();
         }),
-        actionButton(stock.active ? '중지' : '재개', 'text-button', () =>
+        actionButton(stock.active ? '중지' : '재개', 'btn btn-ghost btn-sm text-button', () =>
           patchStock(stock.id, { active: !stock.active })
         ),
-        actionButton(stock.purchaseDate ? '최고가 재계산' : '최고가 초기화', 'secondary-button', () =>
+        actionButton(stock.purchaseDate ? '최고가 재계산' : '최고가 초기화', 'btn btn-ghost btn-sm secondary-button', () =>
           patchStock(stock.id, { resetHighPrice: true })
         ),
-        actionButton('삭제', 'danger-button', () => deleteStock(stock.id))
+        actionButton('삭제', 'btn btn-danger btn-sm danger-button', () => deleteStock(stock.id))
       );
-      row.append(actions);
+      row.querySelector('.stock-bottom').append(actions);
 
       if (state.editingStockId === stock.id) {
         row.append(editStockForm(stock));
@@ -428,8 +443,8 @@ function editStockForm(stock) {
       <textarea name="notes" rows="2">${escapeHtml(stock.notes || '')}</textarea>
     </label>
     <div class="edit-actions">
-      <button type="button" class="secondary-button" data-action="cancel">취소</button>
-      <button type="submit" class="primary-button">저장</button>
+      <button type="button" class="btn btn-outline secondary-button" data-action="cancel">취소</button>
+      <button type="submit" class="btn btn-primary primary-button">저장</button>
     </div>
   `;
 
@@ -480,7 +495,7 @@ function manualTestForm(stock) {
   }
 
   button.type = 'submit';
-  button.className = 'secondary-button';
+  button.className = 'btn btn-outline btn-sm secondary-button';
   button.textContent = '가격 테스트';
 
   form.append(input, button);
@@ -818,6 +833,36 @@ function renderDeliveryStatus(status) {
   return labels[status] || status || '-';
 }
 
+function isMobileViewport() {
+  return window.matchMedia('(max-width: 768px)').matches;
+}
+
+function switchMobileTab(name) {
+  if (!isMobileViewport()) {
+    return;
+  }
+
+  elements.tabSections.forEach((section) => {
+    section.classList.toggle('active', section.id === `tab-${name}`);
+  });
+  elements.mobileNavButtons.forEach((button) => {
+    button.classList.toggle('active', button.dataset.tab === name);
+  });
+}
+
+function syncResponsiveTabs() {
+  if (!isMobileViewport()) {
+    elements.tabSections.forEach((section) => section.classList.add('active'));
+    return;
+  }
+
+  const activeButton =
+    [...elements.mobileNavButtons].find((button) => button.classList.contains('active')) ||
+    elements.mobileNavButtons[0];
+
+  switchMobileTab(activeButton?.dataset.tab || 'register');
+}
+
 function escapeHtml(value) {
   return String(value ?? '')
     .replaceAll('&', '&amp;')
@@ -827,5 +872,6 @@ function escapeHtml(value) {
     .replaceAll("'", '&#039;');
 }
 
+syncResponsiveTabs();
 loadData();
 window.setInterval(loadData, 15000);

@@ -3,109 +3,193 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>Stock Alarm</title>
+    <title>Stock Alarm · Telegram MVP</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=Noto+Sans+KR:wght@300;400;500;600;700&display=swap"
+      rel="stylesheet"
+    />
     <link rel="stylesheet" href="/styles.css" />
   </head>
   <body>
-    <header class="topbar">
-      <div>
-        <p class="eyebrow">Telegram MVP</p>
-        <h1>Stock Alarm</h1>
+    <header class="app-header">
+      <div class="header-left">
+        <span class="header-badge">Telegram MVP</span>
+        <span class="header-title">Stock Alarm</span>
       </div>
-      <div class="status-strip" aria-live="polite">
-        <span id="telegramStatus" class="status-pill muted">Telegram</span>
-        <span id="quoteStatus" class="status-pill muted">Quotes</span>
-        <span id="pollStatus" class="status-pill muted">Polling</span>
+      <div class="header-right" aria-live="polite">
+        <span id="telegramStatus" class="status-chip connected">Telegram</span>
+        <span id="quoteStatus" class="status-chip pipeline">Quotes</span>
+        <span id="pollStatus" class="status-chip timer">Polling</span>
       </div>
     </header>
 
-    <main class="layout">
-      <section class="panel form-panel" aria-labelledby="addStockTitle">
-        <div class="panel-heading">
-          <h2 id="addStockTitle">종목 등록</h2>
+    <main class="page">
+      <section class="col-left tab-section active" id="tab-register" aria-labelledby="addStockTitle">
+        <div class="card">
+          <div class="card-header">
+            <div>
+              <h2 id="addStockTitle" class="card-title">종목 등록</h2>
+            </div>
+          </div>
+
+          <form id="stockForm" class="stock-form">
+            <label class="form-group">
+              <span class="form-label">종목 코드</span>
+              <input
+                class="form-input"
+                name="symbol"
+                placeholder="AAPL, TSLA, 005930.KS"
+                autocomplete="off"
+                required
+              />
+            </label>
+            <div id="symbolSuggestions" class="symbol-suggestions" aria-live="polite"></div>
+
+            <div class="symbol-helper tag-list" aria-label="종목 예시">
+              <button class="tag" type="button" data-symbol="005930" data-name="삼성전자">삼성전자</button>
+              <button class="tag" type="button" data-symbol="000660" data-name="SK하이닉스">SK하이닉스</button>
+              <button class="tag" type="button" data-symbol="035720" data-name="카카오">카카오</button>
+              <button class="tag" type="button" data-symbol="AAPL" data-name="Apple">Apple</button>
+              <button class="tag" type="button" data-symbol="TSLA" data-name="Tesla">Tesla</button>
+            </div>
+
+            <label class="form-group">
+              <span class="form-label">표시 이름</span>
+              <input class="form-input" name="displayName" placeholder="삼성전자" autocomplete="off" />
+            </label>
+
+            <div class="form-row">
+              <label class="form-group">
+                <span class="form-label">매수가</span>
+                <input
+                  class="form-input"
+                  name="purchasePrice"
+                  type="text"
+                  inputmode="decimal"
+                  pattern="[0-9]*[.]?[0-9]*"
+                  placeholder="80000"
+                  required
+                />
+              </label>
+
+              <label class="form-group">
+                <span class="form-label">구매일</span>
+                <input class="form-input" name="purchaseDate" type="date" required />
+              </label>
+            </div>
+
+            <div class="form-row">
+              <label class="form-group">
+                <span class="form-label">하락률 %</span>
+                <input
+                  class="form-input"
+                  name="thresholdPercent"
+                  type="number"
+                  min="0.1"
+                  max="99"
+                  step="0.1"
+                  value="5"
+                  required
+                />
+              </label>
+
+              <label class="form-group">
+                <span class="form-label">반복 분</span>
+                <input
+                  class="form-input"
+                  name="alertCooldownMinutes"
+                  type="number"
+                  min="1"
+                  step="1"
+                  value="30"
+                  required
+                />
+              </label>
+            </div>
+
+            <label class="form-group">
+              <span class="form-label">메모</span>
+              <textarea
+                class="form-textarea"
+                name="notes"
+                rows="3"
+                placeholder="매수 이유 또는 목표가"
+              ></textarea>
+            </label>
+
+            <div id="quotePreview" class="quote-preview" aria-live="polite"></div>
+
+            <div class="form-actions">
+              <button id="previewQuoteButton" type="button" class="btn btn-outline secondary-button">
+                기준 미리 확인
+              </button>
+              <button type="submit" class="btn btn-primary primary-button">등록</button>
+            </div>
+          </form>
         </div>
-
-        <form id="stockForm" class="stock-form">
-          <label>
-            <span>종목 코드</span>
-            <input name="symbol" placeholder="AAPL, TSLA, 005930.KS" autocomplete="off" required />
-          </label>
-          <div id="symbolSuggestions" class="symbol-suggestions" aria-live="polite"></div>
-
-          <div class="symbol-helper" aria-label="종목 예시">
-            <button type="button" data-symbol="005930" data-name="삼성전자">삼성전자</button>
-            <button type="button" data-symbol="000660" data-name="SK하이닉스">SK하이닉스</button>
-            <button type="button" data-symbol="035720" data-name="카카오">카카오</button>
-            <button type="button" data-symbol="AAPL" data-name="Apple">Apple</button>
-            <button type="button" data-symbol="TSLA" data-name="Tesla">Tesla</button>
-          </div>
-
-          <label>
-            <span>표시 이름</span>
-            <input name="displayName" placeholder="삼성전자" autocomplete="off" />
-          </label>
-
-          <div class="field-grid">
-            <label>
-              <span>매수가</span>
-              <input name="purchasePrice" type="text" inputmode="decimal" pattern="[0-9]*[.]?[0-9]*" placeholder="80000" required />
-            </label>
-
-            <label>
-              <span>구매일</span>
-              <input name="purchaseDate" type="date" required />
-            </label>
-          </div>
-
-          <div class="field-grid">
-            <label>
-              <span>하락률 %</span>
-              <input name="thresholdPercent" type="number" min="0.1" max="99" step="0.1" value="5" required />
-            </label>
-
-            <label>
-              <span>반복 분</span>
-              <input name="alertCooldownMinutes" type="number" min="1" step="1" value="30" required />
-            </label>
-          </div>
-
-          <label>
-            <span>메모</span>
-            <textarea name="notes" rows="3" placeholder="매수 이유 또는 목표가"></textarea>
-          </label>
-
-          <div id="quotePreview" class="quote-preview" aria-live="polite"></div>
-
-          <div class="form-actions">
-            <button id="previewQuoteButton" type="button" class="secondary-button">기준 미리 확인</button>
-            <button type="submit" class="primary-button">등록</button>
-          </div>
-        </form>
       </section>
 
-      <section class="panel watch-panel" aria-labelledby="watchTitle">
-        <div class="panel-heading split">
-          <div>
-            <h2 id="watchTitle">감시 종목</h2>
-            <p id="summaryText" class="subtle">0개 등록</p>
+      <section class="col-right tab-section" id="tab-watch" aria-labelledby="watchTitle">
+        <div class="card">
+          <div class="watch-header">
+            <div>
+              <h2 id="watchTitle" class="card-title">감시 종목</h2>
+              <p id="summaryText" class="card-subtitle">0개 등록</p>
+            </div>
+            <div class="watch-actions">
+              <button id="checkNowButton" type="button" class="btn btn-outline btn-sm secondary-button">
+                즉시 확인
+              </button>
+              <button id="testTelegramButton" type="button" class="btn btn-ghost btn-sm secondary-button">
+                테스트 알림
+              </button>
+            </div>
           </div>
-          <div class="button-row">
-            <button id="checkNowButton" type="button" class="secondary-button">즉시 확인</button>
-            <button id="testTelegramButton" type="button" class="secondary-button">테스트 알림</button>
-          </div>
-        </div>
 
-        <div id="message" class="message" role="status" aria-live="polite"></div>
-        <div id="stockList" class="stock-list"></div>
+          <div id="message" class="message" role="status" aria-live="polite"></div>
+          <div id="stockList" class="stock-list"></div>
+        </div>
       </section>
 
-      <section class="panel alerts-panel" aria-labelledby="alertsTitle">
-        <div class="panel-heading">
-          <h2 id="alertsTitle">알림 기록</h2>
+      <section class="col-full tab-section" id="tab-alerts" aria-labelledby="alertsTitle">
+        <div class="card">
+          <div class="card-header">
+            <div>
+              <h2 id="alertsTitle" class="card-title">알림 기록</h2>
+            </div>
+          </div>
+          <div id="alertList" class="alert-list"></div>
         </div>
-        <div id="alertList" class="alert-list"></div>
       </section>
     </main>
+
+    <nav class="mobile-nav" aria-label="모바일 화면 전환">
+      <div class="mobile-nav-inner">
+        <button class="nav-item active" type="button" data-tab="register">
+          <svg viewBox="0 0 24 24" aria-hidden="true">
+            <circle cx="12" cy="12" r="10"></circle>
+            <line x1="12" y1="8" x2="12" y2="16"></line>
+            <line x1="8" y1="12" x2="16" y2="12"></line>
+          </svg>
+          <span>종목 등록</span>
+        </button>
+        <button class="nav-item" type="button" data-tab="watch">
+          <svg viewBox="0 0 24 24" aria-hidden="true">
+            <polyline points="22 12 18 12 15 21 9 3 6 12 2 12"></polyline>
+          </svg>
+          <span>감시 종목</span>
+        </button>
+        <button class="nav-item" type="button" data-tab="alerts">
+          <svg viewBox="0 0 24 24" aria-hidden="true">
+            <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"></path>
+            <path d="M13.73 21a2 2 0 0 1-3.46 0"></path>
+          </svg>
+          <span>알림 기록</span>
+        </button>
+      </div>
+    </nav>
 
     <script src="/app.js" type="module"></script>
   </body>
