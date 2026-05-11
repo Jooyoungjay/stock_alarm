@@ -15,6 +15,7 @@ out/
 
 # Local app data
 data/*.json
+data/backups/
 
 # Logs
 *.log

@@ -103,6 +103,36 @@ test('pollTelegramCommands stores the next Telegram update offset', async () => 
   assert.equal(sent.length, 2);
 });
 
+test('handleTelegramMessage supports backup commands', async () => {
+  const store = await createStore();
+  const sent = [];
+  const options = {
+    sendTelegramMessage: async (_config, text) => {
+      sent.push(text);
+    },
+    createBackup: async () => ({
+      created: true,
+      name: 'store-20260511-120000-000-telegram-manual-12345678.json',
+      size: 2048
+    }),
+    listBackups: async () => [
+      {
+        name: 'store-20260511-120000-000-telegram-manual-12345678.json',
+        size: 2048,
+        createdAt: '2026-05-11T12:00:00.000Z'
+      }
+    ]
+  };
+
+  await handleTelegramMessage(store, config, message('/backup'), options);
+  await handleTelegramMessage(store, config, message('/backups'), options);
+
+  assert.match(sent[0], /백업을 생성했습니다/);
+  assert.match(sent[0], /2.0 KB/);
+  assert.match(sent[1], /최근 백업 1개/);
+  assert.match(sent[1], /telegram-manual/);
+});
+
 async function createStore() {
   const dataDir = await fs.mkdtemp(path.join(os.tmpdir(), 'stock-alarm-test-'));
   return new JsonStore(dataDir, {

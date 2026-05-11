@@ -1,6 +1,7 @@
 import http from 'node:http';
 import fs from 'node:fs/promises';
 import path from 'node:path';
+import { createBackup } from './backups.js';
 import { config } from './config.js';
 import { JsonStore } from './storage.js';
 import {
@@ -15,7 +16,11 @@ import { pollTelegramCommands } from './telegramCommands.js';
 import { normalizeSymbolInput, searchSymbols } from './symbols.js';
 
 const store = new JsonStore(config.dataDir, {
-  defaultAlertCooldownMinutes: config.defaultAlertCooldownMinutes
+  defaultAlertCooldownMinutes: config.defaultAlertCooldownMinutes,
+  backups: {
+    enabled: true,
+    maxBackups: config.backupRetention
+  }
 });
 
 let lastCheck = null;
@@ -24,6 +29,13 @@ let isChecking = false;
 let isPollingTelegramCommands = false;
 let activePort = config.port;
 let server = null;
+
+createBackup(config.dataDir, {
+  reason: 'server-start',
+  maxBackups: config.backupRetention
+}).catch((error) => {
+  console.error('Startup backup failed:', error);
+});
 
 const mimeTypes = {
   '.html': 'text/html; charset=utf-8',

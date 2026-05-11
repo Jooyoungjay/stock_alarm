@@ -1,4 +1,5 @@
 import { buildAlertRule, initializeHighFromPurchaseDate, runAlertCheck } from './alertEngine.js';
+import { createBackup, listBackups } from './backups.js';
 import { ALERT_TYPES } from './storage.js';
 import {
   fetchTelegramUpdates,
@@ -16,6 +17,8 @@ const helpMessage = [
   '/pause <종목코드> - 감시 중지',
   '/resume <종목코드> - 감시 재개',
   '/delete <종목코드> - 종목 삭제',
+  '/backup - 현재 데이터 백업 생성',
+  '/backups - 최근 백업 목록',
   '',
   '등록 예시',
   '/add 336260 두산퓨얼셀 88779 2026-05-11 high 10',
@@ -149,11 +152,58 @@ async function executeCommand(store, config, command, options) {
     case 'delete':
     case 'del':
       return deleteStockFromCommand(store, command.args[0]);
+    case 'backup':
+      return createBackupFromCommand(store, config, options);
+    case 'backups':
+      return listBackupsFromCommand(store, config, command, options);
     case 'check':
       return runManualCheck(store, config, options);
     default:
       return `지원하지 않는 명령어입니다: /${command.name}\n\n${helpMessage}`;
   }
+}
+
+async function createBackupFromCommand(store, config, options) {
+  const backupCreator = options.createBackup || createBackup;
+  const backup = options.createBackup
+    ? await backupCreator(config.dataDir, {
+        reason: 'telegram-manual',
+        maxBackups: config.backupRetention
+      })
+    : store.createBackup
+      ? await store.createBackup('telegram-manual')
+      : await backupCreator(config.dataDir, {
+          reason: 'telegram-manual',
+          maxBackups: config.backupRetention
+        });
+
+  if (!backup.created) {
+    return `백업을 만들지 못했습니다: ${backup.reason}`;
+  }
+
+  return [
+    '백업을 생성했습니다.',
+    `파일: ${backup.name}`,
+    `크기: ${formatBytes(backup.size)}`
+  ].join('\n');
+}
+
+async function listBackupsFromCommand(_store, config, command, options) {
+  const backupLister = options.listBackups || listBackups;
+  const limit = normalizeListLimit(command.args[0] || 5);
+  const backups = await backupLister(config.dataDir, { limit });
+
+  if (!backups.length) {
+    return '백업 파일이 없습니다.';
+  }
+
+  return [
+    `최근 백업 ${backups.length}개`,
+    ...backups.map(
+      (backup, index) =>
+        `${index + 1}. ${backup.name}\n   ${formatDate(backup.createdAt)} · ${formatBytes(backup.size)}`
+    )
+  ].join('\n');
 }
 
 async function addStockFromCommand(store, config, command, options) {
@@ -441,6 +491,42 @@ function formatDateOnly(value) {
   }
 
   return `${match[1]}.${match[2]}.${match[3]}`;
+}
+
+function formatDate(value) {
+  if (!value) {
+    return '-';
+  }
+
+  return new Date(value).toLocaleString('ko-KR');
+}
+
+function formatBytes(value) {
+  const bytes = Number(value);
+
+  if (!Number.isFinite(bytes) || bytes < 0) {
+    return '-';
+  }
+
+  if (bytes < 1024) {
+    return `${bytes} B`;
+  }
+
+  if (bytes < 1024 * 1024) {
+    return `${(bytes / 1024).toFixed(1)} KB`;
+  }
+
+  return `${(bytes / 1024 / 1024).toFixed(1)} MB`;
+}
+
+function normalizeListLimit(value) {
+  const limit = Number(value);
+
+  if (!Number.isInteger(limit) || limit < 1) {
+    return 5;
+  }
+
+  return Math.min(limit, 20);
 }
 
 function getShortUsage(commandName) {

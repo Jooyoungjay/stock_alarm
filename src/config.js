@@ -83,6 +83,7 @@ export const config = {
   port: toNumber(process.env.PORT, 3000, { min: 1, max: 65535 }),
   pollIntervalSeconds: toNumber(process.env.POLL_INTERVAL_SECONDS, 60, { min: 10 }),
   telegramCommandPollSeconds: toNumber(process.env.TELEGRAM_COMMAND_POLL_SECONDS, 5, { min: 2 }),
+  backupRetention: toNumber(process.env.BACKUP_RETENTION, 30, { min: 1 }),
   defaultAlertCooldownMinutes: toNumber(process.env.DEFAULT_ALERT_COOLDOWN_MINUTES, 30, {
     min: 1
   }),

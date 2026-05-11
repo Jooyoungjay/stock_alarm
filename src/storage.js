@@ -1,6 +1,7 @@
 import fs from 'node:fs/promises';
 import path from 'node:path';
 import { randomUUID } from 'node:crypto';
+import { createBackup } from './backups.js';
 import { normalizeSymbolInput } from './symbols.js';
 
 const emptyStore = {
@@ -331,6 +332,10 @@ export class JsonStore {
     this.dataDir = dataDir;
     this.filePath = path.join(dataDir, 'store.json');
     this.defaults = defaults;
+    this.backups = {
+      enabled: Boolean(defaults.backups?.enabled),
+      maxBackups: defaults.backups?.maxBackups
+    };
     this.ready = ensureDataDir(dataDir);
   }
 
@@ -363,8 +368,10 @@ export class JsonStore {
       throw new Error('이미 등록된 종목입니다.');
     }
 
+    await this.createBackup('before-add-stock');
     data.stocks.push(stock);
     await this.write(data);
+    await this.createBackup('after-add-stock');
     return stock;
   }
 
@@ -376,9 +383,11 @@ export class JsonStore {
       throw new Error('종목을 찾을 수 없습니다.');
     }
 
+    await this.createBackup('before-update-stock');
     const updated = applyStockPatch(data.stocks[index], patch);
     data.stocks[index] = updated;
     await this.write(data);
+    await this.createBackup('after-update-stock');
     return updated;
   }
 
@@ -402,6 +411,7 @@ export class JsonStore {
   async deleteStock(id) {
     const data = await this.read();
     const beforeCount = data.stocks.length;
+    await this.createBackup('before-delete-stock');
     data.stocks = data.stocks.filter((stock) => stock.id !== id);
 
     if (data.stocks.length === beforeCount) {
@@ -409,6 +419,7 @@ export class JsonStore {
     }
 
     await this.write(data);
+    await this.createBackup('after-delete-stock');
   }
 
   async listAlerts(limit = 50) {
@@ -443,5 +454,20 @@ export class JsonStore {
     data.alerts = data.alerts.slice(-500);
     await this.write(data);
     return item;
+  }
+
+  async createBackup(reason = 'manual') {
+    if (!this.backups.enabled) {
+      return {
+        created: false,
+        reason: 'disabled'
+      };
+    }
+
+    await this.ready;
+    return createBackup(this.dataDir, {
+      reason,
+      maxBackups: this.backups.maxBackups
+    });
   }
 }
