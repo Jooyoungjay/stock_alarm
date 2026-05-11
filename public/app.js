@@ -115,6 +115,7 @@ async function previewQuote(button) {
   await withBusy(button, async () => {
     const result = await api(`/api/quote-preview?symbol=${encodeURIComponent(symbol)}`);
     const quote = result.quote;
+    elements.form.elements.symbol.value = quote.symbol;
 
     if (
       !elements.form.elements.displayName.value &&

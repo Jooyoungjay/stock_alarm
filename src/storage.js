@@ -1,6 +1,7 @@
 import fs from 'node:fs/promises';
 import path from 'node:path';
 import { randomUUID } from 'node:crypto';
+import { normalizeSymbolInput } from './symbols.js';
 
 const emptyStore = {
   stocks: [],
@@ -32,7 +33,7 @@ async function writeJson(filePath, data) {
 
 function normalizeStock(input, defaults) {
   const now = new Date().toISOString();
-  const symbol = String(input.symbol || '').trim().toUpperCase();
+  const symbol = normalizeSymbolInput(input.symbol);
 
   if (!symbol) {
     throw new Error('종목 코드를 입력하세요.');

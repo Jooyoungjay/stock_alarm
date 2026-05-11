@@ -6,6 +6,7 @@ import { JsonStore } from './storage.js';
 import { runAlertCheck, runManualQuoteCheck } from './alertEngine.js';
 import { fetchQuote } from './priceProvider.js';
 import { isTelegramConfigured, sendTelegramMessage } from './telegram.js';
+import { normalizeSymbolInput } from './symbols.js';
 
 const store = new JsonStore(config.dataDir, {
   defaultAlertCooldownMinutes: config.defaultAlertCooldownMinutes
@@ -104,7 +105,7 @@ async function handleApi(request, response, url) {
   }
 
   if (request.method === 'GET' && url.pathname === '/api/quote-preview') {
-    const symbol = String(url.searchParams.get('symbol') || '').trim().toUpperCase();
+    const symbol = normalizeSymbolInput(url.searchParams.get('symbol'));
 
     if (!symbol) {
       sendError(response, 400, '종목 코드를 입력하세요.');
