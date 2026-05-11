@@ -13,9 +13,23 @@ const elements = {
   telegramStatus: document.querySelector('#telegramStatus'),
   quoteStatus: document.querySelector('#quoteStatus'),
   pollStatus: document.querySelector('#pollStatus'),
+  quotePreview: document.querySelector('#quotePreview'),
+  previewQuoteButton: document.querySelector('#previewQuoteButton'),
   checkNowButton: document.querySelector('#checkNowButton'),
   testTelegramButton: document.querySelector('#testTelegramButton')
 };
+
+document.querySelectorAll('.symbol-helper button').forEach((button) => {
+  button.addEventListener('click', () => {
+    elements.form.elements.symbol.value = button.dataset.symbol || '';
+
+    if (!elements.form.elements.displayName.value) {
+      elements.form.elements.displayName.value = button.dataset.name || '';
+    }
+
+    renderQuotePreview(null);
+  });
+});
 
 elements.form.addEventListener('submit', async (event) => {
   event.preventDefault();
@@ -31,11 +45,16 @@ elements.form.addEventListener('submit', async (event) => {
       body: JSON.stringify(payload)
     });
     elements.form.reset();
-    elements.form.thresholdPercent.value = 5;
-    elements.form.alertCooldownMinutes.value = 30;
+    elements.form.elements.thresholdPercent.value = 5;
+    elements.form.elements.alertCooldownMinutes.value = 30;
+    renderQuotePreview(null);
     showMessage('종목을 등록했습니다.');
     await loadData();
   });
+});
+
+elements.previewQuoteButton.addEventListener('click', async () => {
+  await previewQuote(elements.previewQuoteButton);
 });
 
 elements.checkNowButton.addEventListener('click', async () => {
@@ -84,6 +103,30 @@ async function api(path, options = {}) {
   return payload;
 }
 
+async function previewQuote(button) {
+  const symbol = elements.form.elements.symbol.value.trim().toUpperCase();
+
+  if (!symbol) {
+    showMessage('종목 코드를 입력하세요.', true);
+    return;
+  }
+
+  await withBusy(button, async () => {
+    const result = await api(`/api/quote-preview?symbol=${encodeURIComponent(symbol)}`);
+    const quote = result.quote;
+
+    if (
+      !elements.form.elements.displayName.value &&
+      quote.name &&
+      quote.name !== quote.symbol
+    ) {
+      elements.form.elements.displayName.value = quote.name;
+    }
+
+    renderQuotePreview(quote);
+  });
+}
+
 async function withBusy(button, callback) {
   const previousText = button.textContent;
   button.disabled = true;
@@ -97,6 +140,22 @@ async function withBusy(button, callback) {
     button.disabled = false;
     button.textContent = previousText;
   }
+}
+
+function renderQuotePreview(quote) {
+  if (!quote) {
+    elements.quotePreview.className = 'quote-preview';
+    elements.quotePreview.textContent = '';
+    return;
+  }
+
+  elements.quotePreview.className = 'quote-preview show';
+  elements.quotePreview.innerHTML = `
+    <span class="quote-preview-name">${escapeHtml(quote.name || quote.symbol)}</span>
+    <span>${escapeHtml(quote.symbol)}</span>
+    <span>${formatMoney(quote.price, quote.currency)}</span>
+    <span>${getProviderLabel(quote.provider)}</span>
+  `;
 }
 
 function renderStatus(data) {

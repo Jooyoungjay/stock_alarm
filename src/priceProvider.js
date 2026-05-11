@@ -195,7 +195,7 @@ async function fetchNaverQuote(symbol, options = {}) {
   const naverSymbol = toNaverSymbol(symbol);
   const url = new URL(naverRealtimeUrl);
   url.searchParams.set('query', `SERVICE_ITEM:${naverSymbol}`);
-  const payload = await fetchJson(url, options);
+  const payload = await fetchJson(url, options, 'euc-kr');
 
   return parseNaverQuote(payload, symbol);
 }
@@ -250,14 +250,16 @@ async function fetchYahooQuote(symbol, options = {}) {
   };
 }
 
-async function fetchJson(url, options = {}) {
+async function fetchJson(url, options = {}, encoding = 'utf-8') {
   const response = await fetchWithTimeout(url, options);
 
   if (!response.ok) {
     throw new Error(`HTTP ${response.status}`);
   }
 
-  return response.json();
+  const decoder = new TextDecoder(encoding);
+  const text = decoder.decode(await response.arrayBuffer());
+  return JSON.parse(text);
 }
 
 async function fetchText(url, options = {}) {

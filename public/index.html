@@ -31,6 +31,14 @@
             <input name="symbol" placeholder="AAPL, TSLA, 005930.KS" autocomplete="off" required />
           </label>
 
+          <div class="symbol-helper" aria-label="종목 예시">
+            <button type="button" data-symbol="005930" data-name="삼성전자">삼성전자</button>
+            <button type="button" data-symbol="000660" data-name="SK하이닉스">SK하이닉스</button>
+            <button type="button" data-symbol="035720" data-name="카카오">카카오</button>
+            <button type="button" data-symbol="AAPL" data-name="Apple">Apple</button>
+            <button type="button" data-symbol="TSLA" data-name="Tesla">Tesla</button>
+          </div>
+
           <label>
             <span>표시 이름</span>
             <input name="displayName" placeholder="삼성전자" autocomplete="off" />
@@ -53,7 +61,12 @@
             <textarea name="notes" rows="3" placeholder="매수 이유 또는 목표가"></textarea>
           </label>
 
-          <button type="submit" class="primary-button">등록</button>
+          <div id="quotePreview" class="quote-preview" aria-live="polite"></div>
+
+          <div class="form-actions">
+            <button id="previewQuoteButton" type="button" class="secondary-button">시세 미리 확인</button>
+            <button type="submit" class="primary-button">등록</button>
+          </div>
         </form>
       </section>
 

@@ -4,6 +4,7 @@ import path from 'node:path';
 import { config } from './config.js';
 import { JsonStore } from './storage.js';
 import { runAlertCheck, runManualQuoteCheck } from './alertEngine.js';
+import { fetchQuote } from './priceProvider.js';
 import { isTelegramConfigured, sendTelegramMessage } from './telegram.js';
 
 const store = new JsonStore(config.dataDir, {
@@ -99,6 +100,24 @@ async function handleApi(request, response, url) {
       pollIntervalSeconds: config.pollIntervalSeconds,
       lastCheck
     });
+    return;
+  }
+
+  if (request.method === 'GET' && url.pathname === '/api/quote-preview') {
+    const symbol = String(url.searchParams.get('symbol') || '').trim().toUpperCase();
+
+    if (!symbol) {
+      sendError(response, 400, '종목 코드를 입력하세요.');
+      return;
+    }
+
+    const quote = await fetchQuote(symbol, {
+      timeoutMs: config.quoteTimeoutMs,
+      providers: config.quoteProviders,
+      alphaVantageApiKey: config.alphaVantageApiKey
+    });
+
+    sendJson(response, 200, { quote });
     return;
   }
 

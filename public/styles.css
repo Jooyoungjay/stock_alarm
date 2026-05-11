@@ -170,6 +170,28 @@ h2 {
   padding: 18px;
 }
 
+.symbol-helper {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.symbol-helper button {
+  min-height: 32px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: var(--surface-soft);
+  color: var(--text);
+  padding: 0 10px;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.symbol-helper button:hover {
+  border-color: var(--accent);
+  color: var(--accent-strong);
+}
+
 label {
   display: grid;
   gap: 6px;
@@ -203,6 +225,36 @@ textarea:focus {
   display: grid;
   grid-template-columns: 1fr 1fr;
   gap: 10px;
+}
+
+.form-actions {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+}
+
+.quote-preview {
+  display: none;
+  grid-template-columns: minmax(0, 1.2fr) minmax(80px, 0.7fr);
+  gap: 6px 10px;
+  padding: 10px 12px;
+  border: 1px solid #cce8e3;
+  border-radius: 6px;
+  background: #f0fdfa;
+  color: var(--text);
+  font-size: 13px;
+}
+
+.quote-preview.show {
+  display: grid;
+}
+
+.quote-preview span {
+  overflow-wrap: anywhere;
+}
+
+.quote-preview-name {
+  font-weight: 800;
 }
 
 .primary-button,
@@ -467,6 +519,7 @@ textarea:focus {
   }
 
   .field-grid,
+  .form-actions,
   .stock-row,
   .alert-row {
     grid-template-columns: 1fr;
