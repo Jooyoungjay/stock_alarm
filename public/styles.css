@@ -278,7 +278,7 @@ textarea:focus {
 
 .stock-row {
   display: grid;
-  grid-template-columns: minmax(150px, 1.2fr) repeat(4, minmax(90px, 0.7fr)) minmax(260px, 1.4fr);
+  grid-template-columns: minmax(150px, 1.1fr) repeat(4, minmax(86px, 0.65fr)) minmax(150px, 0.9fr) minmax(260px, 1.35fr);
   gap: 12px;
   align-items: center;
   min-height: 82px;
@@ -328,6 +328,53 @@ textarea:focus {
 
 .metric-value.ok {
   color: var(--ok);
+}
+
+.status-metric {
+  align-content: start;
+}
+
+.status-badge {
+  display: inline-flex;
+  align-items: center;
+  width: max-content;
+  min-height: 26px;
+  padding: 0 9px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.status-badge.ok {
+  background: #ecfdf3;
+  color: var(--ok);
+}
+
+.status-badge.alert {
+  background: #fff7ed;
+  color: var(--warning);
+}
+
+.status-badge.error {
+  background: #fff3f1;
+  color: var(--danger);
+}
+
+.status-badge.muted {
+  background: var(--surface-soft);
+  color: var(--muted);
+}
+
+.metric-detail,
+.metric-error {
+  overflow-wrap: anywhere;
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.35;
+}
+
+.metric-error {
+  color: var(--danger);
 }
 
 .stock-actions {

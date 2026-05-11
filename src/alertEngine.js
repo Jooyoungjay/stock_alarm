@@ -70,6 +70,27 @@ export function evaluateStock(stock, quote, now = new Date()) {
   };
 }
 
+async function markStockError(store, stock, error, now) {
+  const timestamp = now.toISOString();
+  const message = error.message || '가격 조회 중 오류가 발생했습니다.';
+
+  await store.replaceStock({
+    ...stock,
+    lastCheckedAt: timestamp,
+    lastCheckStatus: 'error',
+    lastError: message,
+    lastErrorAt: timestamp,
+    updatedAt: timestamp
+  });
+
+  return {
+    stockId: stock.id,
+    symbol: stock.symbol,
+    status: 'error',
+    error: message
+  };
+}
+
 async function processStockQuote(store, config, stock, quote, options = {}) {
   const telegramSender = options.sendTelegramMessage || sendTelegramMessage;
   const now = options.now || new Date();
@@ -89,6 +110,7 @@ async function processStockQuote(store, config, stock, quote, options = {}) {
     let deliveryStatus = 'none';
     let deliveryError = '';
     let alert = null;
+    const status = evaluation.alertDue ? 'alert' : evaluation.highUpdated ? 'high_updated' : 'checked';
 
     if (evaluation.alertDue) {
       const message = formatAlertMessage(
@@ -132,12 +154,17 @@ async function processStockQuote(store, config, stock, quote, options = {}) {
       });
     }
 
-    await store.replaceStock(nextStock);
+    await store.replaceStock({
+      ...nextStock,
+      lastCheckStatus: status,
+      lastError: '',
+      lastErrorAt: null
+    });
 
     return {
       stockId: stock.id,
       symbol: stock.symbol,
-      status: evaluation.alertDue ? 'alert' : evaluation.highUpdated ? 'high_updated' : 'checked',
+      status,
       price: quote.price,
       highPrice: nextStock.highPrice,
       drawdownPercent: evaluation.drawdownPercent,
@@ -146,12 +173,7 @@ async function processStockQuote(store, config, stock, quote, options = {}) {
       alert
     };
   } catch (error) {
-    return {
-      stockId: stock.id,
-      symbol: stock.symbol,
-      status: 'error',
-      error: error.message
-    };
+    return markStockError(store, stock, error, now);
   }
 }
 
@@ -180,12 +202,7 @@ export async function runAlertCheck(store, config, options = {}) {
       });
       results.push(result);
     } catch (error) {
-      results.push({
-        stockId: stock.id,
-        symbol: stock.symbol,
-        status: 'error',
-        error: error.message
-      });
+      results.push(await markStockError(store, stock, error, now));
     }
   }
 

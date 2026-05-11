@@ -143,6 +143,12 @@ function renderStocks() {
           <span class="metric-label">하락률</span>
           <span class="metric-value ${isTriggered ? 'down' : 'ok'}">-${drawdown.toFixed(2)}%</span>
         </div>
+        <div class="metric status-metric">
+          <span class="metric-label">상태</span>
+          <span class="status-badge ${getStockStatusClass(stock)}">${getStockStatusLabel(stock)}</span>
+          <span class="metric-detail">${formatLastChecked(stock.lastCheckedAt)}</span>
+          ${stock.lastError ? `<span class="metric-error">${escapeHtml(stock.lastError)}</span>` : ''}
+        </div>
       `;
 
       const actions = document.createElement('div');
@@ -260,6 +266,46 @@ function renderManualTestMessage(result) {
   };
 
   return labels[result.status] || '테스트 가격을 확인했습니다.';
+}
+
+function getStockStatusLabel(stock) {
+  if (!stock.active) {
+    return '비활성';
+  }
+
+  const labels = {
+    alert: '알림 전송',
+    high_updated: '새 최고가',
+    checked: '정상',
+    error: '조회 실패',
+    pending: '대기'
+  };
+
+  return labels[stock.lastCheckStatus] || '대기';
+}
+
+function getStockStatusClass(stock) {
+  if (!stock.active) {
+    return 'muted';
+  }
+
+  const classes = {
+    alert: 'alert',
+    high_updated: 'ok',
+    checked: 'ok',
+    error: 'error',
+    pending: 'muted'
+  };
+
+  return classes[stock.lastCheckStatus] || 'muted';
+}
+
+function formatLastChecked(value) {
+  if (!value) {
+    return '확인 전';
+  }
+
+  return `마지막 확인 ${formatDate(value)}`;
 }
 
 function getSuggestedTestPrice(stock) {

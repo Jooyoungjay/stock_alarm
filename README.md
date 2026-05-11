@@ -1,83 +1,94 @@
 # Stock Alarm
 
-Stock Alarm tracks the highest price after a user registers a stock and sends repeated Telegram sell alerts when the current price drops by a configured percentage from that high.
+Stock Alarm은 사용자가 등록한 종목의 등록 이후 최고가를 추적하고, 현재가가 최고가 대비 설정한 비율만큼 하락하면 텔레그램으로 반복 매도 알림을 보내는 MVP입니다.
 
-## Current MVP
+## 현재 MVP 기능
 
-- Web dashboard for watched stocks
-- Highest-price tracking after registration
-- Configurable drawdown percentage per stock
-- Repeated Telegram alerts with a cooldown interval
-- Manual "check now" action
-- Local JSON storage
-- Dependency-free Node.js server
+- 감시 종목을 관리하는 웹 대시보드
+- 종목 등록 이후 최고가 자동 추적
+- 종목별 하락률 기준 설정
+- 반복 알림 간격 설정
+- 텔레그램 테스트 알림
+- 즉시 가격 확인
+- 수동 테스트 가격 입력
+- 종목별 마지막 확인 상태, 확인 시각, 오류 메시지 표시
+- 로컬 JSON 파일 저장
+- 외부 패키지 없이 실행 가능한 Node.js 서버
 
-## Run Locally
+## 로컬 실행
 
 ```powershell
 Copy-Item .env.example .env
 node src/server.js
 ```
 
-Open:
+브라우저에서 아래 주소를 엽니다.
 
 ```text
 http://localhost:3000
 ```
 
-## Telegram Setup
+3000 포트가 이미 사용 중이면 앱이 자동으로 3001, 3002처럼 다음 포트에서 실행됩니다. 서버 시작 로그에 표시되는 주소를 사용하면 됩니다.
 
-1. Create a bot with Telegram BotFather.
-2. Put the bot token in `.env`.
-3. Send any message to the bot from your Telegram account.
-4. Open `https://api.telegram.org/bot<YOUR_TOKEN>/getUpdates`.
-5. Put the `chat.id` value in `.env`.
+## 텔레그램 설정
 
-Required `.env` values:
+1. 텔레그램에서 BotFather를 엽니다.
+2. `/newbot`으로 봇을 생성합니다.
+3. 발급된 봇 토큰을 `.env`의 `TELEGRAM_BOT_TOKEN`에 넣습니다.
+4. 만든 봇에게 `/start` 또는 아무 메시지를 보냅니다.
+5. 브라우저에서 `https://api.telegram.org/bot<봇토큰>/getUpdates`를 엽니다.
+6. 응답의 `chat.id` 값을 `.env`의 `TELEGRAM_CHAT_ID`에 넣습니다.
+
+필수 `.env` 값:
 
 ```text
 TELEGRAM_BOT_TOKEN=
 TELEGRAM_CHAT_ID=
 ```
 
-## Stock Symbols
+봇 토큰은 비밀번호처럼 취급해야 합니다. `.env`는 GitHub에 올라가지 않도록 제외되어 있습니다.
 
-The MVP uses Yahoo Finance quote symbols.
+## 종목 코드
 
-- US stocks: `AAPL`, `TSLA`, `NVDA`
-- Korea KOSPI examples: `005930.KS`, `000660.KS`
-- Korea KOSDAQ examples: `035720.KQ`, `247540.KQ`
+현재 MVP는 Yahoo Finance 심볼을 사용합니다.
 
-For production, replace the quote provider with a licensed market data API.
+- 미국 주식: `AAPL`, `TSLA`, `NVDA`
+- 한국 코스피 예시: `005930.KS`, `000660.KS`
+- 한국 코스닥 예시: `035720.KQ`, `247540.KQ`
 
-## Alert Testing
+운영 서비스로 확장할 때는 약관과 안정성을 확인한 유료 또는 공식 시세 API로 교체하는 것이 좋습니다.
 
-Each watched stock has a manual test price input in the dashboard. Use it to verify alert behavior without waiting for the market price to move.
+## 알림 테스트
 
-Example:
+대시보드의 각 종목에는 `테스트 현재가` 입력칸이 있습니다. 실제 시장 가격이 움직일 때까지 기다리지 않고 알림 로직을 검증할 수 있습니다.
 
-1. Register a stock with a 5% drawdown threshold.
-2. Enter `100` as a manual test price to set the high price.
-3. Enter `94` as a manual test price.
-4. Telegram should receive an alert because 94 is more than 5% below 100.
+예시:
 
-## Scripts
+1. 하락률 기준을 5%로 설정해 종목을 등록합니다.
+2. `테스트 현재가`에 `100`을 입력하고 `가격 테스트`를 누릅니다.
+3. 최고가가 `100`으로 저장됩니다.
+4. `테스트 현재가`에 `94`를 입력하고 `가격 테스트`를 누릅니다.
+5. 94는 최고가 100 대비 5% 이상 하락한 가격이므로 텔레그램 알림이 전송됩니다.
+
+## 실행 명령
 
 ```powershell
 node src/server.js
 node --test
 ```
 
-## Long-Term Goal
+## 장기 목표
 
-- Launch on the Apple App Store and Google Play Store
-- Support account-based watchlists and push notifications
-- Provide stable stock price data integration
-- Add payments, operations dashboards, and production monitoring
+- Apple App Store와 Google Play Store 출시
+- 사용자 계정 기반 관심 종목 관리
+- 앱 푸시 알림
+- 안정적인 시세 데이터 연동
+- 결제, 운영자 도구, 모니터링 추가
 
-## Suggested Build Order
+## 추천 개발 순서
 
-1. Telegram-based MVP
-2. Web dashboard for stock and alert management
-3. Mobile app with push notifications
-4. Store release and operations tooling
+1. 텔레그램 기반 MVP
+2. 웹 대시보드와 알림 관리 기능 강화
+3. 모바일 앱과 푸시 알림
+4. 앱스토어/플레이스토어 출시 준비
+5. 운영 자동화와 유료화 기능

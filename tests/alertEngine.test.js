@@ -4,6 +4,7 @@ import {
   calculateDrawdownPercent,
   calculateThresholdPrice,
   evaluateStock,
+  runAlertCheck,
   runManualQuoteCheck
 } from '../src/alertEngine.js';
 
@@ -18,6 +19,9 @@ const baseStock = {
   highPriceAt: null,
   lastPrice: null,
   lastCheckedAt: null,
+  lastCheckStatus: 'pending',
+  lastError: '',
+  lastErrorAt: null,
   lastAlertAt: null,
   currency: 'USD',
   exchange: 'Nasdaq',
@@ -111,8 +115,35 @@ test('manual quote check sends an alert through the same alert path', async () =
   assert.equal(result.results[0].deliveryStatus, 'sent');
   assert.equal(store.alerts.length, 1);
   assert.equal(store.stocks[0].lastPrice, 94);
+  assert.equal(store.stocks[0].lastCheckStatus, 'alert');
+  assert.equal(store.stocks[0].lastError, '');
   assert.equal(store.stocks[0].lastAlertAt, '2026-05-11T00:40:00.000Z');
   assert.equal(sentMessages.length, 1);
+});
+
+test('quote fetch errors are persisted on the stock', async () => {
+  const store = createMemoryStore(baseStock);
+
+  const result = await runAlertCheck(
+    store,
+    {
+      telegramBotToken: 'token',
+      telegramChatId: 'chat',
+      quoteTimeoutMs: 10000
+    },
+    {
+      now: date('2026-05-11T00:46:00Z'),
+      fetchQuote: async () => {
+        throw new Error('가격 정보를 찾을 수 없습니다: AAPL');
+      }
+    }
+  );
+
+  assert.equal(result.results[0].status, 'error');
+  assert.equal(result.results[0].error, '가격 정보를 찾을 수 없습니다: AAPL');
+  assert.equal(store.stocks[0].lastCheckStatus, 'error');
+  assert.equal(store.stocks[0].lastError, '가격 정보를 찾을 수 없습니다: AAPL');
+  assert.equal(store.stocks[0].lastErrorAt, '2026-05-11T00:46:00.000Z');
 });
 
 function date(value) {

@@ -63,6 +63,9 @@ function normalizeStock(input, defaults) {
     highPriceAt: null,
     lastPrice: null,
     lastCheckedAt: null,
+    lastCheckStatus: 'pending',
+    lastError: '',
+    lastErrorAt: null,
     lastAlertAt: null,
     currency: '',
     exchange: '',
@@ -120,6 +123,15 @@ function applyStockPatch(stock, patch) {
   return next;
 }
 
+function normalizeStoredStock(stock) {
+  return {
+    ...stock,
+    lastCheckStatus: stock.lastCheckStatus || (stock.lastCheckedAt ? 'checked' : 'pending'),
+    lastError: stock.lastError || '',
+    lastErrorAt: stock.lastErrorAt || null
+  };
+}
+
 export class JsonStore {
   constructor(dataDir, defaults = {}) {
     this.dataDir = dataDir;
@@ -133,7 +145,7 @@ export class JsonStore {
     const data = await readJson(this.filePath, emptyStore);
 
     return {
-      stocks: Array.isArray(data.stocks) ? data.stocks : [],
+      stocks: Array.isArray(data.stocks) ? data.stocks.map(normalizeStoredStock) : [],
       alerts: Array.isArray(data.alerts) ? data.alerts : []
     };
   }
