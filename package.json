@@ -7,6 +7,7 @@
   "scripts": {
     "dev": "node src/server.js",
     "start": "node src/server.js",
+    "stop": "node scripts/stop-server.js",
     "test": "node --test"
   },
   "engines": {

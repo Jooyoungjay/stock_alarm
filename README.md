@@ -39,10 +39,14 @@ stock_alarm/
 │  ├─ telegram.js          # 텔레그램 API 호출
 │  ├─ telegramCommands.js  # 텔레그램 명령어 처리
 │  ├─ backups.js           # 데이터 백업/복구
+│  ├─ runtimeInfo.js       # 실행 중 서버 식별 정보
 │  └─ symbols.js           # 종목 검색/정규화
+├─ scripts/
+│  └─ stop-server.js       # 안전 종료 스크립트
 ├─ tests/                  # Node.js 테스트
 ├─ data/                   # 로컬 실행 데이터, Git 제외
 │  ├─ store.json           # 실제 앱 데이터
+│  ├─ server.json          # 실행 중 서버 PID/포트 정보
 │  └─ backups/             # 자동/수동 백업 파일
 ├─ .env.example            # 환경변수 예시
 ├─ package.json
@@ -162,6 +166,7 @@ npm run dev
 
 ```text
 Stock Alarm is running at http://127.0.0.1:3000
+Runtime info: C:\My Web Sites\stock_alarm\data\server.json
 Polling every 60 seconds
 ```
 
@@ -181,7 +186,29 @@ http://127.0.0.1:3000
 Ctrl + C
 ```
 
-백그라운드로 실행한 서버를 종료해야 한다면 먼저 포트를 확인합니다.
+백그라운드로 실행한 서버를 종료해야 한다면 아래 명령을 사용합니다.
+
+```powershell
+npm run stop
+```
+
+`npm` 명령이 PATH에 없다면 같은 종료 로직을 직접 실행할 수 있습니다.
+
+```powershell
+node scripts/stop-server.js
+```
+
+이 명령은 `data/server.json`과 `/api/health` 응답을 비교해서 아래 값이 모두 맞을 때만 종료합니다.
+
+- 앱 이름: `stock_alarm`
+- PID
+- 포트
+- 서버 시작 시각
+- 프로젝트 경로
+
+즉, 회사 PC에서 다른 서비스가 같은 포트나 Node 프로세스를 사용 중이어도 Stock Alarm으로 확인되지 않으면 종료하지 않습니다.
+
+수동 확인이 필요하면 먼저 포트를 확인합니다.
 
 ```powershell
 netstat -ano | Select-String -Pattern ':3001'
@@ -198,6 +225,8 @@ Stop-Process -Id <PID> -Force
 ```powershell
 Stop-Process -Id 12345 -Force
 ```
+
+`Stop-Process`는 마지막 수단으로만 사용하세요. 포트와 PID만 보고 종료하면 다른 업무용 서버를 잘못 종료할 수 있습니다.
 
 실행 중인 Node 프로세스 목록만 보고 싶다면:
 
@@ -384,6 +413,14 @@ NVDA
 data/store.json
 ```
 
+현재 실행 중인 서버의 식별 정보는 아래 파일에 저장됩니다.
+
+```text
+data/server.json
+```
+
+`npm run stop`은 이 파일과 서버의 `/api/health` 응답을 비교해서 Stock Alarm 서버가 맞는지 검증한 뒤 종료합니다.
+
 저장되는 정보:
 
 - 등록 종목
@@ -445,6 +482,7 @@ node --check src/telegramCommands.js
 - 알림 상태 진입/회복
 - 텔레그램 명령어 파싱
 - 백업 생성/목록/복구
+- 서버 실행 정보 파일
 - 시세 provider 파싱
 - 종목 검색
 

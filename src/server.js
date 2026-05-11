@@ -11,6 +11,14 @@ import {
   runManualQuoteCheck
 } from './alertEngine.js';
 import { fetchHistoricalHighSince, fetchQuote } from './priceProvider.js';
+import {
+  APP_DISPLAY_NAME,
+  APP_NAME,
+  buildRuntimeInfo,
+  getRuntimeInfoPath,
+  removeRuntimeInfo,
+  writeRuntimeInfo
+} from './runtimeInfo.js';
 import { isTelegramConfigured, sendTelegramMessage } from './telegram.js';
 import { pollTelegramCommands } from './telegramCommands.js';
 import { normalizeSymbolInput, searchSymbols } from './symbols.js';
@@ -29,6 +37,9 @@ let isChecking = false;
 let isPollingTelegramCommands = false;
 let activePort = config.port;
 let server = null;
+const startedAt = new Date().toISOString();
+let runtimeInfo = null;
+let isShuttingDown = false;
 
 createBackup(config.dataDir, {
   reason: 'server-start',
@@ -144,6 +155,14 @@ async function handleApi(request, response, url) {
   if (request.method === 'GET' && url.pathname === '/api/health') {
     sendJson(response, 200, {
       ok: true,
+      appName: APP_NAME,
+      appDisplayName: APP_DISPLAY_NAME,
+      pid: process.pid,
+      cwd: process.cwd(),
+      rootDir: config.rootDir,
+      dataDir: config.dataDir,
+      startedAt,
+      runtimeFile: getRuntimeInfoPath(config.dataDir),
       telegramConfigured: isTelegramConfigured(config),
       port: activePort,
       quoteProviders: config.quoteProviders,
@@ -346,7 +365,12 @@ function listen(port, remainingAttempts = 20) {
     candidate.off('error', handleError);
     server = candidate;
     activePort = port;
+    runtimeInfo = buildRuntimeInfo(config, port, startedAt);
+    writeRuntimeInfo(config.dataDir, runtimeInfo).catch((error) => {
+      console.error('Runtime info write failed:', error);
+    });
     console.log(`Stock Alarm is running at http://${config.host}:${port}`);
+    console.log(`Runtime info: ${getRuntimeInfoPath(config.dataDir)}`);
     console.log(`Polling every ${config.pollIntervalSeconds} seconds`);
   });
 }
@@ -377,13 +401,44 @@ runTelegramCommandPollOnce().catch((error) => {
   console.error('Initial Telegram command poll failed:', error);
 });
 
-process.on('SIGINT', () => {
-  clearInterval(interval);
-  clearInterval(telegramCommandInterval);
+async function closeServer() {
   if (!server) {
-    process.exit(0);
     return;
   }
 
-  server.close(() => process.exit(0));
+  await new Promise((resolve) => {
+    server.close(resolve);
+  });
+}
+
+async function shutdown() {
+  if (isShuttingDown) {
+    return;
+  }
+
+  isShuttingDown = true;
+  clearInterval(interval);
+  clearInterval(telegramCommandInterval);
+
+  try {
+    await closeServer();
+    if (runtimeInfo) {
+      await removeRuntimeInfo(config.dataDir, {
+        pid: process.pid,
+        startedAt: runtimeInfo.startedAt
+      });
+    }
+  } catch (error) {
+    console.error('Shutdown cleanup failed:', error);
+  }
+
+  process.exit(0);
+}
+
+process.on('SIGINT', () => {
+  shutdown();
+});
+
+process.on('SIGTERM', () => {
+  shutdown();
 });
