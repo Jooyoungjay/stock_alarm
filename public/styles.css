@@ -192,6 +192,56 @@ h2 {
   color: var(--accent-strong);
 }
 
+.symbol-suggestions {
+  display: none;
+  overflow: hidden;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: #fff;
+}
+
+.symbol-suggestions.show {
+  display: grid;
+}
+
+.symbol-suggestion {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 8px;
+  align-items: center;
+  min-height: 42px;
+  padding: 8px 10px;
+  border-bottom: 1px solid var(--line);
+  background: #fff;
+  color: var(--text);
+  text-align: left;
+}
+
+.symbol-suggestion:last-child {
+  border-bottom: 0;
+}
+
+.symbol-suggestion:hover,
+.symbol-suggestion:focus {
+  background: #f0fdfa;
+  outline: none;
+}
+
+.symbol-suggestion-name,
+.symbol-suggestion-meta {
+  overflow-wrap: anywhere;
+}
+
+.symbol-suggestion-name {
+  font-weight: 800;
+}
+
+.symbol-suggestion-meta {
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 700;
+}
+
 label {
   display: grid;
   gap: 6px;

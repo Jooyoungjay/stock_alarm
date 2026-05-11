@@ -6,7 +6,7 @@ import { JsonStore } from './storage.js';
 import { runAlertCheck, runManualQuoteCheck } from './alertEngine.js';
 import { fetchQuote } from './priceProvider.js';
 import { isTelegramConfigured, sendTelegramMessage } from './telegram.js';
-import { normalizeSymbolInput } from './symbols.js';
+import { normalizeSymbolInput, searchSymbols } from './symbols.js';
 
 const store = new JsonStore(config.dataDir, {
   defaultAlertCooldownMinutes: config.defaultAlertCooldownMinutes
@@ -101,6 +101,12 @@ async function handleApi(request, response, url) {
       pollIntervalSeconds: config.pollIntervalSeconds,
       lastCheck
     });
+    return;
+  }
+
+  if (request.method === 'GET' && url.pathname === '/api/symbol-search') {
+    const query = url.searchParams.get('q');
+    sendJson(response, 200, { results: searchSymbols(query) });
     return;
   }
 

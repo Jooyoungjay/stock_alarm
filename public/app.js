@@ -15,10 +15,14 @@ const elements = {
   quoteStatus: document.querySelector('#quoteStatus'),
   pollStatus: document.querySelector('#pollStatus'),
   quotePreview: document.querySelector('#quotePreview'),
+  symbolSuggestions: document.querySelector('#symbolSuggestions'),
   previewQuoteButton: document.querySelector('#previewQuoteButton'),
   checkNowButton: document.querySelector('#checkNowButton'),
   testTelegramButton: document.querySelector('#testTelegramButton')
 };
+
+let symbolSearchTimer = null;
+let symbolSearchRequestId = 0;
 
 document.querySelectorAll('.symbol-helper button').forEach((button) => {
   button.addEventListener('click', () => {
@@ -28,8 +32,27 @@ document.querySelectorAll('.symbol-helper button').forEach((button) => {
       elements.form.elements.displayName.value = button.dataset.name || '';
     }
 
+    hideSymbolSuggestions();
     renderQuotePreview(null);
   });
+});
+
+elements.form.elements.symbol.addEventListener('input', () => {
+  renderQuotePreview(null);
+  queueSymbolSearch(elements.form.elements.symbol.value);
+});
+
+elements.form.elements.symbol.addEventListener('focus', () => {
+  queueSymbolSearch(elements.form.elements.symbol.value);
+});
+
+document.addEventListener('click', (event) => {
+  if (
+    event.target !== elements.form.elements.symbol &&
+    !elements.symbolSuggestions.contains(event.target)
+  ) {
+    hideSymbolSuggestions();
+  }
 });
 
 elements.form.addEventListener('submit', async (event) => {
@@ -48,6 +71,7 @@ elements.form.addEventListener('submit', async (event) => {
     elements.form.reset();
     elements.form.elements.thresholdPercent.value = 5;
     elements.form.elements.alertCooldownMinutes.value = 30;
+    hideSymbolSuggestions();
     renderQuotePreview(null);
     showMessage('종목을 등록했습니다.');
     await loadData();
@@ -112,6 +136,8 @@ async function previewQuote(button) {
     return;
   }
 
+  hideSymbolSuggestions();
+
   await withBusy(button, async () => {
     const result = await api(`/api/quote-preview?symbol=${encodeURIComponent(symbol)}`);
     const quote = result.quote;
@@ -127,6 +153,82 @@ async function previewQuote(button) {
 
     renderQuotePreview(quote);
   });
+}
+
+function queueSymbolSearch(query) {
+  window.clearTimeout(symbolSearchTimer);
+  const requestId = ++symbolSearchRequestId;
+
+  if (!query.trim()) {
+    hideSymbolSuggestions();
+    return;
+  }
+
+  symbolSearchTimer = window.setTimeout(() => {
+    loadSymbolSuggestions(query, requestId);
+  }, 180);
+}
+
+async function loadSymbolSuggestions(query, requestId) {
+  try {
+    const data = await api(`/api/symbol-search?q=${encodeURIComponent(query)}`);
+
+    if (requestId !== symbolSearchRequestId) {
+      return;
+    }
+
+    renderSymbolSuggestions(data.results || []);
+  } catch {
+    if (requestId === symbolSearchRequestId) {
+      hideSymbolSuggestions();
+    }
+  }
+}
+
+function renderSymbolSuggestions(results) {
+  if (!results.length) {
+    hideSymbolSuggestions();
+    return;
+  }
+
+  const buttons = results.map((item) => {
+    const button = document.createElement('button');
+    const name = document.createElement('span');
+    const meta = document.createElement('span');
+
+    button.type = 'button';
+    button.className = 'symbol-suggestion';
+    name.className = 'symbol-suggestion-name';
+    meta.className = 'symbol-suggestion-meta';
+    name.textContent = item.name;
+    meta.textContent = `${item.symbol} · ${item.market}`;
+    button.append(name, meta);
+    button.addEventListener('click', () => selectSymbolSuggestion(item));
+
+    return button;
+  });
+
+  elements.symbolSuggestions.replaceChildren(...buttons);
+  elements.symbolSuggestions.className = 'symbol-suggestions show';
+}
+
+function selectSymbolSuggestion(item) {
+  elements.form.elements.symbol.value = item.symbol;
+
+  if (!elements.form.elements.displayName.value.trim()) {
+    elements.form.elements.displayName.value = item.name;
+  }
+
+  hideSymbolSuggestions();
+  renderQuotePreview(null);
+  elements.form.elements.symbol.focus();
+}
+
+function hideSymbolSuggestions() {
+  symbolSearchRequestId += 1;
+  window.clearTimeout(symbolSearchTimer);
+  elements.symbolSuggestions.className = 'symbol-suggestions';
+  elements.symbolSuggestions.replaceChildren();
 }
 
 async function withBusy(button, callback) {
