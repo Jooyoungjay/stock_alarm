@@ -2,6 +2,10 @@ export function isTelegramConfigured(config) {
   return Boolean(config.telegramBotToken && config.telegramChatId);
 }
 
+export function isAuthorizedTelegramChat(config, chatId) {
+  return String(chatId || '') === String(config.telegramChatId || '');
+}
+
 export function formatAlertMessage(stock, quote, drawdownPercent, thresholdPrice, alertRule = {}) {
   const name = stock.displayName || quote.name || stock.symbol;
   const price = formatNumber(quote.price);
@@ -28,11 +32,37 @@ export function formatAlertMessage(stock, quote, drawdownPercent, thresholdPrice
   ].join('\n');
 }
 
-export async function sendTelegramMessage(config, text) {
+export async function fetchTelegramUpdates(config, offset = null, options = {}) {
+  if (!config.telegramBotToken) {
+    throw new Error('텔레그램 토큰이 설정되지 않았습니다.');
+  }
+
+  const params = new URLSearchParams({
+    timeout: String(options.timeoutSeconds ?? 0),
+    allowed_updates: JSON.stringify(['message'])
+  });
+
+  if (offset !== null && offset !== undefined && offset !== '') {
+    params.set('offset', String(offset));
+  }
+
+  const url = `https://api.telegram.org/bot${config.telegramBotToken}/getUpdates?${params}`;
+  const response = await fetch(url);
+  const payload = await response.json().catch(() => ({}));
+
+  if (!response.ok || payload.ok === false) {
+    throw new Error(payload.description || `텔레그램 업데이트 조회 실패: HTTP ${response.status}`);
+  }
+
+  return Array.isArray(payload.result) ? payload.result : [];
+}
+
+export async function sendTelegramMessage(config, text, options = {}) {
   if (!isTelegramConfigured(config)) {
     throw new Error('텔레그램 토큰 또는 채팅방 ID가 설정되지 않았습니다.');
   }
 
+  const chatId = options.chatId || config.telegramChatId;
   const url = `https://api.telegram.org/bot${config.telegramBotToken}/sendMessage`;
   const response = await fetch(url, {
     method: 'POST',
@@ -40,7 +70,7 @@ export async function sendTelegramMessage(config, text) {
       'content-type': 'application/json'
     },
     body: JSON.stringify({
-      chat_id: config.telegramChatId,
+      chat_id: chatId,
       text,
       disable_web_page_preview: true
     })

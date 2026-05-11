@@ -11,6 +11,7 @@ import {
 } from './alertEngine.js';
 import { fetchHistoricalHighSince, fetchQuote } from './priceProvider.js';
 import { isTelegramConfigured, sendTelegramMessage } from './telegram.js';
+import { pollTelegramCommands } from './telegramCommands.js';
 import { normalizeSymbolInput, searchSymbols } from './symbols.js';
 
 const store = new JsonStore(config.dataDir, {
@@ -18,7 +19,9 @@ const store = new JsonStore(config.dataDir, {
 });
 
 let lastCheck = null;
+let lastTelegramCommandPoll = null;
 let isChecking = false;
+let isPollingTelegramCommands = false;
 let activePort = config.port;
 let server = null;
 
@@ -80,6 +83,28 @@ async function runCheckOnce() {
   }
 }
 
+async function runTelegramCommandPollOnce() {
+  if (isPollingTelegramCommands) {
+    return {
+      checkedAt: new Date().toISOString(),
+      skipped: true,
+      reason: 'telegram_command_poll_already_running'
+    };
+  }
+
+  isPollingTelegramCommands = true;
+
+  try {
+    lastTelegramCommandPoll = {
+      checkedAt: new Date().toISOString(),
+      ...(await pollTelegramCommands(store, config))
+    };
+    return lastTelegramCommandPoll;
+  } finally {
+    isPollingTelegramCommands = false;
+  }
+}
+
 async function initializePurchaseHigh(stock) {
   if (!stock?.purchaseDate) {
     return stock;
@@ -111,6 +136,8 @@ async function handleApi(request, response, url) {
       port: activePort,
       quoteProviders: config.quoteProviders,
       pollIntervalSeconds: config.pollIntervalSeconds,
+      telegramCommandPollSeconds: config.telegramCommandPollSeconds,
+      lastTelegramCommandPoll,
       lastCheck
     });
     return;
@@ -125,6 +152,8 @@ async function handleApi(request, response, url) {
       telegramConfigured: isTelegramConfigured(config),
       quoteProviders: config.quoteProviders,
       pollIntervalSeconds: config.pollIntervalSeconds,
+      telegramCommandPollSeconds: config.telegramCommandPollSeconds,
+      lastTelegramCommandPoll,
       lastCheck
     });
     return;
@@ -318,8 +347,27 @@ const interval = setInterval(() => {
   });
 }, config.pollIntervalSeconds * 1000);
 
+const telegramCommandInterval = setInterval(() => {
+  runTelegramCommandPollOnce().catch((error) => {
+    lastTelegramCommandPoll = {
+      checkedAt: new Date().toISOString(),
+      error: error.message
+    };
+    console.error('Telegram command poll failed:', error);
+  });
+}, config.telegramCommandPollSeconds * 1000);
+
+runTelegramCommandPollOnce().catch((error) => {
+  lastTelegramCommandPoll = {
+    checkedAt: new Date().toISOString(),
+    error: error.message
+  };
+  console.error('Initial Telegram command poll failed:', error);
+});
+
 process.on('SIGINT', () => {
   clearInterval(interval);
+  clearInterval(telegramCommandInterval);
   if (!server) {
     process.exit(0);
     return;

@@ -5,7 +5,8 @@ import { normalizeSymbolInput } from './symbols.js';
 
 const emptyStore = {
   stocks: [],
-  alerts: []
+  alerts: [],
+  meta: {}
 };
 
 export const ALERT_TYPES = Object.freeze({
@@ -286,7 +287,8 @@ export class JsonStore {
 
     return {
       stocks: Array.isArray(data.stocks) ? data.stocks.map(normalizeStoredStock) : [],
-      alerts: Array.isArray(data.alerts) ? data.alerts : []
+      alerts: Array.isArray(data.alerts) ? data.alerts : [],
+      meta: data.meta && typeof data.meta === 'object' ? data.meta : {}
     };
   }
 
@@ -359,6 +361,21 @@ export class JsonStore {
   async listAlerts(limit = 50) {
     const data = await this.read();
     return data.alerts.slice(-limit).reverse();
+  }
+
+  async getMetaValue(key, fallback = null) {
+    const data = await this.read();
+    return data.meta[key] ?? fallback;
+  }
+
+  async setMetaValue(key, value) {
+    const data = await this.read();
+    data.meta = {
+      ...data.meta,
+      [key]: value
+    };
+    await this.write(data);
+    return value;
   }
 
   async appendAlert(alert) {
