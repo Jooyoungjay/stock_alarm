@@ -167,7 +167,9 @@ async function handleApi(request, response, url) {
         {
           purchasePrice: url.searchParams.get('purchasePrice'),
           purchaseDate,
-          thresholdPercent: url.searchParams.get('thresholdPercent')
+          alertType: url.searchParams.get('alertType'),
+          thresholdPercent: url.searchParams.get('thresholdPercent'),
+          targetPrice: url.searchParams.get('targetPrice')
         },
         quote,
         historicalHigh

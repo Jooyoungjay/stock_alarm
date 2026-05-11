@@ -8,6 +8,14 @@ const emptyStore = {
   alerts: []
 };
 
+export const ALERT_TYPES = Object.freeze({
+  HIGH_DRAWDOWN: 'high_drawdown',
+  PURCHASE_LOSS: 'purchase_loss',
+  TARGET_PRICE: 'target_price'
+});
+
+export const DEFAULT_ALERT_TYPE = ALERT_TYPES.HIGH_DRAWDOWN;
+
 async function ensureDataDir(dataDir) {
   await fs.mkdir(dataDir, { recursive: true });
 }
@@ -39,11 +47,12 @@ function normalizeStock(input, defaults) {
     throw new Error('종목 코드를 입력하세요.');
   }
 
-  const thresholdPercent = Number(input.thresholdPercent);
-
-  if (!Number.isFinite(thresholdPercent) || thresholdPercent <= 0 || thresholdPercent >= 100) {
-    throw new Error('하락률은 0보다 크고 100보다 작은 숫자여야 합니다.');
-  }
+  const alertType = normalizeAlertType(input.alertType);
+  const thresholdPercent = normalizeThresholdPercent(input.thresholdPercent);
+  const targetPrice = normalizeOptionalPositiveNumber(
+    input.targetPrice,
+    '직접 기준가는 0보다 큰 숫자여야 합니다.'
+  );
 
   const alertCooldownMinutes = Number(
     input.alertCooldownMinutes || defaults.defaultAlertCooldownMinutes
@@ -53,13 +62,15 @@ function normalizeStock(input, defaults) {
     throw new Error('반복 알림 간격은 1분 이상이어야 합니다.');
   }
 
-  return {
+  const stock = {
     id: randomUUID(),
     symbol,
     displayName: String(input.displayName || '').trim(),
     purchasePrice: normalizeOptionalPositiveNumber(input.purchasePrice, '매수가는 0보다 큰 숫자여야 합니다.'),
     purchaseDate: normalizeOptionalDate(input.purchaseDate),
+    alertType,
     thresholdPercent,
+    targetPrice,
     alertCooldownMinutes,
     active: true,
     highPrice: null,
@@ -79,6 +90,9 @@ function normalizeStock(input, defaults) {
     createdAt: now,
     updatedAt: now
   };
+
+  validateAlertTypeFields(stock);
+  return stock;
 }
 
 function applyStockPatch(stock, patch) {
@@ -106,14 +120,19 @@ function applyStockPatch(stock, patch) {
     next.purchaseDate = normalizeOptionalDate(patch.purchaseDate);
   }
 
+  if (patch.alertType !== undefined) {
+    next.alertType = normalizeAlertType(patch.alertType);
+  }
+
   if (patch.thresholdPercent !== undefined) {
-    const thresholdPercent = Number(patch.thresholdPercent);
+    next.thresholdPercent = normalizeThresholdPercent(patch.thresholdPercent);
+  }
 
-    if (!Number.isFinite(thresholdPercent) || thresholdPercent <= 0 || thresholdPercent >= 100) {
-      throw new Error('하락률은 0보다 크고 100보다 작은 숫자여야 합니다.');
-    }
-
-    next.thresholdPercent = thresholdPercent;
+  if (patch.targetPrice !== undefined) {
+    next.targetPrice = normalizeOptionalPositiveNumber(
+      patch.targetPrice,
+      '직접 기준가는 0보다 큰 숫자여야 합니다.'
+    );
   }
 
   if (patch.alertCooldownMinutes !== undefined) {
@@ -137,11 +156,21 @@ function applyStockPatch(stock, patch) {
     next.lastAlertAt = null;
   }
 
+  validateAlertTypeFields(next);
   return next;
 }
 
 function normalizeStoredStock(stock) {
   const purchasePrice = Number(stock.purchasePrice);
+  const targetPrice = Number(stock.targetPrice);
+  const alertType = normalizeStoredAlertType(stock.alertType);
+  const normalizedTargetPrice =
+    stock.targetPrice === undefined || stock.targetPrice === null || stock.targetPrice === ''
+      ? null
+      : Number.isFinite(targetPrice)
+        ? targetPrice
+        : null;
+  const thresholdPercent = Number(stock.thresholdPercent);
 
   return {
     ...stock,
@@ -152,12 +181,60 @@ function normalizeStoredStock(stock) {
           ? purchasePrice
           : null,
     purchaseDate: stock.purchaseDate || '',
+    alertType:
+      alertType === ALERT_TYPES.TARGET_PRICE && normalizedTargetPrice === null
+        ? DEFAULT_ALERT_TYPE
+        : alertType,
+    thresholdPercent:
+      Number.isFinite(thresholdPercent) && thresholdPercent > 0 && thresholdPercent < 100
+        ? thresholdPercent
+        : 5,
+    targetPrice: normalizedTargetPrice,
     highPriceSource: stock.highPriceSource || '',
     lastCheckStatus: stock.lastCheckStatus || (stock.lastCheckedAt ? 'checked' : 'pending'),
     lastError: stock.lastError || '',
     lastErrorAt: stock.lastErrorAt || null,
     quoteProvider: stock.quoteProvider || ''
   };
+}
+
+export function normalizeAlertType(value) {
+  const alertType = String(value || DEFAULT_ALERT_TYPE).trim();
+
+  if (Object.values(ALERT_TYPES).includes(alertType)) {
+    return alertType;
+  }
+
+  throw new Error('알림 기준이 올바르지 않습니다.');
+}
+
+function normalizeStoredAlertType(value) {
+  try {
+    return normalizeAlertType(value);
+  } catch {
+    return DEFAULT_ALERT_TYPE;
+  }
+}
+
+function normalizeThresholdPercent(value) {
+  const fallbackValue = value === undefined || value === null || value === '' ? 5 : value;
+  const thresholdPercent = Number(fallbackValue);
+
+  if (!Number.isFinite(thresholdPercent) || thresholdPercent <= 0 || thresholdPercent >= 100) {
+    throw new Error('하락률은 0보다 크고 100보다 작은 숫자여야 합니다.');
+  }
+
+  return thresholdPercent;
+}
+
+function validateAlertTypeFields(stock) {
+  if (stock.alertType === ALERT_TYPES.PURCHASE_LOSS && !stock.purchasePrice) {
+    throw new Error('매수가 대비 손절률 기준은 매수가가 필요합니다.');
+  }
+
+  if (stock.alertType === ALERT_TYPES.TARGET_PRICE && !stock.targetPrice) {
+    throw new Error('직접 기준가 알림은 기준가를 입력해야 합니다.');
+  }
 }
 
 function normalizeOptionalPositiveNumber(value, errorMessage) {

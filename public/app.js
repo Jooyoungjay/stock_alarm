@@ -27,6 +27,12 @@ let symbolSearchTimer = null;
 let symbolSearchRequestId = 0;
 
 elements.form.elements.purchaseDate.max = getTodayInputValue();
+syncAlertTypeControls(elements.form);
+
+elements.form.elements.alertType.addEventListener('change', () => {
+  syncAlertTypeControls(elements.form);
+  renderQuotePreview(null);
+});
 
 document.querySelectorAll('.symbol-helper button').forEach((button) => {
   button.addEventListener('click', () => {
@@ -70,11 +76,7 @@ document.addEventListener('click', (event) => {
 elements.form.addEventListener('submit', async (event) => {
   event.preventDefault();
   const formData = new FormData(elements.form);
-  const payload = Object.fromEntries(formData.entries());
-
-  payload.purchasePrice = payload.purchasePrice ? Number(payload.purchasePrice) : null;
-  payload.thresholdPercent = Number(payload.thresholdPercent);
-  payload.alertCooldownMinutes = Number(payload.alertCooldownMinutes);
+  const payload = normalizeStockPayload(Object.fromEntries(formData.entries()));
 
   await withBusy(elements.form.querySelector('button[type="submit"]'), async () => {
     await api('/api/stocks', {
@@ -84,6 +86,7 @@ elements.form.addEventListener('submit', async (event) => {
     elements.form.reset();
     elements.form.elements.thresholdPercent.value = 5;
     elements.form.elements.alertCooldownMinutes.value = 30;
+    syncAlertTypeControls(elements.form);
     hideSymbolSuggestions();
     renderQuotePreview(null);
     showMessage('종목을 등록했습니다.');
@@ -141,6 +144,53 @@ async function api(path, options = {}) {
   return payload;
 }
 
+function normalizeStockPayload(payload) {
+  const normalized = { ...payload };
+
+  normalized.alertType = normalized.alertType || 'high_drawdown';
+  normalized.purchasePrice = normalized.purchasePrice ? Number(normalized.purchasePrice) : null;
+  normalized.targetPrice =
+    normalized.alertType === 'target_price' && normalized.targetPrice
+      ? Number(normalized.targetPrice)
+      : null;
+  normalized.alertCooldownMinutes = Number(normalized.alertCooldownMinutes);
+
+  if (normalized.thresholdPercent === undefined || normalized.thresholdPercent === '') {
+    delete normalized.thresholdPercent;
+  } else {
+    normalized.thresholdPercent = Number(normalized.thresholdPercent);
+  }
+
+  return normalized;
+}
+
+function syncAlertTypeControls(form) {
+  const alertType = form.elements.alertType?.value || 'high_drawdown';
+  const usesTargetPrice = alertType === 'target_price';
+  const targetField = form.querySelector('[data-alert-target]');
+  const targetInput = form.elements.targetPrice;
+  const thresholdInput = form.elements.thresholdPercent;
+  const thresholdLabel = form.querySelector('[data-threshold-label]');
+
+  if (targetField) {
+    targetField.hidden = !usesTargetPrice;
+  }
+
+  if (targetInput) {
+    targetInput.disabled = !usesTargetPrice;
+    targetInput.required = usesTargetPrice;
+  }
+
+  if (thresholdInput) {
+    thresholdInput.disabled = usesTargetPrice;
+    thresholdInput.required = !usesTargetPrice;
+  }
+
+  if (thresholdLabel) {
+    thresholdLabel.textContent = alertType === 'purchase_loss' ? '손절률 %' : '하락률 %';
+  }
+}
+
 async function previewQuote(button) {
   const symbol = elements.form.elements.symbol.value.trim().toUpperCase();
 
@@ -156,7 +206,9 @@ async function previewQuote(button) {
       symbol,
       purchasePrice: elements.form.elements.purchasePrice.value,
       purchaseDate: elements.form.elements.purchaseDate.value,
-      thresholdPercent: elements.form.elements.thresholdPercent.value
+      alertType: elements.form.elements.alertType.value,
+      thresholdPercent: elements.form.elements.thresholdPercent.value,
+      targetPrice: elements.form.elements.targetPrice.value
     });
     const result = await api(`/api/quote-preview?${params.toString()}`);
     const quote = result.quote;
@@ -290,9 +342,10 @@ function renderQuotePreview(preview) {
     </div>
     <div class="quote-preview-grid">
       ${renderPreviewItem('현재가', formatMoney(quote.price, previewCurrency))}
+      ${position ? renderPreviewItem('알림 기준', position.alertTypeLabel || getAlertTypeLabel(position)) : ''}
       ${position ? renderPreviewItem('매수가', formatMoney(position.purchasePrice, position.currency)) : ''}
       ${
-        position
+        position?.highPrice
           ? renderPreviewItem(
               '구매일 이후 최고가',
               formatMoney(position.highPrice, position.currency),
@@ -303,12 +356,12 @@ function renderQuotePreview(preview) {
       ${
         position
           ? renderPreviewItem(
-              `알림 기준가 -${Number(position.thresholdPercent).toFixed(1)}%`,
+              position.thresholdLabel || '알림 기준가',
               formatMoney(position.thresholdPrice, position.currency)
             )
           : ''
       }
-      ${position ? renderPreviewItem('현재 하락률', `-${Number(position.drawdownPercent || 0).toFixed(2)}%`, '', statusClass) : ''}
+      ${position ? renderPreviewItem(position.metricLabel || '현재 하락률', formatMetricPercent(position), '', statusClass) : ''}
       ${renderPreviewItem('상태', statusText, position ? formatDistancePercent(position) : '', statusClass)}
     </div>
   `;
@@ -347,8 +400,8 @@ function renderStocks() {
     ...state.stocks.map((stock) => {
       const row = document.createElement('article');
       row.className = 'stock-row';
-      const drawdown = calculateDrawdown(stock.highPrice, stock.lastPrice);
-      const thresholdPrice = calculateThreshold(stock.highPrice, stock.thresholdPercent);
+      const alertMetric = calculateAlertMetric(stock, stock.lastPrice);
+      const thresholdPrice = calculateAlertThreshold(stock);
       const lastPrice = parseFiniteNumber(stock.lastPrice);
       const isTriggered = thresholdPrice !== null && lastPrice !== null && lastPrice <= thresholdPrice;
 
@@ -369,12 +422,12 @@ function renderStocks() {
             <span class="metric-detail price-unit">${formatHighPriceAt(stock)}</span>
           </div>
           <div class="metric price-block">
-            <span class="metric-label price-label">기준가</span>
+            <span class="metric-label price-label">${escapeHtml(getAlertThresholdLabel(stock))}</span>
             <span class="metric-value price-value">${formatMoney(thresholdPrice, stock.currency)}</span>
           </div>
           <div class="metric change-block">
-            <span class="metric-label price-label">하락률</span>
-            <span class="metric-value change-pct ${isTriggered ? 'down' : 'up'}">-${drawdown.toFixed(2)}%</span>
+            <span class="metric-label price-label">${escapeHtml(getAlertMetricLabel(stock))}</span>
+            <span class="metric-value change-pct ${isTriggered ? 'down' : 'up'}">${formatAlertMetricPercent(alertMetric)}</span>
           </div>
         </div>
         <div class="stock-bottom">
@@ -431,7 +484,19 @@ function editStockForm(stock) {
       <input name="purchaseDate" type="date" max="${getTodayInputValue()}" value="${escapeHtml(stock.purchaseDate || '')}" required />
     </label>
     <label>
-      <span>하락률 %</span>
+      <span>알림 기준</span>
+      <select name="alertType">
+        <option value="high_drawdown" ${getAlertType(stock) === 'high_drawdown' ? 'selected' : ''}>최고가 대비 하락률</option>
+        <option value="purchase_loss" ${getAlertType(stock) === 'purchase_loss' ? 'selected' : ''}>매수가 대비 손절률</option>
+        <option value="target_price" ${getAlertType(stock) === 'target_price' ? 'selected' : ''}>직접 기준가</option>
+      </select>
+    </label>
+    <label data-alert-target>
+      <span>직접 기준가</span>
+      <input name="targetPrice" type="text" inputmode="decimal" pattern="[0-9]*[.]?[0-9]*" value="${escapeHtml(stock.targetPrice || '')}" />
+    </label>
+    <label>
+      <span data-threshold-label>하락률 %</span>
       <input name="thresholdPercent" type="text" inputmode="decimal" pattern="[0-9]*[.]?[0-9]*" value="${escapeHtml(stock.thresholdPercent)}" required />
     </label>
     <label>
@@ -447,20 +512,19 @@ function editStockForm(stock) {
       <button type="submit" class="btn btn-primary primary-button">저장</button>
     </div>
   `;
+  syncAlertTypeControls(form);
 
   form.querySelector('[data-action="cancel"]').addEventListener('click', () => {
     state.editingStockId = null;
     renderStocks();
   });
 
+  form.elements.alertType.addEventListener('change', () => syncAlertTypeControls(form));
+
   form.addEventListener('submit', async (event) => {
     event.preventDefault();
     const formData = new FormData(form);
-    const payload = Object.fromEntries(formData.entries());
-
-    payload.purchasePrice = payload.purchasePrice ? Number(payload.purchasePrice) : null;
-    payload.thresholdPercent = Number(payload.thresholdPercent);
-    payload.alertCooldownMinutes = Number(payload.alertCooldownMinutes);
+    const payload = normalizeStockPayload(Object.fromEntries(formData.entries()));
 
     await withBusy(form.querySelector('button[type="submit"]'), async () => {
       await api(`/api/stocks/${stock.id}`, {
@@ -543,8 +607,8 @@ function renderAlerts() {
           <span class="metric-value">${escapeHtml(alert.displayName || alert.symbol)}</span>
         </div>
         <div class="metric">
-          <span class="metric-label">하락률</span>
-          <span class="metric-value down">-${Number(alert.drawdownPercent || 0).toFixed(2)}%</span>
+          <span class="metric-label">${escapeHtml(alert.metricLabel || '하락률')}</span>
+          <span class="metric-value down">${formatAlertMetricPercent(alert.drawdownPercent)}</span>
         </div>
         <div class="metric">
           <span class="metric-label">전송</span>
@@ -674,6 +738,8 @@ function renderPositionSummary(stock) {
     parts.push(`매수가 ${formatMoney(stock.purchasePrice, stock.currency)}`);
   }
 
+  parts.push(getAlertTypeLabel(stock));
+
   return `<div class="stock-symbol">${escapeHtml(parts.join(' · '))}</div>`;
 }
 
@@ -698,6 +764,43 @@ function formatHighPriceAt(stock) {
   }
 
   return `${formatDateOnly(stock.highPriceAt)} 기준`;
+}
+
+function getAlertType(stock) {
+  const type = String(stock?.alertType || 'high_drawdown');
+  const validTypes = ['high_drawdown', 'purchase_loss', 'target_price'];
+
+  return validTypes.includes(type) ? type : 'high_drawdown';
+}
+
+function getAlertTypeLabel(stock) {
+  const labels = {
+    high_drawdown: '최고가 대비 하락률',
+    purchase_loss: '매수가 대비 손절률',
+    target_price: '직접 기준가'
+  };
+
+  return labels[getAlertType(stock)];
+}
+
+function getAlertThresholdLabel(stock) {
+  const labels = {
+    high_drawdown: '알림 기준가',
+    purchase_loss: '손절 기준가',
+    target_price: '직접 기준가'
+  };
+
+  return labels[getAlertType(stock)];
+}
+
+function getAlertMetricLabel(stock) {
+  const labels = {
+    high_drawdown: '하락률',
+    purchase_loss: '손실률',
+    target_price: '기준 대비'
+  };
+
+  return labels[getAlertType(stock)];
 }
 
 function formatDistancePercent(position) {
@@ -769,6 +872,44 @@ function calculateDrawdown(highPrice, lastPrice) {
   }
 
   return Math.max(0, ((high - last) / high) * 100);
+}
+
+function calculateAlertThreshold(stock) {
+  if (getAlertType(stock) === 'target_price') {
+    return parseFiniteNumber(stock.targetPrice);
+  }
+
+  if (getAlertType(stock) === 'purchase_loss') {
+    return calculateThreshold(stock.purchasePrice, stock.thresholdPercent);
+  }
+
+  return calculateThreshold(stock.highPrice, stock.thresholdPercent);
+}
+
+function calculateAlertMetric(stock, lastPrice) {
+  if (getAlertType(stock) === 'target_price') {
+    return calculateDrawdown(stock.targetPrice, lastPrice);
+  }
+
+  if (getAlertType(stock) === 'purchase_loss') {
+    return calculateDrawdown(stock.purchasePrice, lastPrice);
+  }
+
+  return calculateDrawdown(stock.highPrice, lastPrice);
+}
+
+function formatAlertMetricPercent(value) {
+  const number = Number(value);
+
+  if (!Number.isFinite(number)) {
+    return '-';
+  }
+
+  return number > 0 ? `-${number.toFixed(2)}%` : '0.00%';
+}
+
+function formatMetricPercent(position) {
+  return formatAlertMetricPercent(position.metricPercent ?? position.drawdownPercent);
 }
 
 function formatMoney(value, currency) {

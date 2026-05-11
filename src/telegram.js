@@ -2,13 +2,16 @@ export function isTelegramConfigured(config) {
   return Boolean(config.telegramBotToken && config.telegramChatId);
 }
 
-export function formatAlertMessage(stock, quote, drawdownPercent, thresholdPrice) {
+export function formatAlertMessage(stock, quote, drawdownPercent, thresholdPrice, alertRule = {}) {
   const name = stock.displayName || quote.name || stock.symbol;
   const price = formatNumber(quote.price);
   const high = formatNumber(stock.highPrice);
   const threshold = formatNumber(thresholdPrice);
-  const drawdown = drawdownPercent.toFixed(2);
+  const drawdown = Number(drawdownPercent || 0).toFixed(2);
   const currency = quote.currency ? ` ${quote.currency}` : '';
+  const alertTypeLabel = alertRule.alertTypeLabel || '최고가 대비 하락률';
+  const thresholdLabel = alertRule.thresholdLabel || '알림 기준';
+  const metricLabel = alertRule.metricLabel || '하락률';
   const highLabel = stock.purchaseDate
     ? `구매일 이후 최고가: ${high}${currency} (${formatDateOnly(stock.highPriceAt)} 기준)`
     : `감시 최고가: ${high}${currency}`;
@@ -17,9 +20,10 @@ export function formatAlertMessage(stock, quote, drawdownPercent, thresholdPrice
     `[Stock Alarm] 매도 알림`,
     `${name} (${stock.symbol})`,
     `현재가: ${price}${currency}`,
+    `알림 방식: ${alertTypeLabel}`,
     highLabel,
-    `알림 기준: ${threshold}${currency} 이하`,
-    `하락률: -${drawdown}%`,
+    `${thresholdLabel}: ${threshold}${currency} 이하`,
+    `${metricLabel}: -${drawdown}%`,
     `반복 간격: ${stock.alertCooldownMinutes}분`
   ].join('\n');
 }

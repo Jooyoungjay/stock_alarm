@@ -82,7 +82,30 @@
 
             <div class="form-row">
               <label class="form-group">
-                <span class="form-label">하락률 %</span>
+                <span class="form-label">알림 기준</span>
+                <select class="form-input" name="alertType">
+                  <option value="high_drawdown" selected>최고가 대비 하락률</option>
+                  <option value="purchase_loss">매수가 대비 손절률</option>
+                  <option value="target_price">직접 기준가</option>
+                </select>
+              </label>
+
+              <label class="form-group" data-alert-target hidden>
+                <span class="form-label">직접 기준가</span>
+                <input
+                  class="form-input"
+                  name="targetPrice"
+                  type="text"
+                  inputmode="decimal"
+                  pattern="[0-9]*[.]?[0-9]*"
+                  placeholder="93000"
+                />
+              </label>
+            </div>
+
+            <div class="form-row">
+              <label class="form-group">
+                <span class="form-label" data-threshold-label>하락률 %</span>
                 <input
                   class="form-input"
                   name="thresholdPercent"

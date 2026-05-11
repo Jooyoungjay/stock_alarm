@@ -59,6 +59,40 @@ test('drop below threshold creates an alert when cooldown allows it', () => {
   assert.equal(result.thresholdPrice, 95);
 });
 
+test('purchase-loss alert uses purchase price as the alert basis', () => {
+  const stock = {
+    ...baseStock,
+    alertType: 'purchase_loss',
+    purchasePrice: 100,
+    highPrice: 140,
+    highPriceAt: '2026-05-11T00:01:00.000Z'
+  };
+  const result = evaluateStock(stock, { price: 94, currency: 'USD' }, date('2026-05-11T00:10:00Z'));
+
+  assert.equal(result.alertDue, true);
+  assert.equal(result.alertType, 'purchase_loss');
+  assert.equal(result.thresholdPrice, 95);
+  assert.equal(result.drawdownPercent, 6);
+  assert.equal(result.metricLabel, '매수가 대비 손실률');
+});
+
+test('target-price alert uses the direct target price as the threshold', () => {
+  const stock = {
+    ...baseStock,
+    alertType: 'target_price',
+    targetPrice: 95,
+    highPrice: 140,
+    highPriceAt: '2026-05-11T00:01:00.000Z'
+  };
+  const result = evaluateStock(stock, { price: 94, currency: 'USD' }, date('2026-05-11T00:10:00Z'));
+
+  assert.equal(result.alertDue, true);
+  assert.equal(result.alertType, 'target_price');
+  assert.equal(result.thresholdPrice, 95);
+  assert.equal(result.metricLabel, '기준가 대비 하락률');
+  assert.ok(Math.abs(result.drawdownPercent - 1.0526315789) < 0.000001);
+});
+
 test('cooldown blocks repeated alerts', () => {
   const stock = {
     ...baseStock,
@@ -212,6 +246,58 @@ test('registration preview uses purchase price when it is the highest baseline',
   assert.equal(preview.position.highPriceSource, 'purchase_price');
   assert.equal(preview.position.thresholdPrice, 117);
   assert.equal(preview.position.alertNow, false);
+});
+
+test('registration preview supports purchase-loss basis', () => {
+  const preview = buildRegistrationPreview(
+    {
+      alertType: 'purchase_loss',
+      purchasePrice: 100,
+      purchaseDate: '2026-05-01',
+      thresholdPercent: 5
+    },
+    {
+      symbol: 'AAPL',
+      price: 94,
+      currency: 'USD',
+      provider: 'yahoo'
+    },
+    {
+      symbol: 'AAPL',
+      highPrice: 130,
+      highPriceAt: '2026-05-08T00:00:00.000Z',
+      currency: 'USD',
+      exchange: 'NasdaqGS',
+      provider: 'yahoo',
+      points: 6
+    }
+  );
+
+  assert.equal(preview.position.alertType, 'purchase_loss');
+  assert.equal(preview.position.referencePrice, 100);
+  assert.equal(preview.position.thresholdPrice, 95);
+  assert.equal(preview.position.drawdownPercent, 6);
+  assert.equal(preview.position.alertNow, true);
+});
+
+test('registration preview supports direct target price without historical high', () => {
+  const preview = buildRegistrationPreview(
+    {
+      alertType: 'target_price',
+      targetPrice: 95
+    },
+    {
+      symbol: 'AAPL',
+      price: 94,
+      currency: 'USD',
+      provider: 'yahoo'
+    }
+  );
+
+  assert.equal(preview.position.alertType, 'target_price');
+  assert.equal(preview.position.highPrice, null);
+  assert.equal(preview.position.thresholdPrice, 95);
+  assert.equal(preview.position.alertNow, true);
 });
 
 test('manual quote check sends an alert through the same alert path', async () => {

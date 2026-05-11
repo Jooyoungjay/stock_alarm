@@ -1,5 +1,12 @@
 import { fetchHistoricalHighSince, fetchQuote } from './priceProvider.js';
+import { ALERT_TYPES, DEFAULT_ALERT_TYPE, normalizeAlertType } from './storage.js';
 import { formatAlertMessage, isTelegramConfigured, sendTelegramMessage } from './telegram.js';
+
+const alertTypeLabels = {
+  [ALERT_TYPES.HIGH_DRAWDOWN]: '최고가 대비 하락률',
+  [ALERT_TYPES.PURCHASE_LOSS]: '매수가 대비 손절률',
+  [ALERT_TYPES.TARGET_PRICE]: '직접 기준가'
+};
 
 export function calculateDrawdownPercent(highPrice, currentPrice) {
   const high = Number(highPrice);
@@ -23,6 +30,94 @@ export function calculateThresholdPrice(highPrice, thresholdPercent) {
   return high * (1 - threshold / 100);
 }
 
+export function getAlertTypeLabel(alertType) {
+  return alertTypeLabels[getNormalizedAlertType(alertType)] || alertTypeLabels[DEFAULT_ALERT_TYPE];
+}
+
+export function buildAlertRule(stock, currentPrice) {
+  const alertType = getNormalizedAlertType(stock.alertType);
+  const current = Number(currentPrice);
+
+  if (!Number.isFinite(current) || current <= 0) {
+    throw new Error('현재가가 올바르지 않습니다.');
+  }
+
+  if (alertType === ALERT_TYPES.TARGET_PRICE) {
+    const targetPrice = Number(stock.targetPrice);
+
+    if (!Number.isFinite(targetPrice) || targetPrice <= 0) {
+      throw new Error('직접 기준가 알림은 기준가를 입력해야 합니다.');
+    }
+
+    const metricPercent = calculateDrawdownPercent(targetPrice, current);
+
+    return {
+      alertType,
+      alertTypeLabel: getAlertTypeLabel(alertType),
+      referencePrice: targetPrice,
+      referenceLabel: '직접 기준가',
+      thresholdLabel: '직접 기준가',
+      metricLabel: '기준가 대비 하락률',
+      metricPercent,
+      drawdownPercent: metricPercent,
+      thresholdPrice: targetPrice,
+      thresholdPercent: null,
+      isBelowThreshold: current <= targetPrice
+    };
+  }
+
+  const thresholdPercent = normalizeRuleThresholdPercent(stock.thresholdPercent);
+  const referencePrice =
+    alertType === ALERT_TYPES.PURCHASE_LOSS ? Number(stock.purchasePrice) : Number(stock.highPrice);
+
+  if (!Number.isFinite(referencePrice) || referencePrice <= 0) {
+    throw new Error(
+      alertType === ALERT_TYPES.PURCHASE_LOSS
+        ? '매수가 대비 손절률 기준은 매수가가 필요합니다.'
+        : '최고가 기준이 아직 계산되지 않았습니다.'
+    );
+  }
+
+  const thresholdPrice = calculateThresholdPrice(referencePrice, thresholdPercent);
+  const metricPercent = calculateDrawdownPercent(referencePrice, current);
+
+  return {
+    alertType,
+    alertTypeLabel: getAlertTypeLabel(alertType),
+    referencePrice,
+    referenceLabel: alertType === ALERT_TYPES.PURCHASE_LOSS ? '매수가' : '구매일 이후 최고가',
+    thresholdLabel:
+      alertType === ALERT_TYPES.PURCHASE_LOSS
+        ? `매수가 -${thresholdPercent}%`
+        : `최고가 -${thresholdPercent}%`,
+    metricLabel:
+      alertType === ALERT_TYPES.PURCHASE_LOSS ? '매수가 대비 손실률' : '최고가 대비 하락률',
+    metricPercent,
+    drawdownPercent: metricPercent,
+    thresholdPrice,
+    thresholdPercent,
+    isBelowThreshold: thresholdPrice !== null && current <= thresholdPrice
+  };
+}
+
+function getNormalizedAlertType(alertType) {
+  try {
+    return normalizeAlertType(alertType);
+  } catch {
+    return DEFAULT_ALERT_TYPE;
+  }
+}
+
+function normalizeRuleThresholdPercent(value) {
+  const thresholdPercent = Number(value === undefined || value === null || value === '' ? 5 : value);
+
+  if (!Number.isFinite(thresholdPercent) || thresholdPercent <= 0 || thresholdPercent >= 100) {
+    throw new Error('하락률은 0보다 크고 100보다 작은 숫자여야 합니다.');
+  }
+
+  return thresholdPercent;
+}
+
 export function buildPurchaseHighBaseline(stock, historicalHigh) {
   const purchasePrice = Number(stock.purchasePrice);
   const purchasePriceIsHigher =
@@ -44,14 +139,16 @@ export function buildPurchaseHighBaseline(stock, historicalHigh) {
 }
 
 export function buildRegistrationPreview(input, quote, historicalHigh = null) {
-  const thresholdPercent = Number(input.thresholdPercent);
   const currentPrice = Number(quote.price);
 
   if (!Number.isFinite(currentPrice) || currentPrice <= 0) {
     throw new Error('현재가가 올바르지 않습니다.');
   }
 
-  if (!historicalHigh) {
+  const alertType = getNormalizedAlertType(input.alertType);
+  const needsHistoricalHigh = alertType === ALERT_TYPES.HIGH_DRAWDOWN;
+
+  if (!historicalHigh && needsHistoricalHigh) {
     return {
       quote,
       position: null
@@ -60,17 +157,25 @@ export function buildRegistrationPreview(input, quote, historicalHigh = null) {
 
   const purchasePrice = Number(input.purchasePrice);
 
-  if (!Number.isFinite(purchasePrice) || purchasePrice <= 0) {
+  if (
+    (alertType === ALERT_TYPES.HIGH_DRAWDOWN || alertType === ALERT_TYPES.PURCHASE_LOSS) &&
+    (!Number.isFinite(purchasePrice) || purchasePrice <= 0)
+  ) {
     throw new Error('매수가는 0보다 큰 숫자여야 합니다.');
   }
 
-  if (!Number.isFinite(thresholdPercent) || thresholdPercent <= 0 || thresholdPercent >= 100) {
-    throw new Error('하락률은 0보다 크고 100보다 작은 숫자여야 합니다.');
-  }
-
-  const baseline = buildPurchaseHighBaseline(input, historicalHigh);
-  const thresholdPrice = calculateThresholdPrice(baseline.highPrice, thresholdPercent);
-  const drawdownPercent = calculateDrawdownPercent(baseline.highPrice, currentPrice);
+  const baseline = historicalHigh ? buildPurchaseHighBaseline(input, historicalHigh) : null;
+  const alertRule = buildAlertRule(
+    {
+      ...input,
+      alertType,
+      purchasePrice: Number.isFinite(purchasePrice) ? purchasePrice : null,
+      highPrice: baseline?.highPrice ?? null,
+      targetPrice: input.targetPrice
+    },
+    currentPrice
+  );
+  const thresholdPrice = alertRule.thresholdPrice;
   const distanceToThreshold = thresholdPrice === null ? null : currentPrice - thresholdPrice;
   const distanceToThresholdPercent =
     thresholdPrice === null || currentPrice <= 0 ? null : (distanceToThreshold / currentPrice) * 100;
@@ -78,21 +183,29 @@ export function buildRegistrationPreview(input, quote, historicalHigh = null) {
   return {
     quote,
     position: {
-      purchasePrice: Number(input.purchasePrice),
+      alertType,
+      alertTypeLabel: alertRule.alertTypeLabel,
+      purchasePrice: Number.isFinite(purchasePrice) ? purchasePrice : null,
       purchaseDate: input.purchaseDate,
-      highPrice: baseline.highPrice,
-      highPriceAt: baseline.highPriceAt,
-      highPriceSource: baseline.source,
-      historicalHighPrice: historicalHigh.highPrice,
-      historicalHighAt: historicalHigh.highPriceAt,
-      thresholdPercent,
+      highPrice: baseline?.highPrice ?? null,
+      highPriceAt: baseline?.highPriceAt ?? null,
+      highPriceSource: baseline?.source ?? '',
+      historicalHighPrice: historicalHigh?.highPrice ?? null,
+      historicalHighAt: historicalHigh?.highPriceAt ?? null,
+      referencePrice: alertRule.referencePrice,
+      referenceLabel: alertRule.referenceLabel,
+      targetPrice: alertType === ALERT_TYPES.TARGET_PRICE ? alertRule.thresholdPrice : null,
+      thresholdPercent: alertRule.thresholdPercent,
+      thresholdLabel: alertRule.thresholdLabel,
       thresholdPrice,
-      drawdownPercent,
+      metricLabel: alertRule.metricLabel,
+      metricPercent: alertRule.metricPercent,
+      drawdownPercent: alertRule.metricPercent,
       distanceToThreshold,
       distanceToThresholdPercent,
-      alertNow: thresholdPrice !== null && currentPrice <= thresholdPrice,
-      currency: baseline.currency || quote.currency || '',
-      provider: baseline.provider || ''
+      alertNow: alertRule.isBelowThreshold,
+      currency: baseline?.currency || quote.currency || '',
+      provider: baseline?.provider || ''
     }
   };
 }
@@ -116,33 +229,35 @@ export function evaluateStock(stock, quote, now = new Date()) {
     updatedAt: timestamp
   };
 
-  if (!stock.highPrice || currentPrice > Number(stock.highPrice)) {
+  const highUpdated = !stock.highPrice || currentPrice > Number(stock.highPrice);
+
+  if (highUpdated) {
     nextStock.highPrice = currentPrice;
     nextStock.highPriceAt = timestamp;
     nextStock.highPriceSource = quote.marketState === 'MANUAL_TEST' ? 'manual' : 'realtime';
-
-    return {
-      nextStock,
-      alertDue: false,
-      highUpdated: true,
-      drawdownPercent: 0,
-      thresholdPrice: calculateThresholdPrice(currentPrice, stock.thresholdPercent)
-    };
   }
 
-  const thresholdPrice = calculateThresholdPrice(stock.highPrice, stock.thresholdPercent);
-  const drawdownPercent = calculateDrawdownPercent(stock.highPrice, currentPrice);
-  const isBelowThreshold = thresholdPrice !== null && currentPrice <= thresholdPrice;
+  const alertRule = buildAlertRule(nextStock, currentPrice);
+  const suppressAlertForNewHigh =
+    highUpdated && alertRule.alertType === ALERT_TYPES.HIGH_DRAWDOWN;
   const lastAlertAt = stock.lastAlertAt ? new Date(stock.lastAlertAt).getTime() : 0;
   const cooldownMs = Number(stock.alertCooldownMinutes || 1) * 60 * 1000;
   const cooldownElapsed = !lastAlertAt || now.getTime() - lastAlertAt >= cooldownMs;
 
   return {
     nextStock,
-    alertDue: Boolean(stock.active && isBelowThreshold && cooldownElapsed),
-    highUpdated: false,
-    drawdownPercent,
-    thresholdPrice
+    alertDue: Boolean(
+      stock.active && !suppressAlertForNewHigh && alertRule.isBelowThreshold && cooldownElapsed
+    ),
+    highUpdated,
+    drawdownPercent: alertRule.metricPercent,
+    thresholdPrice: alertRule.thresholdPrice,
+    alertType: alertRule.alertType,
+    alertTypeLabel: alertRule.alertTypeLabel,
+    referencePrice: alertRule.referencePrice,
+    referenceLabel: alertRule.referenceLabel,
+    thresholdLabel: alertRule.thresholdLabel,
+    metricLabel: alertRule.metricLabel
   };
 }
 
@@ -237,7 +352,8 @@ async function processStockQuote(store, config, stock, quote, options = {}) {
         nextStock,
         quote,
         evaluation.drawdownPercent,
-        evaluation.thresholdPrice
+        evaluation.thresholdPrice,
+        evaluation
       );
 
       try {
@@ -263,9 +379,12 @@ async function processStockQuote(store, config, stock, quote, options = {}) {
         symbol: stock.symbol,
         displayName: stock.displayName || quote.name || stock.symbol,
         price: quote.price,
-        highPrice: stock.highPrice,
+        highPrice: nextStock.highPrice,
+        alertType: evaluation.alertType,
+        alertTypeLabel: evaluation.alertTypeLabel,
         thresholdPercent: stock.thresholdPercent,
         thresholdPrice: evaluation.thresholdPrice,
+        metricLabel: evaluation.metricLabel,
         drawdownPercent: evaluation.drawdownPercent,
         deliveryStatus,
         deliveryError,
@@ -287,8 +406,11 @@ async function processStockQuote(store, config, stock, quote, options = {}) {
       status,
       price: quote.price,
       highPrice: nextStock.highPrice,
+      alertType: evaluation.alertType,
+      alertTypeLabel: evaluation.alertTypeLabel,
       drawdownPercent: evaluation.drawdownPercent,
       thresholdPrice: evaluation.thresholdPrice,
+      metricLabel: evaluation.metricLabel,
       deliveryStatus,
       alert
     };
