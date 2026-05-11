@@ -1,0 +1,15 @@
+{
+  "name": "stock-alarm",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Telegram-based stock drawdown alert MVP.",
+  "scripts": {
+    "dev": "node src/server.js",
+    "start": "node src/server.js",
+    "test": "node --test"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}

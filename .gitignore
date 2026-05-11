@@ -13,6 +13,9 @@ out/
 .env.*
 !.env.example
 
+# Local app data
+data/*.json
+
 # Logs
 *.log
 npm-debug.log*
