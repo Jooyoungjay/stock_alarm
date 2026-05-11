@@ -119,7 +119,8 @@ function renderStocks() {
       row.className = 'stock-row';
       const drawdown = calculateDrawdown(stock.highPrice, stock.lastPrice);
       const thresholdPrice = calculateThreshold(stock.highPrice, stock.thresholdPercent);
-      const isTriggered = thresholdPrice !== null && Number(stock.lastPrice) <= thresholdPrice;
+      const lastPrice = parseFiniteNumber(stock.lastPrice);
+      const isTriggered = thresholdPrice !== null && lastPrice !== null && lastPrice <= thresholdPrice;
 
       row.innerHTML = `
         <div class="stock-title">
@@ -147,6 +148,7 @@ function renderStocks() {
       const actions = document.createElement('div');
       actions.className = 'stock-actions';
       actions.append(
+        manualTestForm(stock),
         actionButton(stock.active ? '중지' : '재개', 'text-button', () =>
           patchStock(stock.id, { active: !stock.active })
         ),
@@ -159,6 +161,57 @@ function renderStocks() {
       return row;
     })
   );
+}
+
+function manualTestForm(stock) {
+  const form = document.createElement('form');
+  const input = document.createElement('input');
+  const button = document.createElement('button');
+
+  form.className = 'manual-test-form';
+  input.type = 'text';
+  input.inputMode = 'decimal';
+  input.pattern = '[0-9]*[.]?[0-9]*';
+  input.placeholder = '테스트 현재가';
+  input.setAttribute('aria-label', `${stock.symbol} 테스트 현재가`);
+
+  const suggestedPrice = getSuggestedTestPrice(stock);
+
+  if (suggestedPrice !== null) {
+    input.value = String(suggestedPrice);
+  }
+
+  button.type = 'submit';
+  button.className = 'secondary-button';
+  button.textContent = '가격 테스트';
+
+  form.append(input, button);
+  form.addEventListener('submit', async (event) => {
+    event.preventDefault();
+
+    await withBusy(button, async () => {
+      const price = Number(input.value);
+
+      if (!Number.isFinite(price) || price <= 0) {
+        throw new Error('테스트 현재가를 입력하세요.');
+      }
+
+      const result = await api(`/api/stocks/${stock.id}/test-quote`, {
+        method: 'POST',
+        body: JSON.stringify({ price })
+      });
+      const stockResult = result.results?.[0];
+
+      if (stockResult?.status === 'error') {
+        throw new Error(stockResult.error || '테스트 가격 확인에 실패했습니다.');
+      }
+
+      showMessage(renderManualTestMessage(stockResult));
+      await loadData();
+    });
+  });
+
+  return form;
 }
 
 function renderAlerts() {
@@ -192,6 +245,36 @@ function renderAlerts() {
       return row;
     })
   );
+}
+
+function renderManualTestMessage(result) {
+  if (!result) {
+    return '테스트 가격을 확인했습니다.';
+  }
+
+  const labels = {
+    alert: '테스트 가격으로 알림을 보냈습니다.',
+    high_updated: '테스트 가격이 새 최고가로 저장됐습니다.',
+    checked: '테스트 가격을 확인했습니다. 아직 알림 기준에는 닿지 않았습니다.',
+    skipped: '비활성 종목이라 테스트 확인을 건너뛰었습니다.'
+  };
+
+  return labels[result.status] || '테스트 가격을 확인했습니다.';
+}
+
+function getSuggestedTestPrice(stock) {
+  const lastPrice = parseFiniteNumber(stock.lastPrice);
+  const highPrice = parseFiniteNumber(stock.highPrice);
+
+  if (lastPrice !== null && lastPrice > 0) {
+    return lastPrice;
+  }
+
+  if (highPrice !== null && highPrice > 0) {
+    return highPrice;
+  }
+
+  return null;
 }
 
 function actionButton(text, className, onClick) {
@@ -230,10 +313,10 @@ function showMessage(text, isError = false) {
 }
 
 function calculateThreshold(highPrice, thresholdPercent) {
-  const high = Number(highPrice);
+  const high = parseFiniteNumber(highPrice);
   const threshold = Number(thresholdPercent);
 
-  if (!Number.isFinite(high) || !Number.isFinite(threshold)) {
+  if (high === null || !Number.isFinite(threshold)) {
     return null;
   }
 
@@ -241,10 +324,10 @@ function calculateThreshold(highPrice, thresholdPercent) {
 }
 
 function calculateDrawdown(highPrice, lastPrice) {
-  const high = Number(highPrice);
-  const last = Number(lastPrice);
+  const high = parseFiniteNumber(highPrice);
+  const last = parseFiniteNumber(lastPrice);
 
-  if (!Number.isFinite(high) || high <= 0 || !Number.isFinite(last)) {
+  if (high === null || high <= 0 || last === null) {
     return 0;
   }
 
@@ -252,9 +335,9 @@ function calculateDrawdown(highPrice, lastPrice) {
 }
 
 function formatMoney(value, currency) {
-  const number = Number(value);
+  const number = parseFiniteNumber(value);
 
-  if (!Number.isFinite(number)) {
+  if (number === null) {
     return '-';
   }
 
@@ -271,6 +354,16 @@ function formatDate(value) {
   }
 
   return new Date(value).toLocaleString('ko-KR');
+}
+
+function parseFiniteNumber(value) {
+  if (value === null || value === undefined || value === '') {
+    return null;
+  }
+
+  const number = Number(value);
+
+  return Number.isFinite(number) ? number : null;
 }
 
 function renderDeliveryStatus(status) {

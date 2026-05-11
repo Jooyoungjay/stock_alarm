@@ -3,7 +3,8 @@ import assert from 'node:assert/strict';
 import {
   calculateDrawdownPercent,
   calculateThresholdPrice,
-  evaluateStock
+  evaluateStock,
+  runManualQuoteCheck
 } from '../src/alertEngine.js';
 
 const baseStock = {
@@ -79,6 +80,60 @@ test('drawdown and threshold helpers handle basic math', () => {
   assert.equal(calculateThresholdPrice(200, 7.5), 185);
 });
 
+test('manual quote check sends an alert through the same alert path', async () => {
+  const store = createMemoryStore({
+    ...baseStock,
+    highPrice: 100,
+    highPriceAt: '2026-05-11T00:01:00.000Z'
+  });
+  const sentMessages = [];
+
+  const result = await runManualQuoteCheck(
+    store,
+    {
+      telegramBotToken: 'token',
+      telegramChatId: 'chat',
+      quoteTimeoutMs: 10000
+    },
+    'stock-1',
+    { price: 94 },
+    {
+      now: date('2026-05-11T00:40:00Z'),
+      sendTelegramMessage: async (_config, message) => {
+        sentMessages.push(message);
+        return { ok: true };
+      }
+    }
+  );
+
+  assert.equal(result.manual, true);
+  assert.equal(result.results[0].status, 'alert');
+  assert.equal(result.results[0].deliveryStatus, 'sent');
+  assert.equal(store.alerts.length, 1);
+  assert.equal(store.stocks[0].lastPrice, 94);
+  assert.equal(store.stocks[0].lastAlertAt, '2026-05-11T00:40:00.000Z');
+  assert.equal(sentMessages.length, 1);
+});
+
 function date(value) {
   return new Date(value);
+}
+
+function createMemoryStore(stock) {
+  return {
+    stocks: [{ ...stock }],
+    alerts: [],
+    async listStocks() {
+      return this.stocks;
+    },
+    async replaceStock(nextStock) {
+      const index = this.stocks.findIndex((item) => item.id === nextStock.id);
+      this.stocks[index] = nextStock;
+      return nextStock;
+    },
+    async appendAlert(alert) {
+      this.alerts.push(alert);
+      return alert;
+    }
+  };
 }

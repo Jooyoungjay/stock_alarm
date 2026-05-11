@@ -50,6 +50,17 @@ The MVP uses Yahoo Finance quote symbols.
 
 For production, replace the quote provider with a licensed market data API.
 
+## Alert Testing
+
+Each watched stock has a manual test price input in the dashboard. Use it to verify alert behavior without waiting for the market price to move.
+
+Example:
+
+1. Register a stock with a 5% drawdown threshold.
+2. Enter `100` as a manual test price to set the high price.
+3. Enter `94` as a manual test price.
+4. Telegram should receive an alert because 94 is more than 5% below 100.
+
 ## Scripts
 
 ```powershell

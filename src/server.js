@@ -3,7 +3,7 @@ import fs from 'node:fs/promises';
 import path from 'node:path';
 import { config } from './config.js';
 import { JsonStore } from './storage.js';
-import { runAlertCheck } from './alertEngine.js';
+import { runAlertCheck, runManualQuoteCheck } from './alertEngine.js';
 import { isTelegramConfigured, sendTelegramMessage } from './telegram.js';
 
 const store = new JsonStore(config.dataDir, {
@@ -110,6 +110,14 @@ async function handleApi(request, response, url) {
   if (segments[0] === 'api' && segments[1] === 'stocks' && segments[2]) {
     const id = segments[2];
 
+    if (request.method === 'POST' && segments[3] === 'test-quote') {
+      const body = await readJsonBody(request);
+      const result = await runManualQuoteCheck(store, config, id, body);
+      lastCheck = result;
+      sendJson(response, 200, result);
+      return;
+    }
+
     if (request.method === 'PATCH') {
       const body = await readJsonBody(request);
       const stock = await store.updateStock(id, body);
@@ -165,7 +173,8 @@ async function serveStatic(request, response, url) {
     const extension = path.extname(filePath);
 
     response.writeHead(200, {
-      'content-type': mimeTypes[extension] || 'application/octet-stream'
+      'content-type': mimeTypes[extension] || 'application/octet-stream',
+      'cache-control': 'no-store'
     });
     response.end(content);
   } catch (error) {

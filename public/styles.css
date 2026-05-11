@@ -278,7 +278,7 @@ textarea:focus {
 
 .stock-row {
   display: grid;
-  grid-template-columns: minmax(150px, 1.25fr) repeat(4, minmax(96px, 0.8fr)) auto;
+  grid-template-columns: minmax(150px, 1.2fr) repeat(4, minmax(90px, 0.7fr)) minmax(260px, 1.4fr);
   gap: 12px;
   align-items: center;
   min-height: 82px;
@@ -332,6 +332,22 @@ textarea:focus {
 
 .stock-actions {
   justify-content: flex-end;
+}
+
+.manual-test-form {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: min(100%, 260px);
+}
+
+.manual-test-form input {
+  min-width: 112px;
+  height: 38px;
+}
+
+.manual-test-form button {
+  flex: 0 0 auto;
 }
 
 .alert-list {

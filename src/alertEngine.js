@@ -70,9 +70,93 @@ export function evaluateStock(stock, quote, now = new Date()) {
   };
 }
 
+async function processStockQuote(store, config, stock, quote, options = {}) {
+  const telegramSender = options.sendTelegramMessage || sendTelegramMessage;
+  const now = options.now || new Date();
+
+  if (!stock.active) {
+    return {
+      stockId: stock.id,
+      symbol: stock.symbol,
+      status: 'skipped',
+      reason: 'inactive'
+    };
+  }
+
+  try {
+    const evaluation = evaluateStock(stock, quote, now);
+    let nextStock = evaluation.nextStock;
+    let deliveryStatus = 'none';
+    let deliveryError = '';
+    let alert = null;
+
+    if (evaluation.alertDue) {
+      const message = formatAlertMessage(
+        nextStock,
+        quote,
+        evaluation.drawdownPercent,
+        evaluation.thresholdPrice
+      );
+
+      try {
+        if (isTelegramConfigured(config)) {
+          await telegramSender(config, message);
+          deliveryStatus = 'sent';
+        } else {
+          deliveryStatus = 'not_configured';
+          deliveryError = '텔레그램 설정이 없습니다.';
+        }
+      } catch (error) {
+        deliveryStatus = 'failed';
+        deliveryError = error.message;
+      }
+
+      nextStock = {
+        ...nextStock,
+        lastAlertAt: now.toISOString()
+      };
+
+      alert = await store.appendAlert({
+        stockId: stock.id,
+        symbol: stock.symbol,
+        displayName: stock.displayName || quote.name || stock.symbol,
+        price: quote.price,
+        highPrice: stock.highPrice,
+        thresholdPercent: stock.thresholdPercent,
+        thresholdPrice: evaluation.thresholdPrice,
+        drawdownPercent: evaluation.drawdownPercent,
+        deliveryStatus,
+        deliveryError,
+        message,
+        createdAt: now.toISOString()
+      });
+    }
+
+    await store.replaceStock(nextStock);
+
+    return {
+      stockId: stock.id,
+      symbol: stock.symbol,
+      status: evaluation.alertDue ? 'alert' : evaluation.highUpdated ? 'high_updated' : 'checked',
+      price: quote.price,
+      highPrice: nextStock.highPrice,
+      drawdownPercent: evaluation.drawdownPercent,
+      thresholdPrice: evaluation.thresholdPrice,
+      deliveryStatus,
+      alert
+    };
+  } catch (error) {
+    return {
+      stockId: stock.id,
+      symbol: stock.symbol,
+      status: 'error',
+      error: error.message
+    };
+  }
+}
+
 export async function runAlertCheck(store, config, options = {}) {
   const quoteFetcher = options.fetchQuote || fetchQuote;
-  const telegramSender = options.sendTelegramMessage || sendTelegramMessage;
   const now = options.now || new Date();
   const stocks = await store.listStocks();
   const results = [];
@@ -90,67 +174,11 @@ export async function runAlertCheck(store, config, options = {}) {
 
     try {
       const quote = await quoteFetcher(stock.symbol, { timeoutMs: config.quoteTimeoutMs });
-      const evaluation = evaluateStock(stock, quote, now);
-      let nextStock = evaluation.nextStock;
-      let deliveryStatus = 'none';
-      let deliveryError = '';
-      let alert = null;
-
-      if (evaluation.alertDue) {
-        const message = formatAlertMessage(
-          nextStock,
-          quote,
-          evaluation.drawdownPercent,
-          evaluation.thresholdPrice
-        );
-
-        try {
-          if (isTelegramConfigured(config)) {
-            await telegramSender(config, message);
-            deliveryStatus = 'sent';
-          } else {
-            deliveryStatus = 'not_configured';
-            deliveryError = '텔레그램 설정이 없습니다.';
-          }
-        } catch (error) {
-          deliveryStatus = 'failed';
-          deliveryError = error.message;
-        }
-
-        nextStock = {
-          ...nextStock,
-          lastAlertAt: now.toISOString()
-        };
-
-        alert = await store.appendAlert({
-          stockId: stock.id,
-          symbol: stock.symbol,
-          displayName: stock.displayName || quote.name || stock.symbol,
-          price: quote.price,
-          highPrice: stock.highPrice,
-          thresholdPercent: stock.thresholdPercent,
-          thresholdPrice: evaluation.thresholdPrice,
-          drawdownPercent: evaluation.drawdownPercent,
-          deliveryStatus,
-          deliveryError,
-          message,
-          createdAt: now.toISOString()
-        });
-      }
-
-      await store.replaceStock(nextStock);
-
-      results.push({
-        stockId: stock.id,
-        symbol: stock.symbol,
-        status: evaluation.alertDue ? 'alert' : evaluation.highUpdated ? 'high_updated' : 'checked',
-        price: quote.price,
-        highPrice: nextStock.highPrice,
-        drawdownPercent: evaluation.drawdownPercent,
-        thresholdPrice: evaluation.thresholdPrice,
-        deliveryStatus,
-        alert
+      const result = await processStockQuote(store, config, stock, quote, {
+        now,
+        sendTelegramMessage: options.sendTelegramMessage
       });
+      results.push(result);
     } catch (error) {
       results.push({
         stockId: stock.id,
@@ -164,5 +192,42 @@ export async function runAlertCheck(store, config, options = {}) {
   return {
     checkedAt: now.toISOString(),
     results
+  };
+}
+
+export async function runManualQuoteCheck(store, config, stockId, manualQuote, options = {}) {
+  const now = options.now || new Date();
+  const price = Number(manualQuote.price);
+
+  if (!Number.isFinite(price) || price <= 0) {
+    throw new Error('테스트 현재가는 0보다 큰 숫자여야 합니다.');
+  }
+
+  const stocks = await store.listStocks();
+  const stock = stocks.find((item) => item.id === stockId);
+
+  if (!stock) {
+    throw new Error('종목을 찾을 수 없습니다.');
+  }
+
+  const quote = {
+    symbol: stock.symbol,
+    name: stock.displayName || stock.symbol,
+    price,
+    currency: manualQuote.currency || stock.currency || '',
+    exchange: manualQuote.exchange || stock.exchange || 'Manual test',
+    marketState: 'MANUAL_TEST',
+    regularMarketTime: now.toISOString()
+  };
+
+  const result = await processStockQuote(store, config, stock, quote, {
+    now,
+    sendTelegramMessage: options.sendTelegramMessage
+  });
+
+  return {
+    checkedAt: now.toISOString(),
+    manual: true,
+    results: [result]
   };
 }
