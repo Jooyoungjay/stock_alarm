@@ -86,6 +86,8 @@ export const config = {
     min: 1
   }),
   quoteTimeoutMs: toNumber(process.env.QUOTE_TIMEOUT_MS, 10000, { min: 1000 }),
+  quoteProviders: process.env.QUOTE_PROVIDERS || 'naver,stooq,alphavantage,yahoo',
+  alphaVantageApiKey: process.env.ALPHA_VANTAGE_API_KEY || '',
   telegramBotToken: process.env.TELEGRAM_BOT_TOKEN || '',
   telegramChatId: process.env.TELEGRAM_CHAT_ID || ''
 };

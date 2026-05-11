@@ -50,7 +50,34 @@ TELEGRAM_CHAT_ID=
 
 ## 종목 코드
 
-현재 MVP는 Yahoo Finance 심볼을 사용합니다.
+현재 MVP는 여러 시세 provider를 순서대로 시도합니다.
+
+기본 순서:
+
+```text
+naver,stooq,alphavantage,yahoo
+```
+
+`.env`에서 순서를 바꿀 수 있습니다.
+
+```text
+QUOTE_PROVIDERS=naver,stooq,alphavantage,yahoo
+```
+
+provider 역할:
+
+- `naver`: 한국 6자리 종목코드 또는 `.KS/.KQ` 종목 조회
+- `stooq`: 미국 종목 조회
+- `alphavantage`: Alpha Vantage API 키가 있을 때 사용
+- `yahoo`: 마지막 fallback
+
+Alpha Vantage를 사용하려면 `.env`에 API 키를 넣습니다.
+
+```text
+ALPHA_VANTAGE_API_KEY=
+```
+
+종목 코드 예시:
 
 - 미국 주식: `AAPL`, `TSLA`, `NVDA`
 - 한국 코스피 예시: `005930.KS`, `000660.KS`

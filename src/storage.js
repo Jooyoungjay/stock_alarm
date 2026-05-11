@@ -70,6 +70,7 @@ function normalizeStock(input, defaults) {
     currency: '',
     exchange: '',
     marketState: '',
+    quoteProvider: '',
     notes: String(input.notes || '').trim(),
     createdAt: now,
     updatedAt: now
@@ -128,7 +129,8 @@ function normalizeStoredStock(stock) {
     ...stock,
     lastCheckStatus: stock.lastCheckStatus || (stock.lastCheckedAt ? 'checked' : 'pending'),
     lastError: stock.lastError || '',
-    lastErrorAt: stock.lastErrorAt || null
+    lastErrorAt: stock.lastErrorAt || null,
+    quoteProvider: stock.quoteProvider || ''
   };
 }
 

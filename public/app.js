@@ -11,6 +11,7 @@ const elements = {
   message: document.querySelector('#message'),
   summaryText: document.querySelector('#summaryText'),
   telegramStatus: document.querySelector('#telegramStatus'),
+  quoteStatus: document.querySelector('#quoteStatus'),
   pollStatus: document.querySelector('#pollStatus'),
   checkNowButton: document.querySelector('#checkNowButton'),
   testTelegramButton: document.querySelector('#testTelegramButton')
@@ -101,6 +102,8 @@ async function withBusy(button, callback) {
 function renderStatus(data) {
   elements.telegramStatus.textContent = data.telegramConfigured ? 'Telegram 연결됨' : 'Telegram 미설정';
   elements.telegramStatus.className = `status-pill ${data.telegramConfigured ? 'ok' : 'warn'}`;
+  elements.quoteStatus.textContent = `시세 ${formatProviderList(data.quoteProviders)}`;
+  elements.quoteStatus.className = 'status-pill muted';
   elements.pollStatus.textContent = `${data.pollIntervalSeconds || 60}초 주기`;
   elements.pollStatus.className = 'status-pill muted';
 }
@@ -147,6 +150,7 @@ function renderStocks() {
           <span class="metric-label">상태</span>
           <span class="status-badge ${getStockStatusClass(stock)}">${getStockStatusLabel(stock)}</span>
           <span class="metric-detail">${formatLastChecked(stock.lastCheckedAt)}</span>
+          ${stock.quoteProvider ? `<span class="metric-detail">시세 ${getProviderLabel(stock.quoteProvider)}</span>` : ''}
           ${stock.lastError ? `<span class="metric-error">${escapeHtml(stock.lastError)}</span>` : ''}
         </div>
       `;
@@ -306,6 +310,25 @@ function formatLastChecked(value) {
   }
 
   return `마지막 확인 ${formatDate(value)}`;
+}
+
+function formatProviderList(value) {
+  return String(value || '')
+    .split(',')
+    .map((provider) => getProviderLabel(provider.trim()))
+    .filter(Boolean)
+    .join(' > ');
+}
+
+function getProviderLabel(provider) {
+  const labels = {
+    naver: 'Naver',
+    stooq: 'Stooq',
+    alphavantage: 'Alpha Vantage',
+    yahoo: 'Yahoo'
+  };
+
+  return labels[String(provider || '').toLowerCase()] || provider;
 }
 
 function getSuggestedTestPrice(stock) {

@@ -38,6 +38,7 @@ export function evaluateStock(stock, quote, now = new Date()) {
     currency: quote.currency || stock.currency || '',
     exchange: quote.exchange || stock.exchange || '',
     marketState: quote.marketState || stock.marketState || '',
+    quoteProvider: quote.provider || stock.quoteProvider || '',
     updatedAt: timestamp
   };
 
@@ -195,7 +196,11 @@ export async function runAlertCheck(store, config, options = {}) {
     }
 
     try {
-      const quote = await quoteFetcher(stock.symbol, { timeoutMs: config.quoteTimeoutMs });
+      const quote = await quoteFetcher(stock.symbol, {
+        timeoutMs: config.quoteTimeoutMs,
+        providers: config.quoteProviders,
+        alphaVantageApiKey: config.alphaVantageApiKey
+      });
       const result = await processStockQuote(store, config, stock, quote, {
         now,
         sendTelegramMessage: options.sendTelegramMessage

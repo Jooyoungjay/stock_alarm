@@ -81,6 +81,7 @@ async function handleApi(request, response, url) {
       ok: true,
       telegramConfigured: isTelegramConfigured(config),
       port: activePort,
+      quoteProviders: config.quoteProviders,
       pollIntervalSeconds: config.pollIntervalSeconds,
       lastCheck
     });
@@ -94,6 +95,7 @@ async function handleApi(request, response, url) {
       stocks,
       alerts,
       telegramConfigured: isTelegramConfigured(config),
+      quoteProviders: config.quoteProviders,
       pollIntervalSeconds: config.pollIntervalSeconds,
       lastCheck
     });
