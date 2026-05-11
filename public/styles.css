@@ -449,6 +449,31 @@ textarea:focus {
   flex: 0 0 auto;
 }
 
+.stock-edit-form {
+  grid-column: 1 / -1;
+  display: grid;
+  grid-template-columns: minmax(150px, 1fr) minmax(120px, 0.7fr) minmax(120px, 0.7fr) minmax(180px, 1.2fr) auto;
+  gap: 10px;
+  align-items: end;
+  padding-top: 12px;
+  border-top: 1px solid var(--line);
+}
+
+.stock-edit-form label {
+  min-width: 0;
+}
+
+.edit-actions {
+  display: flex;
+  gap: 8px;
+  justify-content: flex-end;
+  align-items: center;
+}
+
+.edit-actions button {
+  min-width: 70px;
+}
+
 .alert-list {
   display: grid;
   gap: 10px;
@@ -497,12 +522,18 @@ textarea:focus {
   }
 
   .stock-row,
+  .stock-edit-form,
   .alert-row {
     grid-template-columns: 1fr 1fr;
   }
 
   .stock-actions {
     justify-content: flex-start;
+  }
+
+  .edit-notes,
+  .edit-actions {
+    grid-column: 1 / -1;
   }
 }
 
@@ -521,12 +552,21 @@ textarea:focus {
   .field-grid,
   .form-actions,
   .stock-row,
+  .stock-edit-form,
   .alert-row {
     grid-template-columns: 1fr;
   }
 
   .button-row > *,
   .stock-actions > * {
+    flex: 1 1 auto;
+  }
+
+  .edit-actions {
+    justify-content: stretch;
+  }
+
+  .edit-actions button {
     flex: 1 1 auto;
   }
 }

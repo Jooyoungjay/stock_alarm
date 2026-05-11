@@ -1,7 +1,8 @@
 const state = {
   stocks: [],
   alerts: [],
-  loading: false
+  loading: false,
+  editingStockId: null
 };
 
 const elements = {
@@ -218,6 +219,10 @@ function renderStocks() {
       actions.className = 'stock-actions';
       actions.append(
         manualTestForm(stock),
+        actionButton(state.editingStockId === stock.id ? '편집 닫기' : '편집', 'secondary-button', () => {
+          state.editingStockId = state.editingStockId === stock.id ? null : stock.id;
+          renderStocks();
+        }),
         actionButton(stock.active ? '중지' : '재개', 'text-button', () =>
           patchStock(stock.id, { active: !stock.active })
         ),
@@ -227,9 +232,67 @@ function renderStocks() {
         actionButton('삭제', 'danger-button', () => deleteStock(stock.id))
       );
       row.append(actions);
+
+      if (state.editingStockId === stock.id) {
+        row.append(editStockForm(stock));
+      }
+
       return row;
     })
   );
+}
+
+function editStockForm(stock) {
+  const form = document.createElement('form');
+  form.className = 'stock-edit-form';
+  form.innerHTML = `
+    <label>
+      <span>표시 이름</span>
+      <input name="displayName" value="${escapeHtml(stock.displayName || '')}" autocomplete="off" />
+    </label>
+    <label>
+      <span>하락률 %</span>
+      <input name="thresholdPercent" type="text" inputmode="decimal" pattern="[0-9]*[.]?[0-9]*" value="${escapeHtml(stock.thresholdPercent)}" required />
+    </label>
+    <label>
+      <span>반복 분</span>
+      <input name="alertCooldownMinutes" type="text" inputmode="numeric" pattern="[0-9]*" value="${escapeHtml(stock.alertCooldownMinutes)}" required />
+    </label>
+    <label class="edit-notes">
+      <span>메모</span>
+      <textarea name="notes" rows="2">${escapeHtml(stock.notes || '')}</textarea>
+    </label>
+    <div class="edit-actions">
+      <button type="button" class="secondary-button" data-action="cancel">취소</button>
+      <button type="submit" class="primary-button">저장</button>
+    </div>
+  `;
+
+  form.querySelector('[data-action="cancel"]').addEventListener('click', () => {
+    state.editingStockId = null;
+    renderStocks();
+  });
+
+  form.addEventListener('submit', async (event) => {
+    event.preventDefault();
+    const formData = new FormData(form);
+    const payload = Object.fromEntries(formData.entries());
+
+    payload.thresholdPercent = Number(payload.thresholdPercent);
+    payload.alertCooldownMinutes = Number(payload.alertCooldownMinutes);
+
+    await withBusy(form.querySelector('button[type="submit"]'), async () => {
+      await api(`/api/stocks/${stock.id}`, {
+        method: 'PATCH',
+        body: JSON.stringify(payload)
+      });
+      state.editingStockId = null;
+      showMessage('알림 조건을 저장했습니다.');
+      await loadData();
+    });
+  });
+
+  return form;
 }
 
 function manualTestForm(stock) {
