@@ -7,6 +7,7 @@ import {
   APP_NAME,
   buildRuntimeInfo,
   getRuntimeInfoPath,
+  getRuntimeHealthUrl,
   isSameRuntime,
   readRuntimeInfo,
   removeRuntimeInfo,
@@ -34,6 +35,12 @@ test('runtime info is written, read, and removed only for the matching process',
 
   assert.equal(await removeRuntimeInfo(dataDir, { pid: process.pid + 1 }), false);
   assert.equal(await removeRuntimeInfo(dataDir, { pid: process.pid, startedAt }), true);
+});
+
+test('runtime health URL uses localhost when the server listens on every interface', () => {
+  assert.equal(getRuntimeHealthUrl({ host: '0.0.0.0', port: 3000 }), 'http://127.0.0.1:3000/api/health');
+  assert.equal(getRuntimeHealthUrl({ host: '::', port: 3001 }), 'http://127.0.0.1:3001/api/health');
+  assert.equal(getRuntimeHealthUrl({ host: '127.0.0.1', port: 3002 }), 'http://127.0.0.1:3002/api/health');
 });
 
 test('isSameRuntime requires app, pid, port, start time, and project directory to match', () => {

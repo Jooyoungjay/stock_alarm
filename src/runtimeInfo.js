@@ -13,6 +13,14 @@ export function normalizeRuntimePath(value) {
   return path.resolve(String(value || '')).toLowerCase();
 }
 
+export function getRuntimeHealthUrl(info) {
+  const rawHost = String(info?.host || '').trim();
+  const host = rawHost && rawHost !== '0.0.0.0' && rawHost !== '::' ? rawHost : '127.0.0.1';
+  const formattedHost = host.includes(':') && !host.startsWith('[') ? `[${host}]` : host;
+
+  return `http://${formattedHost}:${info.port}/api/health`;
+}
+
 export function buildRuntimeInfo(config, port, startedAt) {
   return {
     appName: APP_NAME,
@@ -27,7 +35,7 @@ export function buildRuntimeInfo(config, port, startedAt) {
     nodeVersion: process.version,
     platform: process.platform,
     startedAt,
-    healthUrl: `http://${config.host}:${port}/api/health`
+    healthUrl: getRuntimeHealthUrl({ host: config.host, port })
   };
 }
 

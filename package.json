@@ -8,6 +8,9 @@
     "dev": "node src/server.js",
     "start": "node src/server.js",
     "stop": "node scripts/stop-server.js",
+    "local:start": "node scripts/local-server.js start",
+    "local:phone": "node scripts/local-server.js start-lan",
+    "local:status": "node scripts/local-server.js status",
     "check:railway": "node scripts/check-railway-config.js",
     "test": "node --test"
   },

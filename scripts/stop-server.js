@@ -3,6 +3,7 @@ import { config } from '../src/config.js';
 import {
   APP_NAME,
   getRuntimeInfoPath,
+  getRuntimeHealthUrl,
   isSameRuntime,
   normalizeRuntimePath,
   readRuntimeInfo,
@@ -103,7 +104,7 @@ validateRuntimeFile(info);
 
 let health;
 try {
-  health = await fetchHealth(info.healthUrl);
+  health = await fetchHealth(getRuntimeHealthUrl(info));
 } catch (error) {
   if (!isProcessAlive(Number(info.pid))) {
     await removeStaleRuntime(info);
