@@ -881,12 +881,17 @@ Invoke-RestMethod http://127.0.0.1:3001/api/health
 
 ## 다음 개발 후보
 
+상세 WBS와 예상 작업량은 [개발 WBS 및 로드맵](docs/development-roadmap.md)에서 관리합니다.
+
 우선순위가 높은 순서:
 
-1. 배당 API provider별 성공/실패 진단 화면과 상세 로그
-2. 공공데이터포털/OpenDART 국내 종목 매칭 보정
-3. 배당락일, 지급일, 배당 변경 내역 표시
-4. 공식 또는 유료 시세 API 후보 검토
-5. Postgres 저장소 설계와 JSON 데이터 이전 준비
-6. Expo 모바일 앱 초기 프로젝트 생성
-7. App Store / Play Store 출시 준비
+1. 개발 WBS/일정 문서 관리와 웹 대시보드 표시
+2. 배당 API provider별 성공/실패 진단 화면과 상세 로그
+3. 공공데이터포털/OpenDART 국내 종목 매칭 보정
+4. 위험도 순위와 일일 브리핑 알림
+5. 배당락일, 지급일, 배당 변경 내역 표시
+6. NXT 포함 시세 API 가능성 검토
+7. 공식 또는 유료 시세 API 후보 검토
+8. Postgres 저장소 설계와 JSON 데이터 이전 준비
+9. Expo 모바일 앱 초기 프로젝트 생성
+10. App Store / Play Store 출시 준비
