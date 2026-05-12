@@ -16,6 +16,7 @@ const helpMessage = [
   '/check - 지금 바로 전체 확인',
   '/pause <종목코드> - 감시 중지',
   '/resume <종목코드> - 감시 재개',
+  '/edit <종목코드> <항목> <값> - 알림 조건 수정',
   '/delete <종목코드> - 종목 삭제',
   '/backup - 현재 데이터 백업 생성',
   '/backups - 최근 백업 목록',
@@ -25,6 +26,13 @@ const helpMessage = [
   '/add 336260 두산퓨얼셀 88779 2026-05-11 high 10',
   '/add 336260 두산퓨얼셀 88779 2026-05-11 loss 5',
   '/add 336260 두산퓨얼셀 88779 2026-05-11 target 93000',
+  '',
+  '수정 예시',
+  '/edit 336260 high 8',
+  '/edit 336260 loss 5',
+  '/edit 336260 target 93000',
+  '/edit 336260 cooldown 60',
+  '/edit 336260 name 두산퓨얼셀',
   '',
   '기준값: high=최고가 대비 하락률, loss=매수가 대비 손절률, target=직접 기준가'
 ].join('\n');
@@ -150,6 +158,8 @@ async function executeCommand(store, config, command, options) {
     case 'resume':
     case 'startstock':
       return setStockActive(store, command.args[0], true);
+    case 'edit':
+      return editStockFromCommand(store, config, command, options);
     case 'delete':
     case 'del':
       return deleteStockFromCommand(store, command.args[0]);
@@ -248,6 +258,33 @@ async function addStockFromCommand(store, config, command, options) {
     .join('\n');
 }
 
+async function editStockFromCommand(store, config, command, options) {
+  const input = parseEditArgs(command.args);
+  let stock = await findStock(store, input.query);
+  stock = await store.updateStock(stock.id, input.patch);
+
+  if (input.reinitializeHigh && stock.purchaseDate) {
+    const highInitializer = options.initializeHighFromPurchaseDate || initializeHighFromPurchaseDate;
+    stock = await highInitializer(store, config, stock);
+  }
+
+  return [
+    '종목 정보를 수정했습니다.',
+    `${stock.displayName || stock.symbol} (${stock.symbol})`,
+    `수정 항목: ${input.label}`,
+    `알림 기준: ${formatAlertType(stock.alertType)}`,
+    stock.alertType === ALERT_TYPES.TARGET_PRICE
+      ? `직접 기준가: ${formatNumber(stock.targetPrice)}`
+      : `비율: ${stock.thresholdPercent}%`,
+    `반복 알림: ${stock.alertCooldownMinutes}분`,
+    stock.purchasePrice ? `매수가: ${formatNumber(stock.purchasePrice)}` : '',
+    stock.purchaseDate ? `매수일: ${stock.purchaseDate}` : '',
+    stock.highPrice ? `구매일 이후 최고가: ${formatNumber(stock.highPrice)}${stock.currency ? ` ${stock.currency}` : ''}` : ''
+  ]
+    .filter(Boolean)
+    .join('\n');
+}
+
 export function parseAddArgs(args) {
   if (!args.length) {
     throw new Error('등록할 종목 정보를 입력하세요.');
@@ -300,6 +337,102 @@ export function parseAddArgs(args) {
     targetPrice: alertType === ALERT_TYPES.TARGET_PRICE ? valueToken : undefined,
     alertCooldownMinutes: cooldownToken
   });
+}
+
+export function parseEditArgs(args) {
+  if (args.length < 2) {
+    throw new Error('수정할 종목코드와 항목을 입력하세요.');
+  }
+
+  const [query, rawField, ...valueTokens] = args;
+  const field = normalizeEditField(rawField);
+  const value = valueTokens.join(' ').trim();
+  const firstValue = valueTokens[0];
+
+  switch (field) {
+    case 'high':
+      requireValue(value, '최고가 대비 하락률을 입력하세요.');
+      return {
+        query,
+        label: '최고가 대비 하락률',
+        patch: {
+          alertType: ALERT_TYPES.HIGH_DRAWDOWN,
+          thresholdPercent: firstValue,
+          targetPrice: null
+        }
+      };
+    case 'loss':
+      requireValue(value, '매수가 대비 손절률을 입력하세요.');
+      return {
+        query,
+        label: '매수가 대비 손절률',
+        patch: {
+          alertType: ALERT_TYPES.PURCHASE_LOSS,
+          thresholdPercent: firstValue,
+          targetPrice: null
+        }
+      };
+    case 'target':
+      requireValue(value, '직접 기준가를 입력하세요.');
+      return {
+        query,
+        label: '직접 기준가',
+        patch: {
+          alertType: ALERT_TYPES.TARGET_PRICE,
+          targetPrice: firstValue
+        }
+      };
+    case 'cooldown':
+      requireValue(value, '반복 알림 간격을 분 단위로 입력하세요.');
+      return {
+        query,
+        label: '반복 알림 간격',
+        patch: {
+          alertCooldownMinutes: firstValue
+        }
+      };
+    case 'name':
+      requireValue(value, '표시 이름을 입력하세요.');
+      return {
+        query,
+        label: '표시 이름',
+        patch: {
+          displayName: value
+        }
+      };
+    case 'price':
+      requireValue(value, '매수가를 입력하세요.');
+      return {
+        query,
+        label: '매수가',
+        reinitializeHigh: true,
+        patch: {
+          purchasePrice: firstValue,
+          resetHighPrice: true
+        }
+      };
+    case 'date':
+      requireValue(value, '매수일을 YYYY-MM-DD 형식으로 입력하세요.');
+      return {
+        query,
+        label: '매수일',
+        reinitializeHigh: true,
+        patch: {
+          purchaseDate: firstValue,
+          resetHighPrice: true
+        }
+      };
+    case 'notes':
+      return {
+        query,
+        label: '메모',
+        patch: {
+          notes: value
+        }
+      };
+    default:
+      throw new Error('수정 항목은 high, loss, target, cooldown, name, price, date, notes 중 하나로 입력하세요.');
+  }
 }
 
 function normalizeAddInput(input) {
@@ -371,6 +504,50 @@ function normalizeTypeToken(value) {
   }
 
   throw new Error('알림 기준은 high, loss, target 중 하나로 입력하세요.');
+}
+
+function normalizeEditField(value) {
+  const token = String(value || '').toLowerCase();
+
+  if (['high', 'high_drawdown', 'drawdown', 'trailing', 'rate', 'threshold', '최고가'].includes(token)) {
+    return 'high';
+  }
+
+  if (['loss', 'purchase_loss', 'stop', 'stoploss', 'buy', '손절'].includes(token)) {
+    return 'loss';
+  }
+
+  if (['target', 'target_price', 'price_target', 'direct', '기준가', '직접'].includes(token)) {
+    return 'target';
+  }
+
+  if (['cooldown', 'interval', 'repeat', 'minutes', '반복', '간격'].includes(token)) {
+    return 'cooldown';
+  }
+
+  if (['name', 'displayname', 'display_name', 'title', '이름'].includes(token)) {
+    return 'name';
+  }
+
+  if (['price', 'purchaseprice', 'purchase_price', 'buyprice', '매수가'].includes(token)) {
+    return 'price';
+  }
+
+  if (['date', 'purchasedate', 'purchase_date', 'buydate', '매수일', '구매일'].includes(token)) {
+    return 'date';
+  }
+
+  if (['note', 'notes', 'memo', '메모'].includes(token)) {
+    return 'notes';
+  }
+
+  return token;
+}
+
+function requireValue(value, message) {
+  if (!String(value || '').trim()) {
+    throw new Error(message);
+  }
 }
 
 async function setStockActive(store, query, active) {
@@ -565,6 +742,17 @@ function getShortUsage(commandName) {
       '/backups',
       '/restore 1',
       '/restore store-20260511-082342-355-server-start-c6b8dcd7.json'
+    ].join('\n');
+  }
+
+  if (commandName === 'edit') {
+    return [
+      '예시:',
+      '/edit 336260 high 8',
+      '/edit 336260 loss 5',
+      '/edit 336260 target 93000',
+      '/edit 336260 cooldown 60',
+      '/edit 336260 name 두산퓨얼셀'
     ].join('\n');
   }
 

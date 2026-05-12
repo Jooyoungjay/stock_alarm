@@ -275,6 +275,7 @@ Get-Process node
 | `/check` | 즉시 전체 종목 가격 확인 |
 | `/pause <종목코드>` | 감시 중지 |
 | `/resume <종목코드>` | 감시 재개 |
+| `/edit <종목코드> <항목> <값>` | 알림 조건과 종목 정보 수정 |
 | `/delete <종목코드>` | 종목 삭제 |
 | `/backup` | 현재 데이터 수동 백업 |
 | `/backups` | 최근 백업 목록 |
@@ -299,6 +300,30 @@ Get-Process node
 - `high`: 구매일 이후 최고가 대비 하락률
 - `loss`: 매수가 대비 손절률
 - `target`: 직접 기준가
+
+종목 수정 예시:
+
+```text
+/edit 336260 high 8
+/edit 336260 loss 5
+/edit 336260 target 93000
+/edit 336260 cooldown 60
+/edit 336260 name 두산퓨얼셀
+/edit 336260 price 88779
+/edit 336260 date 2026-05-11
+/edit 336260 notes 실적 발표 전까지 보유
+```
+
+수정 항목:
+
+- `high`: 최고가 대비 하락률로 변경
+- `loss`: 매수가 대비 손절률로 변경
+- `target`: 직접 기준가로 변경
+- `cooldown`: 반복 알림 간격 변경
+- `name`: 표시 이름 변경
+- `price`: 매수가 변경 후 최고가 재계산
+- `date`: 매수일 변경 후 최고가 재계산
+- `notes`: 메모 변경
 
 백업 복구 예시:
 
@@ -566,7 +591,6 @@ Invoke-RestMethod http://127.0.0.1:3001/api/health
 
 ## 다음 개발 후보
 
-- 텔레그램 `/edit` 명령어로 알림 조건 수정
 - Render, Fly.io, Railway, VPS 등 서버 배포
 - 모바일 앱용 API 정리
 - App Store / Play Store 출시 준비

@@ -7,6 +7,7 @@ import { JsonStore } from '../src/storage.js';
 import {
   handleTelegramMessage,
   parseAddArgs,
+  parseEditArgs,
   pollTelegramCommands
 } from '../src/telegramCommands.js';
 
@@ -35,6 +36,43 @@ test('parseAddArgs supports direct target price commands', () => {
   assert.equal(input.alertType, 'target_price');
   assert.equal(input.targetPrice, '93000');
   assert.equal(input.thresholdPercent, 5);
+});
+
+test('parseEditArgs supports alert rule and metadata edits', () => {
+  assert.deepEqual(parseEditArgs(['336260', 'high', '8']), {
+    query: '336260',
+    label: '최고가 대비 하락률',
+    patch: {
+      alertType: 'high_drawdown',
+      thresholdPercent: '8',
+      targetPrice: null
+    }
+  });
+
+  assert.deepEqual(parseEditArgs(['336260', 'target', '93000']), {
+    query: '336260',
+    label: '직접 기준가',
+    patch: {
+      alertType: 'target_price',
+      targetPrice: '93000'
+    }
+  });
+
+  assert.deepEqual(parseEditArgs(['336260', 'name', '두산', '퓨얼셀']), {
+    query: '336260',
+    label: '표시 이름',
+    patch: {
+      displayName: '두산 퓨얼셀'
+    }
+  });
+
+  assert.deepEqual(parseEditArgs(['336260', 'cooldown', '60']), {
+    query: '336260',
+    label: '반복 알림 간격',
+    patch: {
+      alertCooldownMinutes: '60'
+    }
+  });
 });
 
 test('handleTelegramMessage can add, pause, resume, and delete a stock', async () => {
@@ -73,6 +111,41 @@ test('handleTelegramMessage can add, pause, resume, and delete a stock', async (
   assert.equal(stocks.length, 0);
   assert.equal(sent.length, 4);
   assert.equal(sent[0].chatId, config.telegramChatId);
+});
+
+test('handleTelegramMessage can edit stock alert settings', async () => {
+  const store = await createStore();
+  const sent = [];
+  const options = {
+    sendTelegramMessage: async (_config, text) => {
+      sent.push(text);
+    },
+    initializeHighFromPurchaseDate: async (_store, _config, stock) => ({
+      ...stock,
+      highPrice: Number(stock.purchasePrice || 0) + 100,
+      highPriceAt: stock.purchaseDate,
+      highPriceSource: 'purchase_price'
+    })
+  };
+
+  await handleTelegramMessage(
+    store,
+    config,
+    message('/add 336260 두산퓨얼셀 88779 2026-05-11 high 10'),
+    options
+  );
+  await handleTelegramMessage(store, config, message('/edit 336260 loss 5'), options);
+  await handleTelegramMessage(store, config, message('/edit 336260 target 93000'), options);
+  await handleTelegramMessage(store, config, message('/edit 336260 cooldown 60'), options);
+  await handleTelegramMessage(store, config, message('/edit 336260 name 두산 퓨얼셀'), options);
+
+  const stocks = await store.listStocks();
+  assert.equal(stocks.length, 1);
+  assert.equal(stocks[0].alertType, 'target_price');
+  assert.equal(stocks[0].targetPrice, 93000);
+  assert.equal(stocks[0].alertCooldownMinutes, 60);
+  assert.equal(stocks[0].displayName, '두산 퓨얼셀');
+  assert.match(sent.at(-1), /종목 정보를 수정했습니다/);
 });
 
 test('pollTelegramCommands stores the next Telegram update offset', async () => {
