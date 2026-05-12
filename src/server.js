@@ -4,6 +4,7 @@ import path from 'node:path';
 import { buildAccessUrls } from './accessUrls.js';
 import { createBackup, listBackups, restoreBackup } from './backups.js';
 import { config } from './config.js';
+import { runDividendRefresh } from './dividendRefresh.js';
 import { createQrSvg } from './qrCode.js';
 import { JsonStore } from './storage.js';
 import {
@@ -34,8 +35,10 @@ const store = new JsonStore(config.dataDir, {
 });
 
 let lastCheck = null;
+let lastDividendRefresh = null;
 let lastTelegramCommandPoll = null;
 let isChecking = false;
+let isRefreshingDividends = false;
 let isPollingTelegramCommands = false;
 let activePort = config.port;
 let server = null;
@@ -157,6 +160,26 @@ async function runTelegramCommandPollOnce() {
   }
 }
 
+async function runDividendRefreshOnce() {
+  if (isRefreshingDividends) {
+    return {
+      checkedAt: new Date().toISOString(),
+      results: [],
+      skipped: true,
+      reason: 'dividend_refresh_already_running'
+    };
+  }
+
+  isRefreshingDividends = true;
+
+  try {
+    lastDividendRefresh = await runDividendRefresh(store, config);
+    return lastDividendRefresh;
+  } finally {
+    isRefreshingDividends = false;
+  }
+}
+
 async function initializePurchaseHigh(stock) {
   if (!stock?.purchaseDate) {
     return stock;
@@ -198,9 +221,12 @@ async function handleApi(request, response, url) {
       port: activePort,
       accessUrls: buildAccessUrls({ host: config.host, port: activePort }),
       quoteProviders: config.quoteProviders,
+      dividendProviders: config.dividendProviders,
       pollIntervalSeconds: config.pollIntervalSeconds,
+      dividendRefreshIntervalSeconds: config.dividendRefreshIntervalSeconds,
       telegramCommandPollSeconds: config.telegramCommandPollSeconds,
       lastTelegramCommandPoll,
+      lastDividendRefresh,
       lastCheck
     });
     return;
@@ -214,9 +240,12 @@ async function handleApi(request, response, url) {
       alerts,
       telegramConfigured: isTelegramConfigured(config),
       quoteProviders: config.quoteProviders,
+      dividendProviders: config.dividendProviders,
       pollIntervalSeconds: config.pollIntervalSeconds,
+      dividendRefreshIntervalSeconds: config.dividendRefreshIntervalSeconds,
       telegramCommandPollSeconds: config.telegramCommandPollSeconds,
       lastTelegramCommandPoll,
+      lastDividendRefresh,
       lastCheck
     });
     return;
@@ -453,6 +482,12 @@ async function handleApi(request, response, url) {
     return;
   }
 
+  if (request.method === 'POST' && url.pathname === '/api/dividends/refresh') {
+    const result = await runDividendRefreshOnce();
+    sendJson(response, 200, result);
+    return;
+  }
+
   if (request.method === 'POST' && url.pathname === '/api/telegram/test') {
     await sendTelegramMessage(
       config,
@@ -536,6 +571,7 @@ function listen(port, remainingAttempts = 20) {
     console.log(`Stock Alarm is running at http://${config.host}:${port}`);
     console.log(`Runtime info: ${getRuntimeInfoPath(config.dataDir)}`);
     console.log(`Polling every ${config.pollIntervalSeconds} seconds`);
+    console.log(`Refreshing dividends every ${config.dividendRefreshIntervalSeconds} seconds`);
   });
 }
 
@@ -546,6 +582,16 @@ const interval = setInterval(() => {
     console.error('Scheduled alert check failed:', error);
   });
 }, config.pollIntervalSeconds * 1000);
+
+const dividendRefreshInterval = setInterval(() => {
+  runDividendRefreshOnce().catch((error) => {
+    lastDividendRefresh = {
+      checkedAt: new Date().toISOString(),
+      error: error.message
+    };
+    console.error('Scheduled dividend refresh failed:', error);
+  });
+}, config.dividendRefreshIntervalSeconds * 1000);
 
 const telegramCommandInterval = setInterval(() => {
   runTelegramCommandPollOnce().catch((error) => {
@@ -582,6 +628,7 @@ async function shutdown() {
 
   isShuttingDown = true;
   clearInterval(interval);
+  clearInterval(dividendRefreshInterval);
   clearInterval(telegramCommandInterval);
 
   try {

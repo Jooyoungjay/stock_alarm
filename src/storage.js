@@ -82,6 +82,18 @@ function normalizeStock(input, defaults) {
     ),
     dividendFrequency: normalizeDividendFrequency(input.dividendFrequency),
     dividendMonths: normalizeDividendMonths(input.dividendMonths),
+    dividendDataSource: input.annualDividendPerShare ? 'manual' : '',
+    dividendProvider: '',
+    dividendSourceSymbol: '',
+    dividendCurrency: '',
+    dividendYieldPercent: null,
+    lastDividendValue: null,
+    exDividendDate: '',
+    dividendDate: '',
+    dividendUpdatedAt: input.annualDividendPerShare ? now : null,
+    dividendLastCheckedAt: null,
+    dividendLastError: '',
+    dividendLastErrorAt: null,
     purchaseDate: normalizeOptionalDate(input.purchaseDate),
     alertType,
     thresholdPercent,
@@ -171,6 +183,17 @@ function applyStockPatch(stock, patch) {
       patch.annualDividendPerShare,
       '주당 연 배당금은 0보다 큰 숫자여야 합니다.'
     );
+    next.dividendDataSource = next.annualDividendPerShare ? 'manual' : '';
+    next.dividendProvider = '';
+    next.dividendSourceSymbol = '';
+    next.dividendCurrency = '';
+    next.dividendYieldPercent = null;
+    next.lastDividendValue = null;
+    next.exDividendDate = '';
+    next.dividendDate = '';
+    next.dividendUpdatedAt = next.annualDividendPerShare ? next.updatedAt : null;
+    next.dividendLastError = '';
+    next.dividendLastErrorAt = null;
   }
 
   if (patch.dividendFrequency !== undefined) {
@@ -273,6 +296,19 @@ function normalizeStoredStock(stock) {
           : null,
     dividendFrequency: normalizeStoredDividendFrequency(stock.dividendFrequency),
     dividendMonths: normalizeStoredDividendMonths(stock.dividendMonths),
+    dividendDataSource:
+      stock.dividendDataSource || (Number.isFinite(annualDividendPerShare) && annualDividendPerShare > 0 ? 'manual' : ''),
+    dividendProvider: stock.dividendProvider || '',
+    dividendSourceSymbol: stock.dividendSourceSymbol || '',
+    dividendCurrency: stock.dividendCurrency || '',
+    dividendYieldPercent: normalizeOptionalStoredNumber(stock.dividendYieldPercent),
+    lastDividendValue: normalizeOptionalStoredNumber(stock.lastDividendValue),
+    exDividendDate: stock.exDividendDate || '',
+    dividendDate: stock.dividendDate || '',
+    dividendUpdatedAt: stock.dividendUpdatedAt || null,
+    dividendLastCheckedAt: stock.dividendLastCheckedAt || null,
+    dividendLastError: stock.dividendLastError || '',
+    dividendLastErrorAt: stock.dividendLastErrorAt || null,
     purchaseDate: stock.purchaseDate || '',
     alertType:
       alertType === ALERT_TYPES.TARGET_PRICE && normalizedTargetPrice === null

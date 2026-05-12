@@ -93,12 +93,16 @@ export const config = {
   isRailwayRuntime,
   pollIntervalSeconds: toNumber(process.env.POLL_INTERVAL_SECONDS, 60, { min: 10 }),
   telegramCommandPollSeconds: toNumber(process.env.TELEGRAM_COMMAND_POLL_SECONDS, 5, { min: 2 }),
+  dividendRefreshIntervalSeconds: toNumber(process.env.DIVIDEND_REFRESH_INTERVAL_SECONDS, 300, {
+    min: 60
+  }),
   backupRetention: toNumber(process.env.BACKUP_RETENTION, 30, { min: 1 }),
   defaultAlertCooldownMinutes: toNumber(process.env.DEFAULT_ALERT_COOLDOWN_MINUTES, 30, {
     min: 1
   }),
   quoteTimeoutMs: toNumber(process.env.QUOTE_TIMEOUT_MS, 10000, { min: 1000 }),
   quoteProviders: process.env.QUOTE_PROVIDERS || 'naver,stooq,alphavantage,yahoo',
+  dividendProviders: process.env.DIVIDEND_PROVIDERS || 'yahoo',
   alphaVantageApiKey: process.env.ALPHA_VANTAGE_API_KEY || '',
   telegramBotToken: process.env.TELEGRAM_BOT_TOKEN || '',
   telegramChatId: process.env.TELEGRAM_CHAT_ID || ''

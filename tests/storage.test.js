@@ -87,6 +87,8 @@ test('JsonStore stores and updates optional stock quantity', async () => {
   assert.equal(stock.annualDividendPerShare, 1200);
   assert.equal(stock.dividendFrequency, 'quarterly');
   assert.deepEqual(stock.dividendMonths, [3, 6, 9, 12]);
+  assert.equal(stock.dividendDataSource, 'manual');
+  assert.ok(stock.dividendUpdatedAt);
   assert.equal((await store.listStocks())[0].quantity, 12.5);
   assert.equal((await store.listStocks())[0].annualDividendPerShare, 1200);
   assert.equal((await store.listStocks())[0].dividendFrequency, 'quarterly');
@@ -102,6 +104,8 @@ test('JsonStore stores and updates optional stock quantity', async () => {
   assert.equal(updated.annualDividendPerShare, null);
   assert.equal(updated.dividendFrequency, '');
   assert.deepEqual(updated.dividendMonths, []);
+  assert.equal(updated.dividendDataSource, '');
+  assert.equal(updated.dividendUpdatedAt, null);
 
   await assert.rejects(
     () => store.updateStock(stock.id, { quantity: 0 }),

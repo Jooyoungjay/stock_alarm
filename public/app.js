@@ -39,6 +39,7 @@ const elements = {
   registerStepButtons: document.querySelectorAll('[data-register-step-button]'),
   registerSteps: document.querySelectorAll('[data-register-step]'),
   checkNowButton: document.querySelector('#checkNowButton'),
+  refreshDividendsButton: document.querySelector('#refreshDividendsButton'),
   testTelegramButton: document.querySelector('#testTelegramButton'),
   createBackupButton: document.querySelector('#createBackupButton'),
   refreshBackupsButton: document.querySelector('#refreshBackupsButton'),
@@ -175,6 +176,15 @@ elements.checkNowButton.addEventListener('click', async () => {
     const checked = result.results?.length || 0;
     showMessage(`${checked}개 종목을 확인했습니다.`);
     await loadData();
+  });
+});
+
+elements.refreshDividendsButton.addEventListener('click', async () => {
+  await withBusy(elements.refreshDividendsButton, async () => {
+    const result = await api('/api/dividends/refresh', { method: 'POST' });
+    const counts = countDividendRefreshResults(result);
+    showMessage(`배당 정보 ${counts.checked}개 확인, ${counts.updated}개 업데이트했습니다.`);
+    await Promise.all([loadData(), loadHealth()]);
   });
 });
 
@@ -706,7 +716,7 @@ function renderStatus(data) {
   elements.telegramStatus.className = `status-chip ${data.telegramConfigured ? 'connected' : 'warn'}`;
   elements.quoteStatus.textContent = `시세 ${formatProviderList(data.quoteProviders)}`;
   elements.quoteStatus.className = 'status-chip pipeline';
-  elements.pollStatus.textContent = `${data.pollIntervalSeconds || 60}초 주기`;
+  elements.pollStatus.textContent = `시세 ${data.pollIntervalSeconds || 60}초 · 배당 ${formatInterval(data.dividendRefreshIntervalSeconds || 300)}`;
   elements.pollStatus.className = 'status-chip timer';
 }
 
@@ -724,8 +734,10 @@ function renderServerStatus(health) {
       ${renderServerMetric('서버', '정상 실행', `시작 ${formatDate(health.startedAt)}`)}
       ${renderServerMetric('Telegram', health.telegramConfigured ? '연결됨' : '미설정', health.telegramConfigured ? '알림 전송 가능' : '.env 설정 필요')}
       ${renderServerMetric('시세', formatProviderList(health.quoteProviders), `${health.pollIntervalSeconds || 60}초 주기`)}
+      ${renderServerMetric('배당', formatProviderList(health.dividendProviders), `${formatInterval(health.dividendRefreshIntervalSeconds || 300)} 주기`)}
       ${renderServerMetric('명령', formatDate(health.lastTelegramCommandPoll?.checkedAt), `${health.telegramCommandPollSeconds || 5}초 주기`)}
       ${renderServerMetric('마지막 확인', formatDate(health.lastCheck?.checkedAt), getLastCheckDetail(health.lastCheck))}
+      ${renderServerMetric('배당 갱신', formatDate(health.lastDividendRefresh?.checkedAt), getLastDividendRefreshDetail(health.lastDividendRefresh))}
       ${renderServerMetric('포트', String(health.port || '-'), `HOST ${health.host || '-'}`)}
       ${renderServerMetric('데이터', shortenPath(health.dataDir), '로컬 저장소')}
       ${renderServerMetric('실행 방식', health.railwayRuntime ? 'Railway' : '로컬 PC', health.cwd || '')}
@@ -817,6 +829,63 @@ function getLastCheckDetail(lastCheck) {
 
   const checked = Array.isArray(lastCheck.results) ? lastCheck.results.length : 0;
   return `${checked}개 종목 확인`;
+}
+
+function getLastDividendRefreshDetail(lastRefresh) {
+  if (!lastRefresh) {
+    return '아직 실행 전';
+  }
+
+  if (lastRefresh.skipped) {
+    return lastRefresh.reason || '건너뜀';
+  }
+
+  if (lastRefresh.error) {
+    return lastRefresh.error;
+  }
+
+  const counts = countDividendRefreshResults(lastRefresh);
+  return `확인 ${counts.checked}개 · 업데이트 ${counts.updated}개 · 실패 ${counts.error}개`;
+}
+
+function countDividendRefreshResults(result) {
+  const counts = {
+    checked: 0,
+    updated: 0,
+    error: 0,
+    skipped: 0
+  };
+  const results = Array.isArray(result?.results) ? result.results : [];
+
+  for (const item of results) {
+    if (item.status === 'updated') {
+      counts.updated += 1;
+      counts.checked += 1;
+    } else if (item.status === 'checked') {
+      counts.checked += 1;
+    } else if (item.status === 'error') {
+      counts.error += 1;
+      counts.checked += 1;
+    } else if (item.status === 'skipped') {
+      counts.skipped += 1;
+    }
+  }
+
+  return counts;
+}
+
+function formatInterval(seconds) {
+  const value = Number(seconds);
+
+  if (!Number.isFinite(value) || value <= 0) {
+    return '-';
+  }
+
+  if (value % 60 === 0) {
+    return `${value / 60}분`;
+  }
+
+  return `${value}초`;
 }
 
 function shortenPath(value) {
@@ -1624,6 +1693,23 @@ function getProviderLabel(provider) {
   return labels[String(provider || '').toLowerCase()] || provider;
 }
 
+function formatDividendRefreshStatus(stock) {
+  if (stock.dividendLastError) {
+    return `실패 ${formatDate(stock.dividendLastErrorAt)}`;
+  }
+
+  if (stock.dividendLastCheckedAt) {
+    const source = stock.dividendDataSource ? ` · ${getProviderLabel(stock.dividendDataSource)}` : '';
+    return `${formatDate(stock.dividendLastCheckedAt)}${source}`;
+  }
+
+  if (stock.dividendDataSource === 'manual') {
+    return '수동 입력';
+  }
+
+  return '확인 전';
+}
+
 function getSuggestedTestPrice(stock) {
   const lastPrice = parseFiniteNumber(stock.lastPrice);
   const highPrice = parseFiniteNumber(stock.highPrice);
@@ -1659,6 +1745,7 @@ function renderHoldingSummary(stock) {
       ${renderHoldingMetric('배당수익률', formatPercent(metrics.dividendYieldPercent))}
       ${renderHoldingMetric('1회 예상 배당금', metrics.dividendPaymentAmount === null ? '-' : formatMoney(metrics.dividendPaymentAmount, stock.currency))}
       ${renderHoldingMetric('배당 지급월', formatDividendMonths(metrics.dividendMonths))}
+      ${renderHoldingMetric('배당 갱신', formatDividendRefreshStatus(stock), stock.dividendLastError ? 'down' : '')}
     </div>
   `;
 }
@@ -1697,6 +1784,10 @@ function renderPositionSummary(stock) {
 
   if (stock.dividendFrequency) {
     parts.push(getDividendFrequencyLabel(stock.dividendFrequency));
+  }
+
+  if (stock.dividendDataSource && stock.dividendDataSource !== 'manual') {
+    parts.push(`배당 ${getProviderLabel(stock.dividendDataSource)}`);
   }
 
   parts.push(getAlertTypeLabel(stock));
