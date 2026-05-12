@@ -2,7 +2,7 @@ import zlib from 'node:zlib';
 import { isKoreanStockSymbol } from './priceProvider.js';
 
 const publicDataDividendUrl =
-  'http://apis.data.go.kr/1160100/service/GetStocDiviInfoService/getDiviInfo';
+  'http://apis.data.go.kr/1160100/GetStocDiviInfoService_V2/getDiviInfo_V2';
 const openDartAlotMatterUrl = 'https://opendart.fss.or.kr/api/alotMatter.json';
 const openDartCorpCodeUrl = 'https://opendart.fss.or.kr/api/corpCode.xml';
 const alphaVantageUrl = 'https://www.alphavantage.co/query';
@@ -101,7 +101,7 @@ export function parsePublicDataDividendResponse(
         item.dvdnAmt,
         findDividendAmountInRecord(item)
       ),
-      exDate: parseCompactDate(item.dvdnBseDt || item.basDt || item.rghtStndDt),
+      exDate: parseCompactDate(item.dvdnBasDt || item.dvdnBseDt || item.basDt || item.rghtStndDt),
       payDate: parseCompactDate(item.cashDvdnPayDt || item.dvdnPayDt || item.payDt),
       currency: 'KRW',
       sourceSymbol: item.stckIssuCmpyNm || sourceName || requestedSymbol
@@ -253,8 +253,7 @@ async function fetchPublicDataDividendInfo(symbol, options = {}) {
     throw new Error('공공데이터 배당정보 조회에는 종목 표시 이름이 필요합니다.');
   }
 
-  const url = new URL(publicDataDividendUrl);
-  url.searchParams.set('serviceKey', options.dataGoKrServiceKey);
+  const url = createPublicDataUrl(options.dataGoKrServiceKey);
   url.searchParams.set('pageNo', '1');
   url.searchParams.set('numOfRows', '100');
   url.searchParams.set('resultType', 'json');
@@ -460,6 +459,22 @@ function getYahooDividendSymbols(symbol) {
   }
 
   return [toYahooDividendSymbol(normalized)];
+}
+
+function createPublicDataUrl(serviceKey) {
+  const key = String(serviceKey || '').trim();
+
+  if (!key) {
+    throw new Error('DATA_GO_KR_SERVICE_KEY가 설정되지 않았습니다.');
+  }
+
+  if (key.includes('%')) {
+    return new URL(`${publicDataDividendUrl}?serviceKey=${key}`);
+  }
+
+  const url = new URL(publicDataDividendUrl);
+  url.searchParams.set('serviceKey', key);
+  return url;
 }
 
 function buildDividendInfoFromEvents(events, meta = {}) {

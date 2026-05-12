@@ -98,13 +98,17 @@ function normalizePositiveNumber(value) {
 }
 
 function getDividendCompanyName(stock) {
+  const catalogItem = symbolCatalog.find((item) => item.symbol === stock.symbol);
+
+  if (catalogItem?.name && /^\d{6}(\.(KS|KQ))?$/i.test(String(stock.symbol || ''))) {
+    return catalogItem.name;
+  }
+
   const displayName = String(stock.displayName || '').trim();
 
   if (displayName) {
     return displayName;
   }
-
-  const catalogItem = symbolCatalog.find((item) => item.symbol === stock.symbol);
 
   return catalogItem?.name || stock.symbol;
 }

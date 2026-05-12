@@ -168,7 +168,7 @@ test('parsePublicDataDividendResponse extracts Korean dividend rows', () => {
               {
                 stckIssuCmpyNm: '두산퓨얼셀',
                 basDt: '20260401',
-                dvdnBseDt: '20260331',
+                dvdnBasDt: '20260331',
                 cashDvdnPayDt: '20260420',
                 stckGenrDvdnAmt: '150'
               },
