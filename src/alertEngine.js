@@ -156,6 +156,7 @@ export function buildRegistrationPreview(input, quote, historicalHigh = null) {
   }
 
   const purchasePrice = Number(input.purchasePrice);
+  const quantity = Number(input.quantity);
 
   if (
     (alertType === ALERT_TYPES.HIGH_DRAWDOWN || alertType === ALERT_TYPES.PURCHASE_LOSS) &&
@@ -179,6 +180,16 @@ export function buildRegistrationPreview(input, quote, historicalHigh = null) {
   const distanceToThreshold = thresholdPrice === null ? null : currentPrice - thresholdPrice;
   const distanceToThresholdPercent =
     thresholdPrice === null || currentPrice <= 0 ? null : (distanceToThreshold / currentPrice) * 100;
+  const normalizedQuantity = Number.isFinite(quantity) && quantity > 0 ? quantity : null;
+  const investmentAmount =
+    normalizedQuantity && Number.isFinite(purchasePrice) && purchasePrice > 0
+      ? normalizedQuantity * purchasePrice
+      : null;
+  const marketValue = normalizedQuantity ? normalizedQuantity * currentPrice : null;
+  const unrealizedProfit =
+    investmentAmount !== null && marketValue !== null ? marketValue - investmentAmount : null;
+  const unrealizedProfitPercent =
+    unrealizedProfit !== null && investmentAmount > 0 ? (unrealizedProfit / investmentAmount) * 100 : null;
 
   return {
     quote,
@@ -186,6 +197,11 @@ export function buildRegistrationPreview(input, quote, historicalHigh = null) {
       alertType,
       alertTypeLabel: alertRule.alertTypeLabel,
       purchasePrice: Number.isFinite(purchasePrice) ? purchasePrice : null,
+      quantity: normalizedQuantity,
+      investmentAmount,
+      marketValue,
+      unrealizedProfit,
+      unrealizedProfitPercent,
       purchaseDate: input.purchaseDate,
       highPrice: baseline?.highPrice ?? null,
       highPriceAt: baseline?.highPriceAt ?? null,

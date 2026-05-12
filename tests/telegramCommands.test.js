@@ -38,6 +38,21 @@ test('parseAddArgs supports direct target price commands', () => {
   assert.equal(input.thresholdPercent, 5);
 });
 
+test('parseAddArgs supports keyed quantity commands', () => {
+  const input = parseAddArgs([
+    'symbol=336260',
+    'name=두산퓨얼셀',
+    'price=88779',
+    'qty=10',
+    'date=2026-05-11',
+    'type=high',
+    'rate=10'
+  ]);
+
+  assert.equal(input.symbol, '336260');
+  assert.equal(input.quantity, '10');
+});
+
 test('parseEditArgs supports alert rule and metadata edits', () => {
   assert.deepEqual(parseEditArgs(['336260', 'high', '8']), {
     query: '336260',
@@ -71,6 +86,14 @@ test('parseEditArgs supports alert rule and metadata edits', () => {
     label: '반복 알림 간격',
     patch: {
       alertCooldownMinutes: '60'
+    }
+  });
+
+  assert.deepEqual(parseEditArgs(['336260', 'qty', '10']), {
+    query: '336260',
+    label: '보유 수량',
+    patch: {
+      quantity: '10'
     }
   });
 });

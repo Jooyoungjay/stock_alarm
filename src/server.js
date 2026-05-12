@@ -343,6 +343,7 @@ async function handleApi(request, response, url) {
       buildRegistrationPreview(
         {
           purchasePrice: url.searchParams.get('purchasePrice'),
+          quantity: url.searchParams.get('quantity'),
           purchaseDate,
           alertType: url.searchParams.get('alertType'),
           thresholdPercent: url.searchParams.get('thresholdPercent'),

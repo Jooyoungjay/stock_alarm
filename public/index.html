@@ -106,6 +106,18 @@
               </label>
 
               <label class="form-group">
+                <span class="form-label">보유 수량</span>
+                <input
+                  class="form-input"
+                  name="quantity"
+                  type="text"
+                  inputmode="decimal"
+                  pattern="[0-9]*[.]?[0-9]*"
+                  placeholder="10"
+                />
+              </label>
+
+              <label class="form-group">
                 <span class="form-label">구매일</span>
                 <input class="form-input" name="purchaseDate" type="date" required />
               </label>
@@ -217,6 +229,7 @@
 
           <div id="message" class="message" role="status" aria-live="polite"></div>
           <div id="watchSummaryBar" class="watch-summary-bar" aria-live="polite"></div>
+          <div id="portfolioSummaryBar" class="portfolio-summary-bar" aria-live="polite"></div>
           <div class="watch-controls" aria-label="감시 종목 보기 설정">
             <div id="watchFilterButtons" class="segmented-control" role="group" aria-label="감시 종목 필터">
               <button type="button" class="active" data-watch-filter="all">전체</button>
@@ -230,6 +243,7 @@
               <select id="watchSortSelect">
                 <option value="risk">위험도순</option>
                 <option value="distance">기준가 근접순</option>
+                <option value="profit">수익률순</option>
                 <option value="checked">최근 확인순</option>
                 <option value="name">이름순</option>
               </select>

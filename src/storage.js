@@ -75,6 +75,7 @@ function normalizeStock(input, defaults) {
     symbol,
     displayName: String(input.displayName || '').trim(),
     purchasePrice: normalizeOptionalPositiveNumber(input.purchasePrice, '매수가는 0보다 큰 숫자여야 합니다.'),
+    quantity: normalizeOptionalPositiveNumber(input.quantity, '보유 수량은 0보다 큰 숫자여야 합니다.'),
     purchaseDate: normalizeOptionalDate(input.purchaseDate),
     alertType,
     thresholdPercent,
@@ -152,6 +153,13 @@ function applyStockPatch(stock, patch) {
     alertConditionChanged = true;
   }
 
+  if (patch.quantity !== undefined) {
+    next.quantity = normalizeOptionalPositiveNumber(
+      patch.quantity,
+      '보유 수량은 0보다 큰 숫자여야 합니다.'
+    );
+  }
+
   if (patch.purchaseDate !== undefined) {
     next.purchaseDate = normalizeOptionalDate(patch.purchaseDate);
     alertConditionChanged = true;
@@ -207,6 +215,7 @@ function applyStockPatch(stock, patch) {
 
 function normalizeStoredStock(stock) {
   const purchasePrice = Number(stock.purchasePrice);
+  const quantity = Number(stock.quantity);
   const targetPrice = Number(stock.targetPrice);
   const alertType = normalizeStoredAlertType(stock.alertType);
   const normalizedTargetPrice =
@@ -225,6 +234,12 @@ function normalizeStoredStock(stock) {
         ? null
         : Number.isFinite(purchasePrice)
           ? purchasePrice
+          : null,
+    quantity:
+      stock.quantity === undefined || stock.quantity === null || stock.quantity === ''
+        ? null
+        : Number.isFinite(quantity) && quantity > 0
+          ? quantity
           : null,
     purchaseDate: stock.purchaseDate || '',
     alertType:

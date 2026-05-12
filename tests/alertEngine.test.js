@@ -229,6 +229,7 @@ test('registration preview calculates threshold and drawdown before saving', () 
   const preview = buildRegistrationPreview(
     {
       purchasePrice: 90,
+      quantity: 10,
       purchaseDate: '2026-05-01',
       thresholdPercent: 5
     },
@@ -254,6 +255,11 @@ test('registration preview calculates threshold and drawdown before saving', () 
   assert.equal(preview.position.thresholdPrice, 114);
   assert.equal(preview.position.drawdownPercent, 5);
   assert.equal(preview.position.alertNow, true);
+  assert.equal(preview.position.quantity, 10);
+  assert.equal(preview.position.investmentAmount, 900);
+  assert.equal(preview.position.marketValue, 1140);
+  assert.equal(preview.position.unrealizedProfit, 240);
+  assert.ok(Math.abs(preview.position.unrealizedProfitPercent - 26.6666666667) < 0.000001);
 });
 
 test('registration preview uses purchase price when it is the highest baseline', () => {

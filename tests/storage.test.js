@@ -72,6 +72,22 @@ test('JsonStore scopes stocks and alerts by anonymous device', async () => {
   assert.equal((await store.listStocks({ deviceId: second.device.id })).length, 1);
 });
 
+test('JsonStore stores and updates optional stock quantity', async () => {
+  const store = await createStore();
+  const stock = await store.addStock(stockInput({ quantity: 12.5 }));
+
+  assert.equal(stock.quantity, 12.5);
+  assert.equal((await store.listStocks())[0].quantity, 12.5);
+
+  const updated = await store.updateStock(stock.id, { quantity: '' });
+  assert.equal(updated.quantity, null);
+
+  await assert.rejects(
+    () => store.updateStock(stock.id, { quantity: 0 }),
+    /보유 수량/
+  );
+});
+
 async function createStore() {
   const dataDir = await fs.mkdtemp(path.join(os.tmpdir(), 'stock-alarm-storage-test-'));
   return new JsonStore(dataDir, {

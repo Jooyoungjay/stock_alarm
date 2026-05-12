@@ -17,6 +17,7 @@ const elements = {
   alertList: document.querySelector('#alertList'),
   message: document.querySelector('#message'),
   watchSummaryBar: document.querySelector('#watchSummaryBar'),
+  portfolioSummaryBar: document.querySelector('#portfolioSummaryBar'),
   watchFilterButtons: document.querySelectorAll('[data-watch-filter]'),
   watchSortSelect: document.querySelector('#watchSortSelect'),
   backupList: document.querySelector('#backupList'),
@@ -285,6 +286,7 @@ function normalizeStockPayload(payload) {
 
   normalized.alertType = normalized.alertType || 'high_drawdown';
   normalized.purchasePrice = normalized.purchasePrice ? Number(normalized.purchasePrice) : null;
+  normalized.quantity = normalized.quantity ? Number(normalized.quantity) : null;
   normalized.targetPrice =
     normalized.alertType === 'target_price' && normalized.targetPrice
       ? Number(normalized.targetPrice)
@@ -356,7 +358,7 @@ function updateRegistrationStep(step) {
 function validateRegistrationStep(step) {
   const controlsByStep = {
     1: [elements.form.elements.symbol],
-    2: [elements.form.elements.purchasePrice, elements.form.elements.purchaseDate],
+    2: [elements.form.elements.purchasePrice, elements.form.elements.quantity, elements.form.elements.purchaseDate],
     3: [
       elements.form.elements.alertType,
       elements.form.elements.targetPrice,
@@ -424,6 +426,7 @@ async function previewQuote(button) {
     const params = new URLSearchParams({
       symbol,
       purchasePrice: elements.form.elements.purchasePrice.value,
+      quantity: elements.form.elements.quantity.value,
       purchaseDate: elements.form.elements.purchaseDate.value,
       alertType: elements.form.elements.alertType.value,
       thresholdPercent: elements.form.elements.thresholdPercent.value,
@@ -564,6 +567,7 @@ function renderQuotePreview(preview) {
       ${renderPreviewItem('현재가', formatMoney(quote.price, previewCurrency))}
       ${position ? renderPreviewItem('알림 기준', position.alertTypeLabel || getAlertTypeLabel(position)) : ''}
       ${position ? renderPreviewItem('매수가', formatMoney(position.purchasePrice, position.currency)) : ''}
+      ${position?.quantity ? renderPreviewItem('보유 수량', formatQuantity(position.quantity)) : ''}
       ${
         position?.highPrice
           ? renderPreviewItem(
@@ -578,6 +582,18 @@ function renderQuotePreview(preview) {
           ? renderPreviewItem(
               position.thresholdLabel || '알림 기준가',
               formatMoney(position.thresholdPrice, position.currency)
+            )
+          : ''
+      }
+      ${position?.investmentAmount ? renderPreviewItem('총 매수금액', formatMoney(position.investmentAmount, position.currency)) : ''}
+      ${position?.marketValue ? renderPreviewItem('현재 평가금액', formatMoney(position.marketValue, position.currency)) : ''}
+      ${
+        position?.unrealizedProfit !== null && position?.unrealizedProfit !== undefined
+          ? renderPreviewItem(
+              '평가손익',
+              formatSignedMoney(position.unrealizedProfit, position.currency),
+              formatSignedPercent(position.unrealizedProfitPercent),
+              getProfitClass(position.unrealizedProfit)
             )
           : ''
       }
@@ -602,6 +618,7 @@ function renderRegistrationSummary() {
   const symbol = form.elements.symbol.value.trim().toUpperCase() || '-';
   const displayName = form.elements.displayName.value.trim();
   const purchasePrice = parseFiniteNumber(form.elements.purchasePrice.value);
+  const quantity = parseFiniteNumber(form.elements.quantity.value);
   const purchaseDate = form.elements.purchaseDate.value || '-';
   const alertType = form.elements.alertType.value;
   const thresholdPercent = parseFiniteNumber(form.elements.thresholdPercent.value);
@@ -612,11 +629,14 @@ function renderRegistrationSummary() {
     alertType === 'target_price'
       ? `기준가 ${formatMoney(targetPrice)}`
       : `${alertType === 'purchase_loss' ? '손절률' : '하락률'} ${thresholdPercent ?? '-'}%`;
+  const purchaseAmount =
+    purchasePrice !== null && quantity !== null ? purchasePrice * quantity : null;
 
   elements.registrationSummary.innerHTML = `
     <div class="registration-summary-grid">
       ${renderSummaryItem('종목', displayName ? `${displayName} · ${symbol}` : symbol)}
       ${renderSummaryItem('매수가', formatMoney(purchasePrice), purchaseDate)}
+      ${renderSummaryItem('보유 수량', quantity ? formatQuantity(quantity) : '-', purchaseAmount ? `총 ${formatMoney(purchaseAmount)}` : '선택 입력')}
       ${renderSummaryItem('알림 기준', getAlertTypeLabel({ alertType }), alertDetail)}
       ${renderSummaryItem('반복 알림', cooldown ? `${cooldown}분마다` : '-', notes || '메모 없음')}
     </div>
@@ -771,6 +791,7 @@ function renderStocks() {
   const visibleStocks = filterWatchStocks(decoratedStocks).sort(compareWatchStocks);
 
   renderWatchSummary(decoratedStocks, visibleStocks.length);
+  renderPortfolioSummary(decoratedStocks);
   renderWatchControls();
 
   if (!state.stocks.length) {
@@ -821,6 +842,7 @@ function renderStocks() {
             <span class="metric-value change-pct ${isTriggered ? 'down' : 'up'}">${formatAlertMetricPercent(alertMetric)}</span>
           </div>
         </div>
+        ${renderHoldingSummary(stock)}
         <div class="stock-bottom">
           <div class="status-block">
             <span class="status-badge ${getStockStatusClass(stock)}"><span class="dot"></span>${getStockStatusLabel(stock)}</span>
@@ -898,6 +920,93 @@ function createWatchSummaryItem(label, value, level) {
   return item;
 }
 
+function renderPortfolioSummary(items) {
+  const groups = buildPortfolioSummaryGroups(items.map(({ stock }) => stock));
+
+  if (!groups.length) {
+    elements.portfolioSummaryBar.innerHTML =
+      '<div class="portfolio-summary-empty">보유 수량을 입력하면 평가손익과 전체 평가금액이 표시됩니다.</div>';
+    return;
+  }
+
+  elements.portfolioSummaryBar.replaceChildren(
+    ...groups.map((group) => {
+      const item = document.createElement('div');
+      const profitClass = getProfitClass(group.profit);
+      item.className = `portfolio-summary-item ${profitClass}`;
+      item.innerHTML = `
+        <div class="portfolio-summary-head">
+          <span>${escapeHtml(group.currencyLabel)}</span>
+          <strong>${escapeHtml(group.count)}개 보유</strong>
+        </div>
+        <div class="portfolio-summary-grid">
+          <span>총 매수금액</span>
+          <strong>${escapeHtml(formatMoney(group.investmentAmount, group.currency))}</strong>
+          <span>현재 평가금액</span>
+          <strong>${escapeHtml(group.marketValue === null ? '-' : formatMoney(group.marketValue, group.currency))}</strong>
+          <span>평가손익</span>
+          <strong class="${profitClass}">${escapeHtml(formatSignedMoney(group.profit, group.currency))}</strong>
+          <span>수익률</span>
+          <strong class="${profitClass}">${escapeHtml(formatSignedPercent(group.profitPercent))}</strong>
+        </div>
+        ${group.pendingCount ? `<div class="portfolio-summary-note">${group.pendingCount}개 종목은 현재가 확인 후 평가금액에 반영됩니다.</div>` : ''}
+      `;
+      return item;
+    })
+  );
+}
+
+function buildPortfolioSummaryGroups(stocks) {
+  const groups = new Map();
+
+  for (const stock of stocks) {
+    const metrics = calculateHoldingMetrics(stock);
+
+    if (!metrics.hasQuantity || metrics.investmentAmount === null) {
+      continue;
+    }
+
+    const currency = stock.currency || '';
+    const key = currency || 'unknown';
+    const group =
+      groups.get(key) ||
+      {
+        currency,
+        currencyLabel: currency || '통화 미정',
+        count: 0,
+        pendingCount: 0,
+        investmentAmount: 0,
+        valuedInvestmentAmount: 0,
+        marketValue: 0,
+        profit: 0,
+        profitPercent: null
+      };
+
+    group.count += 1;
+    group.investmentAmount += metrics.investmentAmount;
+
+    if (metrics.marketValue === null || metrics.profit === null) {
+      group.pendingCount += 1;
+    } else {
+      group.marketValue += metrics.marketValue;
+      group.valuedInvestmentAmount += metrics.investmentAmount;
+      group.profit += metrics.profit;
+    }
+
+    groups.set(key, group);
+  }
+
+  return [...groups.values()]
+    .map((group) => ({
+      ...group,
+      marketValue: group.valuedInvestmentAmount > 0 ? group.marketValue : null,
+      profit: group.valuedInvestmentAmount > 0 ? group.profit : null,
+      profitPercent:
+        group.valuedInvestmentAmount > 0 ? (group.profit / group.valuedInvestmentAmount) * 100 : null
+    }))
+    .sort((left, right) => left.currencyLabel.localeCompare(right.currencyLabel, 'ko-KR'));
+}
+
 function renderWatchControls() {
   elements.watchFilterButtons.forEach((button) => {
     button.classList.toggle('active', button.dataset.watchFilter === state.watchFilter);
@@ -938,6 +1047,10 @@ function compareWatchStocks(left, right) {
     return getDistanceSortValue(leftStatus) - getDistanceSortValue(rightStatus);
   }
 
+  if (sort === 'profit') {
+    return getProfitSortValue(right.stock) - getProfitSortValue(left.stock);
+  }
+
   return (
     getRiskRank(leftStatus.level) - getRiskRank(rightStatus.level) ||
     getDistanceSortValue(leftStatus) - getDistanceSortValue(rightStatus) ||
@@ -967,6 +1080,12 @@ function getDistanceSortValue(status) {
   return value;
 }
 
+function getProfitSortValue(stock) {
+  const metrics = calculateHoldingMetrics(stock);
+
+  return Number.isFinite(metrics.profitPercent) ? metrics.profitPercent : Number.NEGATIVE_INFINITY;
+}
+
 function getStockDisplayName(stock) {
   return String(stock.displayName || stock.symbol || '');
 }
@@ -987,6 +1106,10 @@ function editStockForm(stock) {
     <label>
       <span>매수가</span>
       <input name="purchasePrice" type="text" inputmode="decimal" pattern="[0-9]*[.]?[0-9]*" value="${escapeHtml(stock.purchasePrice || '')}" required />
+    </label>
+    <label>
+      <span>보유 수량</span>
+      <input name="quantity" type="text" inputmode="decimal" pattern="[0-9]*[.]?[0-9]*" value="${escapeHtml(stock.quantity || '')}" />
     </label>
     <label>
       <span>구매일</span>
@@ -1395,8 +1518,37 @@ function getSuggestedTestPrice(stock) {
   return null;
 }
 
+function renderHoldingSummary(stock) {
+  const metrics = calculateHoldingMetrics(stock);
+
+  if (!metrics.hasQuantity) {
+    return '';
+  }
+
+  const profitClass = getProfitClass(metrics.profit);
+
+  return `
+    <div class="stock-holding-grid">
+      ${renderHoldingMetric('보유 수량', formatQuantity(metrics.quantity))}
+      ${renderHoldingMetric('총 매수금액', formatMoney(metrics.investmentAmount, stock.currency))}
+      ${renderHoldingMetric('현재 평가금액', metrics.marketValue === null ? '-' : formatMoney(metrics.marketValue, stock.currency))}
+      ${renderHoldingMetric('평가손익', formatSignedMoney(metrics.profit, stock.currency), profitClass)}
+      ${renderHoldingMetric('수익률', formatSignedPercent(metrics.profitPercent), profitClass)}
+    </div>
+  `;
+}
+
+function renderHoldingMetric(label, value, valueClass = '') {
+  return `
+    <div class="stock-holding-metric">
+      <span>${escapeHtml(label)}</span>
+      <strong class="${escapeHtml(valueClass)}">${escapeHtml(value)}</strong>
+    </div>
+  `;
+}
+
 function renderPositionSummary(stock) {
-  if (!stock.purchaseDate && !stock.purchasePrice) {
+  if (!stock.purchaseDate && !stock.purchasePrice && !stock.quantity) {
     return '';
   }
 
@@ -1408,6 +1560,10 @@ function renderPositionSummary(stock) {
 
   if (stock.purchasePrice) {
     parts.push(`매수가 ${formatMoney(stock.purchasePrice, stock.currency)}`);
+  }
+
+  if (stock.quantity) {
+    parts.push(`수량 ${formatQuantity(stock.quantity)}`);
   }
 
   parts.push(getAlertTypeLabel(stock));
@@ -1552,6 +1708,31 @@ async function copyText(text) {
   }
 }
 
+function calculateHoldingMetrics(stock) {
+  const quantity = parseFiniteNumber(stock.quantity);
+  const purchasePrice = parseFiniteNumber(stock.purchasePrice);
+  const lastPrice = parseFiniteNumber(stock.lastPrice);
+  const hasQuantity = quantity !== null && quantity > 0;
+  const investmentAmount =
+    hasQuantity && purchasePrice !== null && purchasePrice > 0 ? quantity * purchasePrice : null;
+  const marketValue = hasQuantity && lastPrice !== null && lastPrice > 0 ? quantity * lastPrice : null;
+  const profit =
+    investmentAmount !== null && marketValue !== null ? marketValue - investmentAmount : null;
+  const profitPercent =
+    profit !== null && investmentAmount > 0 ? (profit / investmentAmount) * 100 : null;
+
+  return {
+    hasQuantity,
+    quantity,
+    purchasePrice,
+    lastPrice,
+    investmentAmount,
+    marketValue,
+    profit,
+    profitPercent
+  };
+}
+
 function calculateThreshold(highPrice, thresholdPercent) {
   const high = parseFiniteNumber(highPrice);
   const threshold = Number(thresholdPercent);
@@ -1624,6 +1805,50 @@ function formatMoney(value, currency) {
   });
 
   return currency ? `${formatted} ${currency}` : formatted;
+}
+
+function formatSignedMoney(value, currency) {
+  const number = parseFiniteNumber(value);
+
+  if (number === null) {
+    return '-';
+  }
+
+  const prefix = number > 0 ? '+' : '';
+  return `${prefix}${formatMoney(number, currency)}`;
+}
+
+function formatQuantity(value) {
+  const number = parseFiniteNumber(value);
+
+  if (number === null) {
+    return '-';
+  }
+
+  return number.toLocaleString('ko-KR', {
+    maximumFractionDigits: 6
+  });
+}
+
+function formatSignedPercent(value) {
+  const number = parseFiniteNumber(value);
+
+  if (number === null) {
+    return '-';
+  }
+
+  const prefix = number > 0 ? '+' : '';
+  return `${prefix}${number.toFixed(2)}%`;
+}
+
+function getProfitClass(value) {
+  const number = parseFiniteNumber(value);
+
+  if (number === null || number === 0) {
+    return 'flat';
+  }
+
+  return number > 0 ? 'up' : 'down';
 }
 
 function formatDate(value) {
