@@ -1,10 +1,11 @@
 import fs from 'node:fs/promises';
 import path from 'node:path';
-import { randomUUID } from 'node:crypto';
+import { createHash, randomBytes, randomUUID } from 'node:crypto';
 import { createBackup } from './backups.js';
 import { normalizeSymbolInput } from './symbols.js';
 
 const emptyStore = {
+  devices: [],
   stocks: [],
   alerts: [],
   meta: {}
@@ -70,6 +71,7 @@ function normalizeStock(input, defaults) {
 
   const stock = {
     id: randomUUID(),
+    deviceId: normalizeDeviceId(input.deviceId),
     symbol,
     displayName: String(input.displayName || '').trim(),
     purchasePrice: normalizeOptionalPositiveNumber(input.purchasePrice, '매수가는 0보다 큰 숫자여야 합니다.'),
@@ -106,6 +108,25 @@ function normalizeStock(input, defaults) {
 
   validateAlertTypeFields(stock);
   return stock;
+}
+
+function normalizeDevice(input) {
+  const now = new Date().toISOString();
+  const deviceId = String(input.deviceId || randomUUID()).trim();
+
+  if (!deviceId) {
+    throw new Error('기기 ID가 올바르지 않습니다.');
+  }
+
+  return {
+    id: deviceId,
+    label: String(input.label || '').trim(),
+    platform: normalizeDevicePlatform(input.platform),
+    pushTokens: [],
+    createdAt: now,
+    updatedAt: now,
+    lastSeenAt: now
+  };
 }
 
 function applyStockPatch(stock, patch) {
@@ -198,6 +219,7 @@ function normalizeStoredStock(stock) {
 
   return {
     ...stock,
+    deviceId: normalizeDeviceId(stock.deviceId),
     purchasePrice:
       stock.purchasePrice === undefined || stock.purchasePrice === null || stock.purchasePrice === ''
         ? null
@@ -229,6 +251,21 @@ function normalizeStoredStock(stock) {
   };
 }
 
+function normalizeStoredDevice(device) {
+  return {
+    id: String(device.id || device.deviceId || '').trim(),
+    label: String(device.label || '').trim(),
+    platform: normalizeDevicePlatform(device.platform),
+    secretHash: device.secretHash || '',
+    pushTokens: Array.isArray(device.pushTokens)
+      ? device.pushTokens.map(normalizePushToken).filter((token) => token.token)
+      : [],
+    createdAt: device.createdAt || new Date().toISOString(),
+    updatedAt: device.updatedAt || device.createdAt || new Date().toISOString(),
+    lastSeenAt: device.lastSeenAt || device.updatedAt || device.createdAt || new Date().toISOString()
+  };
+}
+
 function resetAlertState(stock) {
   stock.alertState = 'clear';
   stock.alertStartedAt = null;
@@ -255,6 +292,36 @@ function normalizeOptionalStoredNumber(value) {
 
   const number = Number(value);
   return Number.isFinite(number) ? number : null;
+}
+
+function normalizeDeviceId(value) {
+  const id = String(value || '').trim();
+  return id || null;
+}
+
+function normalizeDevicePlatform(value) {
+  const platform = String(value || 'unknown').trim().toLowerCase();
+  const allowed = ['ios', 'android', 'web', 'unknown'];
+
+  return allowed.includes(platform) ? platform : 'unknown';
+}
+
+function createDeviceSecret() {
+  return randomBytes(32).toString('base64url');
+}
+
+function hashDeviceSecret(secret) {
+  return createHash('sha256').update(String(secret || '')).digest('hex');
+}
+
+function normalizePushToken(input) {
+  return {
+    token: String(input.token || '').trim(),
+    provider: String(input.provider || 'expo').trim().toLowerCase(),
+    platform: normalizeDevicePlatform(input.platform),
+    enabled: input.enabled === undefined ? true : Boolean(input.enabled),
+    updatedAt: input.updatedAt || new Date().toISOString()
+  };
 }
 
 export function normalizeAlertType(value) {
@@ -348,6 +415,7 @@ export class JsonStore {
     const data = await readJson(this.filePath, emptyStore);
 
     return {
+      devices: Array.isArray(data.devices) ? data.devices.map(normalizeStoredDevice) : [],
       stocks: Array.isArray(data.stocks) ? data.stocks.map(normalizeStoredStock) : [],
       alerts: Array.isArray(data.alerts) ? data.alerts : [],
       meta: data.meta && typeof data.meta === 'object' ? data.meta : {}
@@ -359,16 +427,111 @@ export class JsonStore {
     await writeJson(this.filePath, data);
   }
 
-  async listStocks() {
+  async createDevice(input = {}) {
     const data = await this.read();
-    return data.stocks;
+    const secret = createDeviceSecret();
+    const device = {
+      ...normalizeDevice(input),
+      secretHash: hashDeviceSecret(secret)
+    };
+
+    if (data.devices.some((item) => item.id === device.id)) {
+      throw new Error('이미 등록된 기기입니다.');
+    }
+
+    data.devices.push(device);
+    await this.write(data);
+
+    return {
+      device: sanitizeDevice(device),
+      deviceSecret: secret
+    };
+  }
+
+  async authenticateDevice(deviceId, deviceSecret) {
+    const data = await this.read();
+    const id = String(deviceId || '').trim();
+    const secretHash = hashDeviceSecret(deviceSecret);
+    const index = data.devices.findIndex((device) => device.id === id);
+
+    if (index === -1 || data.devices[index].secretHash !== secretHash) {
+      throw new Error('기기 인증에 실패했습니다.');
+    }
+
+    const now = new Date().toISOString();
+    data.devices[index] = {
+      ...data.devices[index],
+      lastSeenAt: now,
+      updatedAt: now
+    };
+    await this.write(data);
+
+    return sanitizeDevice(data.devices[index]);
+  }
+
+  async upsertDevicePushToken(deviceId, input) {
+    const data = await this.read();
+    const index = data.devices.findIndex((device) => device.id === deviceId);
+
+    if (index === -1) {
+      throw new Error('기기를 찾을 수 없습니다.');
+    }
+
+    const now = new Date().toISOString();
+    const pushToken = normalizePushToken({
+      ...input,
+      updatedAt: now
+    });
+
+    if (!pushToken.token) {
+      throw new Error('푸시 토큰을 입력하세요.');
+    }
+
+    const device = data.devices[index];
+    const tokenIndex = device.pushTokens.findIndex(
+      (item) => item.provider === pushToken.provider && item.token === pushToken.token
+    );
+
+    if (tokenIndex === -1) {
+      device.pushTokens.push(pushToken);
+    } else {
+      device.pushTokens[tokenIndex] = {
+        ...device.pushTokens[tokenIndex],
+        ...pushToken
+      };
+    }
+
+    device.platform = pushToken.platform === 'unknown' ? device.platform : pushToken.platform;
+    device.updatedAt = now;
+    device.lastSeenAt = now;
+    data.devices[index] = device;
+    await this.write(data);
+
+    return sanitizeDevice(device);
+  }
+
+  async listStocks(options = {}) {
+    const data = await this.read();
+    const deviceId = normalizeDeviceId(options.deviceId);
+
+    if (!deviceId) {
+      return data.stocks;
+    }
+
+    return data.stocks.filter((stock) => normalizeDeviceId(stock.deviceId) === deviceId);
   }
 
   async addStock(input) {
     const data = await this.read();
     const stock = normalizeStock(input, this.defaults);
 
-    if (data.stocks.some((item) => item.symbol === stock.symbol)) {
+    if (
+      data.stocks.some(
+        (item) =>
+          item.symbol === stock.symbol &&
+          normalizeDeviceId(item.deviceId) === normalizeDeviceId(stock.deviceId)
+      )
+    ) {
       throw new Error('이미 등록된 종목입니다.');
     }
 
@@ -379,11 +542,11 @@ export class JsonStore {
     return stock;
   }
 
-  async updateStock(id, patch) {
+  async updateStock(id, patch, options = {}) {
     const data = await this.read();
     const index = data.stocks.findIndex((stock) => stock.id === id);
 
-    if (index === -1) {
+    if (index === -1 || !stockMatchesDevice(data.stocks[index], options.deviceId)) {
       throw new Error('종목을 찾을 수 없습니다.');
     }
 
@@ -412,11 +575,13 @@ export class JsonStore {
     return data.stocks[index];
   }
 
-  async deleteStock(id) {
+  async deleteStock(id, options = {}) {
     const data = await this.read();
     const beforeCount = data.stocks.length;
     await this.createBackup('before-delete-stock');
-    data.stocks = data.stocks.filter((stock) => stock.id !== id);
+    data.stocks = data.stocks.filter(
+      (stock) => stock.id !== id || !stockMatchesDevice(stock, options.deviceId)
+    );
 
     if (data.stocks.length === beforeCount) {
       throw new Error('종목을 찾을 수 없습니다.');
@@ -426,9 +591,14 @@ export class JsonStore {
     await this.createBackup('after-delete-stock');
   }
 
-  async listAlerts(limit = 50) {
+  async listAlerts(limit = 50, options = {}) {
     const data = await this.read();
-    return data.alerts.slice(-limit).reverse();
+    const deviceId = normalizeDeviceId(options.deviceId);
+    const alerts = deviceId
+      ? data.alerts.filter((alert) => normalizeDeviceId(alert.deviceId) === deviceId)
+      : data.alerts;
+
+    return alerts.slice(-limit).reverse();
   }
 
   async getMetaValue(key, fallback = null) {
@@ -474,4 +644,29 @@ export class JsonStore {
       maxBackups: this.backups.maxBackups
     });
   }
+}
+
+function stockMatchesDevice(stock, deviceId) {
+  if (deviceId === undefined) {
+    return true;
+  }
+
+  return normalizeDeviceId(stock.deviceId) === normalizeDeviceId(deviceId);
+}
+
+function sanitizeDevice(device) {
+  return {
+    id: device.id,
+    label: device.label,
+    platform: device.platform,
+    pushTokens: device.pushTokens.map((token) => ({
+      provider: token.provider,
+      platform: token.platform,
+      enabled: token.enabled,
+      updatedAt: token.updatedAt
+    })),
+    createdAt: device.createdAt,
+    updatedAt: device.updatedAt,
+    lastSeenAt: device.lastSeenAt
+  };
 }

@@ -100,6 +100,17 @@ function serializeBackup(backup) {
   };
 }
 
+async function authenticateMobileDevice(request) {
+  const deviceId = request.headers['x-device-id'];
+  const deviceSecret = request.headers['x-device-secret'];
+
+  if (!deviceId || !deviceSecret) {
+    throw new Error('기기 인증 정보가 필요합니다.');
+  }
+
+  return store.authenticateDevice(deviceId, deviceSecret);
+}
+
 async function runCheckOnce() {
   if (isChecking) {
     return {
@@ -208,6 +219,75 @@ async function handleApi(request, response, url) {
     const query = url.searchParams.get('q');
     sendJson(response, 200, { results: searchSymbols(query) });
     return;
+  }
+
+  if (request.method === 'POST' && url.pathname === '/api/devices') {
+    const body = await readJsonBody(request);
+    const result = await store.createDevice(body);
+
+    sendJson(response, 201, result);
+    return;
+  }
+
+  if (segments[0] === 'api' && segments[1] === 'mobile') {
+    const device = await authenticateMobileDevice(request);
+
+    if (request.method === 'GET' && segments[2] === 'me') {
+      sendJson(response, 200, { device });
+      return;
+    }
+
+    if (request.method === 'POST' && segments[2] === 'push-token') {
+      const body = await readJsonBody(request);
+      const updatedDevice = await store.upsertDevicePushToken(device.id, body);
+
+      sendJson(response, 200, { device: updatedDevice });
+      return;
+    }
+
+    if (request.method === 'GET' && segments[2] === 'stocks' && !segments[3]) {
+      const [stocks, alerts] = await Promise.all([
+        store.listStocks({ deviceId: device.id }),
+        store.listAlerts(30, { deviceId: device.id })
+      ]);
+
+      sendJson(response, 200, { device, stocks, alerts });
+      return;
+    }
+
+    if (request.method === 'POST' && segments[2] === 'stocks' && !segments[3]) {
+      const body = await readJsonBody(request);
+      let stock = await store.addStock({
+        ...body,
+        deviceId: device.id
+      });
+      stock = await initializePurchaseHigh(stock);
+
+      sendJson(response, 201, { stock });
+      return;
+    }
+
+    if (segments[2] === 'stocks' && segments[3]) {
+      const id = segments[3];
+
+      if (request.method === 'PATCH') {
+        const body = await readJsonBody(request);
+        let stock = await store.updateStock(id, body, { deviceId: device.id });
+
+        if (body.resetHighPrice || body.purchaseDate !== undefined) {
+          stock = await initializePurchaseHigh(stock);
+        }
+
+        sendJson(response, 200, { stock });
+        return;
+      }
+
+      if (request.method === 'DELETE') {
+        await store.deleteStock(id, { deviceId: device.id });
+        sendJson(response, 200, { ok: true });
+        return;
+      }
+    }
   }
 
   if (request.method === 'GET' && url.pathname === '/api/quote-preview') {

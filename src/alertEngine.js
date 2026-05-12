@@ -418,6 +418,7 @@ async function processStockQuote(store, config, stock, quote, options = {}) {
 
       alert = await store.appendAlert({
         stockId: stock.id,
+        deviceId: stock.deviceId || null,
         symbol: stock.symbol,
         displayName: stock.displayName || quote.name || stock.symbol,
         price: quote.price,
