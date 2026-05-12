@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-label="Stock Alarm">
+  <rect width="512" height="512" rx="96" fill="#0d1117"/>
+  <path d="M112 352h288" fill="none" stroke="#30363d" stroke-width="24" stroke-linecap="round"/>
+  <path d="M112 328l80-88 64 48 112-136" fill="none" stroke="#22c487" stroke-width="34" stroke-linecap="round" stroke-linejoin="round"/>
+  <circle cx="368" cy="152" r="44" fill="#1a9e6e"/>
+  <path d="M352 152l12 12 28-34" fill="none" stroke="#ffffff" stroke-width="16" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M144 384h224" fill="none" stroke="#8b949e" stroke-width="18" stroke-linecap="round"/>
+</svg>

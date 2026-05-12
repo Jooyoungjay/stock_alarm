@@ -1180,6 +1180,19 @@ function escapeHtml(value) {
 }
 
 syncResponsiveTabs();
+initWebApp();
 loadData();
 loadBackups();
 window.setInterval(loadData, 15000);
+
+function initWebApp() {
+  if (!('serviceWorker' in navigator)) {
+    return;
+  }
+
+  window.addEventListener('load', () => {
+    navigator.serviceWorker.register('/sw.js').catch((error) => {
+      console.warn('Service worker registration failed:', error);
+    });
+  });
+}
