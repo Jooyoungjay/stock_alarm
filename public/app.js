@@ -5,6 +5,7 @@ const state = {
   health: null,
   backupRetention: 0,
   loading: false,
+  registrationStep: 1,
   editingStockId: null
 };
 
@@ -22,8 +23,15 @@ const elements = {
   quoteStatus: document.querySelector('#quoteStatus'),
   pollStatus: document.querySelector('#pollStatus'),
   quotePreview: document.querySelector('#quotePreview'),
+  registrationSummary: document.querySelector('#registrationSummary'),
+  alertRuleSummary: document.querySelector('#alertRuleSummary'),
   symbolSuggestions: document.querySelector('#symbolSuggestions'),
   previewQuoteButton: document.querySelector('#previewQuoteButton'),
+  registerBackButton: document.querySelector('#registerBackButton'),
+  registerNextButton: document.querySelector('#registerNextButton'),
+  registerSubmitButton: document.querySelector('#registerSubmitButton'),
+  registerStepButtons: document.querySelectorAll('[data-register-step-button]'),
+  registerSteps: document.querySelectorAll('[data-register-step]'),
   checkNowButton: document.querySelector('#checkNowButton'),
   testTelegramButton: document.querySelector('#testTelegramButton'),
   createBackupButton: document.querySelector('#createBackupButton'),
@@ -38,10 +46,37 @@ let symbolSearchRequestId = 0;
 
 elements.form.elements.purchaseDate.max = getTodayInputValue();
 syncAlertTypeControls(elements.form);
+renderRegistrationSummary();
+updateRegistrationStep(1);
 
 elements.form.elements.alertType.addEventListener('change', () => {
   syncAlertTypeControls(elements.form);
   renderQuotePreview(null);
+  renderRegistrationSummary();
+});
+
+elements.form.addEventListener('input', () => {
+  renderRegistrationSummary();
+});
+
+elements.registerStepButtons.forEach((button) => {
+  button.addEventListener('click', () => {
+    const nextStep = Number(button.dataset.registerStepButton);
+
+    if (!Number.isFinite(nextStep) || nextStep === state.registrationStep) {
+      return;
+    }
+
+    if (nextStep > state.registrationStep) {
+      for (let step = state.registrationStep; step < nextStep; step += 1) {
+        if (!validateRegistrationStep(step)) {
+          return;
+        }
+      }
+    }
+
+    updateRegistrationStep(nextStep);
+  });
 });
 
 document.querySelectorAll('.symbol-helper button').forEach((button) => {
@@ -56,6 +91,7 @@ document.querySelectorAll('.symbol-helper button').forEach((button) => {
 
     hideSymbolSuggestions();
     renderQuotePreview(null);
+    renderRegistrationSummary();
   });
 });
 
@@ -85,6 +121,11 @@ document.addEventListener('click', (event) => {
 
 elements.form.addEventListener('submit', async (event) => {
   event.preventDefault();
+
+  if (![1, 2, 3].every((step) => validateRegistrationStep(step))) {
+    return;
+  }
+
   const formData = new FormData(elements.form);
   const payload = normalizeStockPayload(Object.fromEntries(formData.entries()));
 
@@ -99,6 +140,8 @@ elements.form.addEventListener('submit', async (event) => {
     syncAlertTypeControls(elements.form);
     hideSymbolSuggestions();
     renderQuotePreview(null);
+    renderRegistrationSummary();
+    updateRegistrationStep(1);
     showMessage('종목을 등록했습니다.');
     await loadData();
   });
@@ -106,6 +149,18 @@ elements.form.addEventListener('submit', async (event) => {
 
 elements.previewQuoteButton.addEventListener('click', async () => {
   await previewQuote(elements.previewQuoteButton);
+});
+
+elements.registerBackButton.addEventListener('click', () => {
+  updateRegistrationStep(state.registrationStep - 1);
+});
+
+elements.registerNextButton.addEventListener('click', () => {
+  if (!validateRegistrationStep(state.registrationStep)) {
+    return;
+  }
+
+  updateRegistrationStep(state.registrationStep + 1);
 });
 
 elements.checkNowButton.addEventListener('click', async () => {
@@ -253,9 +308,92 @@ function syncAlertTypeControls(form) {
   if (thresholdLabel) {
     thresholdLabel.textContent = alertType === 'purchase_loss' ? '손절률 %' : '하락률 %';
   }
+
+  renderAlertRuleSummary(alertType);
+}
+
+function updateRegistrationStep(step) {
+  const nextStep = Math.max(1, Math.min(4, Number(step) || 1));
+  state.registrationStep = nextStep;
+
+  elements.registerSteps.forEach((section) => {
+    section.classList.toggle('active', Number(section.dataset.registerStep) === nextStep);
+  });
+
+  elements.registerStepButtons.forEach((button) => {
+    const buttonStep = Number(button.dataset.registerStepButton);
+    button.classList.toggle('active', buttonStep === nextStep);
+    button.classList.toggle('completed', buttonStep < nextStep);
+  });
+
+  elements.registerBackButton.hidden = nextStep === 1;
+  elements.registerNextButton.hidden = nextStep === 4;
+  elements.previewQuoteButton.hidden = nextStep !== 4;
+  elements.registerSubmitButton.hidden = nextStep !== 4;
+
+  if (nextStep === 4) {
+    renderRegistrationSummary();
+  }
+}
+
+function validateRegistrationStep(step) {
+  const controlsByStep = {
+    1: [elements.form.elements.symbol],
+    2: [elements.form.elements.purchasePrice, elements.form.elements.purchaseDate],
+    3: [
+      elements.form.elements.alertType,
+      elements.form.elements.targetPrice,
+      elements.form.elements.thresholdPercent,
+      elements.form.elements.alertCooldownMinutes
+    ]
+  };
+  const controls = controlsByStep[step] || [];
+
+  for (const control of controls) {
+    if (!control || control.disabled) {
+      continue;
+    }
+
+    if (!control.checkValidity()) {
+      control.reportValidity();
+      return false;
+    }
+  }
+
+  return true;
+}
+
+function renderAlertRuleSummary(alertType = elements.form.elements.alertType.value) {
+  const summaries = {
+    high_drawdown: {
+      value: '최고가 대비 하락률',
+      detail: '구매일 이후 최고가에서 설정한 비율만큼 내려오면 알림을 보냅니다.'
+    },
+    purchase_loss: {
+      value: '매수가 대비 손절률',
+      detail: '매수가에서 설정한 비율만큼 손실이 나면 알림을 보냅니다.'
+    },
+    target_price: {
+      value: '직접 기준가',
+      detail: '직접 입력한 기준가 이하가 되면 알림을 보냅니다.'
+    }
+  };
+  const summary = summaries[alertType] || summaries.high_drawdown;
+
+  elements.alertRuleSummary.innerHTML = `
+    <div class="alert-rule-item">
+      <span class="alert-rule-label">선택한 알림 기준</span>
+      <span class="alert-rule-value">${escapeHtml(summary.value)}</span>
+      <span class="alert-rule-detail">${escapeHtml(summary.detail)}</span>
+    </div>
+  `;
 }
 
 async function previewQuote(button) {
+  if (![1, 2, 3].every((step) => validateRegistrationStep(step))) {
+    return;
+  }
+
   const symbol = elements.form.elements.symbol.value.trim().toUpperCase();
 
   if (!symbol) {
@@ -356,6 +494,7 @@ function selectSymbolSuggestion(item) {
 
   hideSymbolSuggestions();
   renderQuotePreview(null);
+  renderRegistrationSummary();
   elements.form.elements.symbol.focus();
 }
 
@@ -437,6 +576,42 @@ function renderPreviewItem(label, value, detail = '', valueClass = '') {
       <span class="quote-preview-label">${escapeHtml(label)}</span>
       <span class="quote-preview-value ${escapeHtml(valueClass)}">${escapeHtml(value)}</span>
       ${detail ? `<span class="quote-preview-detail">${escapeHtml(detail)}</span>` : ''}
+    </div>
+  `;
+}
+
+function renderRegistrationSummary() {
+  const form = elements.form;
+  const symbol = form.elements.symbol.value.trim().toUpperCase() || '-';
+  const displayName = form.elements.displayName.value.trim();
+  const purchasePrice = parseFiniteNumber(form.elements.purchasePrice.value);
+  const purchaseDate = form.elements.purchaseDate.value || '-';
+  const alertType = form.elements.alertType.value;
+  const thresholdPercent = parseFiniteNumber(form.elements.thresholdPercent.value);
+  const targetPrice = parseFiniteNumber(form.elements.targetPrice.value);
+  const cooldown = parseFiniteNumber(form.elements.alertCooldownMinutes.value);
+  const notes = form.elements.notes.value.trim();
+  const alertDetail =
+    alertType === 'target_price'
+      ? `기준가 ${formatMoney(targetPrice)}`
+      : `${alertType === 'purchase_loss' ? '손절률' : '하락률'} ${thresholdPercent ?? '-'}%`;
+
+  elements.registrationSummary.innerHTML = `
+    <div class="registration-summary-grid">
+      ${renderSummaryItem('종목', displayName ? `${displayName} · ${symbol}` : symbol)}
+      ${renderSummaryItem('매수가', formatMoney(purchasePrice), purchaseDate)}
+      ${renderSummaryItem('알림 기준', getAlertTypeLabel({ alertType }), alertDetail)}
+      ${renderSummaryItem('반복 알림', cooldown ? `${cooldown}분마다` : '-', notes || '메모 없음')}
+    </div>
+  `;
+}
+
+function renderSummaryItem(label, value, detail = '') {
+  return `
+    <div class="registration-summary-item">
+      <span class="registration-summary-label">${escapeHtml(label)}</span>
+      <span class="registration-summary-value">${escapeHtml(value || '-')}</span>
+      <span class="registration-summary-detail">${escapeHtml(detail || '-')}</span>
     </div>
   `;
 }

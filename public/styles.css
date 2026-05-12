@@ -232,6 +232,62 @@ input[type="date"] {
   gap: 14px;
 }
 
+.register-progress {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 6px;
+}
+
+.register-step-button {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  min-height: 34px;
+  padding: 0 9px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--tag-bg);
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 800;
+  text-align: left;
+}
+
+.register-step-button span {
+  display: grid;
+  place-items: center;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: var(--surface-2);
+  color: currentColor;
+  font-family: Syne, ui-sans-serif, system-ui, sans-serif;
+  font-size: 11px;
+  line-height: 1;
+}
+
+.register-step-button.active {
+  border-color: var(--accent);
+  background: var(--accent-glow);
+  color: var(--accent);
+}
+
+.register-step-button.completed {
+  border-color: rgba(46, 168, 77, 0.28);
+  color: var(--ok);
+}
+
+.form-step {
+  display: none;
+  gap: 14px;
+}
+
+.form-step.active {
+  display: grid;
+}
+
 .form-group {
   display: grid;
   gap: 6px;
@@ -464,12 +520,12 @@ select:focus {
   margin-top: 2px;
 }
 
-.form-actions button:first-child {
-  flex: 0 0 auto;
+.form-actions .primary-button {
+  flex: 1;
 }
 
-.form-actions button:last-child {
-  flex: 1;
+.form-actions button[hidden] {
+  display: none;
 }
 
 .quote-preview {
@@ -481,6 +537,52 @@ select:focus {
   background: rgba(26, 158, 110, 0.08);
   color: var(--text);
   font-size: 13px;
+}
+
+.registration-summary,
+.alert-rule-summary {
+  display: grid;
+  gap: 10px;
+  padding: 12px;
+  border: 1px solid var(--border-soft);
+  border-radius: var(--radius-sm);
+  background: var(--surface-2);
+}
+
+.registration-summary-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+}
+
+.registration-summary-item,
+.alert-rule-item {
+  display: grid;
+  gap: 3px;
+  min-width: 0;
+}
+
+.registration-summary-label,
+.alert-rule-label {
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 800;
+}
+
+.registration-summary-value,
+.alert-rule-value {
+  overflow-wrap: anywhere;
+  color: var(--text);
+  font-size: 13px;
+  font-weight: 800;
+}
+
+.alert-rule-detail,
+.registration-summary-detail {
+  overflow-wrap: anywhere;
+  color: var(--dim);
+  font-size: 11px;
+  line-height: 1.35;
 }
 
 .quote-preview.show {
@@ -1157,6 +1259,7 @@ select:focus {
   .form-row,
   .field-grid,
   .quote-preview-grid,
+  .registration-summary-grid,
   .server-status-grid,
   .stock-top,
   .stock-edit-form {
@@ -1167,8 +1270,7 @@ select:focus {
     flex-direction: column;
   }
 
-  .form-actions button:first-child,
-  .form-actions button:last-child {
+  .form-actions .primary-button {
     flex: 1 1 auto;
   }
 }
