@@ -75,12 +75,22 @@ function toNumber(value, fallback, options = {}) {
 
 loadEnvironment();
 
+const isRailwayRuntime = Boolean(
+  process.env.RAILWAY_ENVIRONMENT ||
+    process.env.RAILWAY_PROJECT_ID ||
+    process.env.RAILWAY_SERVICE_ID
+);
+
+const defaultHost = isRailwayRuntime ? '0.0.0.0' : '127.0.0.1';
+const defaultDataDir = process.env.RAILWAY_VOLUME_MOUNT_PATH || path.join(rootDir, 'data');
+
 export const config = {
   rootDir,
   publicDir: path.join(rootDir, 'public'),
-  dataDir: process.env.DATA_DIR || path.join(rootDir, 'data'),
-  host: process.env.HOST || '127.0.0.1',
+  dataDir: process.env.DATA_DIR || defaultDataDir,
+  host: process.env.HOST || defaultHost,
   port: toNumber(process.env.PORT, 3000, { min: 1, max: 65535 }),
+  isRailwayRuntime,
   pollIntervalSeconds: toNumber(process.env.POLL_INTERVAL_SECONDS, 60, { min: 10 }),
   telegramCommandPollSeconds: toNumber(process.env.TELEGRAM_COMMAND_POLL_SECONDS, 5, { min: 2 }),
   backupRetention: toNumber(process.env.BACKUP_RETENTION, 30, { min: 1 }),

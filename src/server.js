@@ -186,6 +186,8 @@ async function handleApi(request, response, url) {
       cwd: process.cwd(),
       rootDir: config.rootDir,
       dataDir: config.dataDir,
+      host: config.host,
+      railwayRuntime: config.isRailwayRuntime,
       startedAt,
       runtimeFile: getRuntimeInfoPath(config.dataDir),
       telegramConfigured: isTelegramConfigured(config),

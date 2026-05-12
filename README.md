@@ -44,13 +44,18 @@ stock_alarm/
 │  ├─ runtimeInfo.js       # 실행 중 서버 식별 정보
 │  └─ symbols.js           # 종목 검색/정규화
 ├─ scripts/
-│  └─ stop-server.js       # 안전 종료 스크립트
+│  ├─ stop-server.js       # 안전 종료 스크립트
+│  └─ check-railway-config.js # Railway 환경 점검
+├─ docs/
+│  └─ railway-deploy.md    # Railway 배포 가이드
 ├─ tests/                  # Node.js 테스트
 ├─ data/                   # 로컬 실행 데이터, Git 제외
 │  ├─ store.json           # 실제 앱 데이터
 │  ├─ server.json          # 실행 중 서버 PID/포트 정보
 │  └─ backups/             # 자동/수동 백업 파일
 ├─ .env.example            # 환경변수 예시
+├─ .env.railway.example    # Railway 환경변수 예시
+├─ railway.json            # Railway Config as Code
 ├─ package.json
 └─ README.md
 ```
@@ -105,7 +110,9 @@ TELEGRAM_CHAT_ID=
 전체 설정 예시:
 
 ```text
+HOST=127.0.0.1
 PORT=3000
+DATA_DIR=
 POLL_INTERVAL_SECONDS=60
 TELEGRAM_COMMAND_POLL_SECONDS=5
 BACKUP_RETENTION=30
@@ -179,6 +186,52 @@ http://127.0.0.1:3000
 ```
 
 3000 포트가 이미 사용 중이면 서버가 자동으로 3001, 3002처럼 다음 포트에서 실행됩니다. 반드시 터미널 로그에 표시된 주소를 기준으로 접속하세요.
+
+## Railway 배포 준비
+
+Railway 배포용 설정 파일은 루트의 `railway.json`입니다.
+
+```text
+Start Command: node src/server.js
+Healthcheck Path: /api/health
+Restart Policy: ON_FAILURE
+```
+
+Railway 서비스 Variables에는 최소 아래 값을 설정합니다.
+
+```text
+HOST=0.0.0.0
+DATA_DIR=/app/data
+POLL_INTERVAL_SECONDS=60
+TELEGRAM_COMMAND_POLL_SECONDS=5
+BACKUP_RETENTION=30
+DEFAULT_ALERT_COOLDOWN_MINUTES=30
+QUOTE_TIMEOUT_MS=10000
+QUOTE_PROVIDERS=naver,stooq,alphavantage,yahoo
+TELEGRAM_BOT_TOKEN=
+TELEGRAM_CHAT_ID=
+```
+
+`PORT`는 Railway가 자동으로 넣으므로 직접 설정하지 않습니다.
+
+현재 앱은 JSON 파일 저장소를 사용하므로 Railway에서 Volume이 필요합니다.
+
+```text
+Volume Mount Path: /app/data
+DATA_DIR=/app/data
+```
+
+로컬에서 배포 전 설정 점검:
+
+```powershell
+$env:RAILWAY_ENVIRONMENT='production'
+$env:HOST='0.0.0.0'
+$env:PORT='3000'
+$env:DATA_DIR='/app/data'
+node scripts/check-railway-config.js
+```
+
+자세한 절차는 [Railway 배포 가이드](docs/railway-deploy.md)를 확인하세요.
 
 ## 서버 종료
 

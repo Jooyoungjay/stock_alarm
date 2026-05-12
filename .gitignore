@@ -12,6 +12,10 @@ out/
 .env
 .env.*
 !.env.example
+!.env.railway.example
+
+# Project docs
+!docs/*.md
 
 # Local app data
 data/*.json
