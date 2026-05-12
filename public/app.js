@@ -6,6 +6,8 @@ const state = {
   backupRetention: 0,
   loading: false,
   registrationStep: 1,
+  watchFilter: 'all',
+  watchSort: 'risk',
   editingStockId: null
 };
 
@@ -14,6 +16,9 @@ const elements = {
   stockList: document.querySelector('#stockList'),
   alertList: document.querySelector('#alertList'),
   message: document.querySelector('#message'),
+  watchSummaryBar: document.querySelector('#watchSummaryBar'),
+  watchFilterButtons: document.querySelectorAll('[data-watch-filter]'),
+  watchSortSelect: document.querySelector('#watchSortSelect'),
   backupList: document.querySelector('#backupList'),
   backupSummary: document.querySelector('#backupSummary'),
   serverStatusPanel: document.querySelector('#serverStatusPanel'),
@@ -200,6 +205,18 @@ elements.refreshBackupsButton.addEventListener('click', async () => {
 
 elements.refreshServerStatusButton.addEventListener('click', async () => {
   await withBusy(elements.refreshServerStatusButton, loadHealth);
+});
+
+elements.watchFilterButtons.forEach((button) => {
+  button.addEventListener('click', () => {
+    state.watchFilter = button.dataset.watchFilter || 'all';
+    renderStocks();
+  });
+});
+
+elements.watchSortSelect.addEventListener('change', () => {
+  state.watchSort = elements.watchSortSelect.value || 'risk';
+  renderStocks();
 });
 
 elements.serverStatusPanel.addEventListener('click', async (event) => {
@@ -747,23 +764,39 @@ function shortenPath(value) {
 }
 
 function renderStocks() {
-  elements.summaryText.textContent = `${state.stocks.length}개 등록`;
+  const decoratedStocks = state.stocks.map((stock) => ({
+    stock,
+    watchStatus: getWatchStatus(stock)
+  }));
+  const visibleStocks = filterWatchStocks(decoratedStocks).sort(compareWatchStocks);
+
+  renderWatchSummary(decoratedStocks, visibleStocks.length);
+  renderWatchControls();
 
   if (!state.stocks.length) {
     elements.stockList.innerHTML = '<div class="empty">등록된 종목이 없습니다.</div>';
     return;
   }
 
+  if (!visibleStocks.length) {
+    elements.stockList.innerHTML = '<div class="empty">선택한 조건에 맞는 종목이 없습니다.</div>';
+    return;
+  }
+
   elements.stockList.replaceChildren(
-    ...state.stocks.map((stock) => {
+    ...visibleStocks.map(({ stock, watchStatus }) => {
       const row = document.createElement('article');
-      row.className = 'stock-row';
+      row.className = `stock-row ${watchStatus.level}`;
       const alertMetric = calculateAlertMetric(stock, stock.lastPrice);
       const thresholdPrice = calculateAlertThreshold(stock);
       const lastPrice = parseFiniteNumber(stock.lastPrice);
       const isTriggered = thresholdPrice !== null && lastPrice !== null && lastPrice <= thresholdPrice;
 
       row.innerHTML = `
+        <div class="stock-risk-line">
+          <span class="stock-risk-badge ${watchStatus.level}">${escapeHtml(watchStatus.label)}</span>
+          <span class="stock-risk-detail">${escapeHtml(watchStatus.detail)}</span>
+        </div>
         <div class="stock-top">
           <div class="stock-title stock-info">
             <div class="stock-name">${escapeHtml(stock.displayName || stock.symbol)}</div>
@@ -823,6 +856,124 @@ function renderStocks() {
       return row;
     })
   );
+}
+
+function renderWatchSummary(items, visibleCount) {
+  const counts = {
+    total: items.length,
+    alert: 0,
+    warning: 0,
+    error: 0,
+    inactive: 0
+  };
+
+  for (const item of items) {
+    counts[item.watchStatus.level] = (counts[item.watchStatus.level] || 0) + 1;
+  }
+
+  elements.summaryText.textContent = `${visibleCount}개 표시 · 전체 ${counts.total}개`;
+  elements.watchSummaryBar.replaceChildren(
+    createWatchSummaryItem('전체', counts.total, 'muted'),
+    createWatchSummaryItem('알림', counts.alert, 'alert'),
+    createWatchSummaryItem('주의', counts.warning, 'warning'),
+    createWatchSummaryItem('조회 실패', counts.error, 'error'),
+    createWatchSummaryItem('비활성', counts.inactive, 'inactive')
+  );
+}
+
+function createWatchSummaryItem(label, value, level) {
+  const item = document.createElement('button');
+  item.type = 'button';
+  item.className = `watch-summary-item ${level}`;
+  item.dataset.watchFilter =
+    level === 'muted' ? 'all' : level === 'warning' ? 'attention' : level;
+  item.innerHTML = `
+    <span class="watch-summary-label">${escapeHtml(label)}</span>
+    <span class="watch-summary-value">${Number(value || 0)}</span>
+  `;
+  item.addEventListener('click', () => {
+    state.watchFilter = item.dataset.watchFilter;
+    renderStocks();
+  });
+  return item;
+}
+
+function renderWatchControls() {
+  elements.watchFilterButtons.forEach((button) => {
+    button.classList.toggle('active', button.dataset.watchFilter === state.watchFilter);
+  });
+  elements.watchSortSelect.value = state.watchSort;
+}
+
+function filterWatchStocks(items) {
+  const filter = state.watchFilter;
+
+  if (filter === 'all') {
+    return items;
+  }
+
+  if (filter === 'attention') {
+    return items.filter(({ watchStatus }) =>
+      ['alert', 'warning', 'error'].includes(watchStatus.level)
+    );
+  }
+
+  return items.filter(({ watchStatus }) => watchStatus.level === filter);
+}
+
+function compareWatchStocks(left, right) {
+  const sort = state.watchSort;
+  const leftStatus = left.watchStatus;
+  const rightStatus = right.watchStatus;
+
+  if (sort === 'name') {
+    return getStockDisplayName(left.stock).localeCompare(getStockDisplayName(right.stock), 'ko-KR');
+  }
+
+  if (sort === 'checked') {
+    return getTimeValue(right.stock.lastCheckedAt) - getTimeValue(left.stock.lastCheckedAt);
+  }
+
+  if (sort === 'distance') {
+    return getDistanceSortValue(leftStatus) - getDistanceSortValue(rightStatus);
+  }
+
+  return (
+    getRiskRank(leftStatus.level) - getRiskRank(rightStatus.level) ||
+    getDistanceSortValue(leftStatus) - getDistanceSortValue(rightStatus) ||
+    getStockDisplayName(left.stock).localeCompare(getStockDisplayName(right.stock), 'ko-KR')
+  );
+}
+
+function getRiskRank(level) {
+  const ranks = {
+    alert: 0,
+    error: 1,
+    warning: 2,
+    ok: 3,
+    inactive: 4
+  };
+
+  return ranks[level] ?? 9;
+}
+
+function getDistanceSortValue(status) {
+  const value = Number(status.distancePercent);
+
+  if (!Number.isFinite(value)) {
+    return Number.POSITIVE_INFINITY;
+  }
+
+  return value;
+}
+
+function getStockDisplayName(stock) {
+  return String(stock.displayName || stock.symbol || '');
+}
+
+function getTimeValue(value) {
+  const time = new Date(value || 0).getTime();
+  return Number.isFinite(time) ? time : 0;
 }
 
 function editStockForm(stock) {
@@ -1115,6 +1266,74 @@ function getStockStatusClass(stock) {
   }
 
   return classes[stock.lastCheckStatus] || 'muted';
+}
+
+function getWatchStatus(stock) {
+  const thresholdPrice = calculateAlertThreshold(stock);
+  const lastPrice = parseFiniteNumber(stock.lastPrice);
+  const distance =
+    thresholdPrice !== null && lastPrice !== null ? lastPrice - thresholdPrice : null;
+  const distancePercent =
+    distance !== null && thresholdPrice && thresholdPrice > 0 ? (distance / thresholdPrice) * 100 : null;
+  const distanceText = formatDistanceToThreshold(distance, distancePercent, stock.currency);
+
+  if (!stock.active) {
+    return {
+      level: 'inactive',
+      label: '비활성',
+      detail: '감시가 중지된 종목입니다.',
+      distancePercent
+    };
+  }
+
+  if (stock.lastCheckStatus === 'error') {
+    return {
+      level: 'error',
+      label: '조회 실패',
+      detail: stock.lastError || '최근 시세 조회에 실패했습니다.',
+      distancePercent
+    };
+  }
+
+  if (
+    stock.alertState === 'triggered' ||
+    (thresholdPrice !== null && lastPrice !== null && lastPrice <= thresholdPrice)
+  ) {
+    return {
+      level: 'alert',
+      label: '알림',
+      detail: distanceText || '현재가가 알림 기준에 닿았습니다.',
+      distancePercent
+    };
+  }
+
+  if (distancePercent !== null && distancePercent <= 5) {
+    return {
+      level: 'warning',
+      label: '주의',
+      detail: distanceText,
+      distancePercent
+    };
+  }
+
+  return {
+    level: 'ok',
+    label: '정상',
+    detail: distanceText || '아직 알림 기준까지 여유가 있습니다.',
+    distancePercent
+  };
+}
+
+function formatDistanceToThreshold(distance, distancePercent, currency) {
+  if (!Number.isFinite(distance) || !Number.isFinite(distancePercent)) {
+    return '';
+  }
+
+  if (distance <= 0) {
+    return `기준가보다 ${formatMoney(Math.abs(distance), currency)} 낮음`;
+  }
+
+  return `기준가까지 ${formatMoney(distance, currency)} · ${distancePercent.toFixed(2)}%`;
 }
 
 function formatLastChecked(value) {

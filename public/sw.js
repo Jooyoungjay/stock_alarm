@@ -1,4 +1,4 @@
-const CACHE_NAME = 'stock-alarm-webapp-v2';
+const CACHE_NAME = 'stock-alarm-webapp-v3';
 const SHELL_ASSETS = [
   '/',
   '/index.html',

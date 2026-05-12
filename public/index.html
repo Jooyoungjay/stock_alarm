@@ -216,6 +216,25 @@
           </div>
 
           <div id="message" class="message" role="status" aria-live="polite"></div>
+          <div id="watchSummaryBar" class="watch-summary-bar" aria-live="polite"></div>
+          <div class="watch-controls" aria-label="감시 종목 보기 설정">
+            <div id="watchFilterButtons" class="segmented-control" role="group" aria-label="감시 종목 필터">
+              <button type="button" class="active" data-watch-filter="all">전체</button>
+              <button type="button" data-watch-filter="attention">주의</button>
+              <button type="button" data-watch-filter="alert">알림</button>
+              <button type="button" data-watch-filter="error">조회 실패</button>
+              <button type="button" data-watch-filter="inactive">비활성</button>
+            </div>
+            <label class="watch-sort-control">
+              <span>정렬</span>
+              <select id="watchSortSelect">
+                <option value="risk">위험도순</option>
+                <option value="distance">기준가 근접순</option>
+                <option value="checked">최근 확인순</option>
+                <option value="name">이름순</option>
+              </select>
+            </label>
+          </div>
           <div id="stockList" class="stock-list"></div>
         </div>
       </section>
