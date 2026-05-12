@@ -20,7 +20,7 @@ export async function createBackup(dataDir, options = {}) {
   let content;
 
   try {
-    content = await fs.readFile(sourcePath, 'utf8');
+    content = stripBom(await fs.readFile(sourcePath, 'utf8'));
   } catch (error) {
     if (error.code === 'ENOENT') {
       return {
@@ -98,7 +98,7 @@ export async function listBackups(dataDir, options = {}) {
 export async function restoreBackup(dataDir, target, options = {}) {
   const maxBackups = normalizeBackupLimit(options.maxBackups);
   const backup = await resolveBackup(dataDir, target);
-  const content = await fs.readFile(backup.path, 'utf8');
+  const content = stripBom(await fs.readFile(backup.path, 'utf8'));
 
   validateStoreContent(content);
 
@@ -207,7 +207,7 @@ function validateStoreContent(content) {
   let data;
 
   try {
-    data = JSON.parse(content);
+    data = JSON.parse(stripBom(content));
   } catch {
     throw new Error('백업 파일의 JSON 형식이 올바르지 않습니다.');
   }
@@ -233,6 +233,10 @@ function validateStoreContent(content) {
 
 function ensureTrailingNewline(value) {
   return value.endsWith('\n') ? value : `${value}\n`;
+}
+
+function stripBom(value) {
+  return String(value || '').replace(/^\uFEFF/, '');
 }
 
 function normalizeBackupLimit(value) {

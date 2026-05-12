@@ -1,6 +1,8 @@
 const state = {
   stocks: [],
   alerts: [],
+  backups: [],
+  backupRetention: 0,
   loading: false,
   editingStockId: null
 };
@@ -10,6 +12,8 @@ const elements = {
   stockList: document.querySelector('#stockList'),
   alertList: document.querySelector('#alertList'),
   message: document.querySelector('#message'),
+  backupList: document.querySelector('#backupList'),
+  backupSummary: document.querySelector('#backupSummary'),
   summaryText: document.querySelector('#summaryText'),
   telegramStatus: document.querySelector('#telegramStatus'),
   quoteStatus: document.querySelector('#quoteStatus'),
@@ -19,6 +23,8 @@ const elements = {
   previewQuoteButton: document.querySelector('#previewQuoteButton'),
   checkNowButton: document.querySelector('#checkNowButton'),
   testTelegramButton: document.querySelector('#testTelegramButton'),
+  createBackupButton: document.querySelector('#createBackupButton'),
+  refreshBackupsButton: document.querySelector('#refreshBackupsButton'),
   tabSections: document.querySelectorAll('.tab-section'),
   mobileNavButtons: document.querySelectorAll('.nav-item')
 };
@@ -114,6 +120,25 @@ elements.testTelegramButton.addEventListener('click', async () => {
   });
 });
 
+elements.createBackupButton.addEventListener('click', async () => {
+  await withBusy(elements.createBackupButton, async () => {
+    const result = await api('/api/backups', { method: 'POST' });
+    state.backups = result.backups || [];
+    renderBackups();
+
+    if (result.backup?.created === false) {
+      showMessage('아직 저장된 데이터가 없어 백업을 만들지 않았습니다.', true);
+      return;
+    }
+
+    showMessage('현재 데이터를 백업했습니다.');
+  });
+});
+
+elements.refreshBackupsButton.addEventListener('click', async () => {
+  await withBusy(elements.refreshBackupsButton, loadBackups);
+});
+
 async function loadData() {
   try {
     const data = await api('/api/stocks');
@@ -122,6 +147,17 @@ async function loadData() {
     renderStatus(data);
     renderStocks();
     renderAlerts();
+  } catch (error) {
+    showMessage(error.message, true);
+  }
+}
+
+async function loadBackups() {
+  try {
+    const data = await api('/api/backups');
+    state.backups = data.backups || [];
+    state.backupRetention = data.retention || 0;
+    renderBackups();
   } catch (error) {
     showMessage(error.message, true);
   }
@@ -625,6 +661,80 @@ function renderAlerts() {
   );
 }
 
+function renderBackups() {
+  if (!elements.backupList) {
+    return;
+  }
+
+  const retentionText = state.backupRetention ? `최대 ${state.backupRetention}개 보관` : '백업 보관';
+  elements.backupSummary.textContent = `${state.backups.length}개 백업 · ${retentionText}`;
+
+  if (!state.backups.length) {
+    elements.backupList.innerHTML = '<div class="empty">백업 파일이 없습니다.</div>';
+    return;
+  }
+
+  elements.backupList.replaceChildren(
+    ...state.backups.map((backup, index) => {
+      const row = document.createElement('article');
+      row.className = 'backup-row';
+      row.innerHTML = `
+        <div class="metric">
+          <span class="metric-label">순번</span>
+          <span class="metric-value">${index + 1}</span>
+        </div>
+        <div class="metric backup-file">
+          <span class="metric-label">파일명</span>
+          <span class="metric-value">${escapeHtml(backup.name || '-')}</span>
+          <span class="metric-detail">${escapeHtml(getBackupReasonLabel(backup.reason))}</span>
+        </div>
+        <div class="metric">
+          <span class="metric-label">크기</span>
+          <span class="metric-value">${formatFileSize(backup.size)}</span>
+        </div>
+        <div class="metric">
+          <span class="metric-label">생성 시각</span>
+          <span class="metric-value">${formatDate(backup.createdAt)}</span>
+        </div>
+        <div class="backup-actions"></div>
+      `;
+
+      row.querySelector('.backup-actions').append(
+        actionButton('복구', 'btn btn-danger btn-sm danger-button', () => restoreBackupItem(backup))
+      );
+
+      return row;
+    })
+  );
+}
+
+async function restoreBackupItem(backup) {
+  const confirmed = window.confirm(
+    [
+      '선택한 백업으로 데이터를 복구합니다.',
+      '',
+      `백업: ${backup.name}`,
+      `생성 시각: ${formatDate(backup.createdAt)}`,
+      '',
+      '현재 데이터는 복구 전에 안전 백업으로 먼저 저장됩니다.',
+      '계속할까요?'
+    ].join('\n')
+  );
+
+  if (!confirmed) {
+    return;
+  }
+
+  await api('/api/backups/restore', {
+    method: 'POST',
+    body: JSON.stringify({ target: backup.name })
+  });
+
+  state.editingStockId = null;
+  showMessage('선택한 백업으로 복구했습니다.');
+  await Promise.all([loadData(), loadBackups()]);
+}
+
 function renderManualTestMessage(result) {
   if (!result) {
     return '테스트 가격을 확인했습니다.';
@@ -969,6 +1079,41 @@ function formatDateOnly(value) {
   return formatDate(value);
 }
 
+function formatFileSize(value) {
+  const size = Number(value);
+
+  if (!Number.isFinite(size) || size < 0) {
+    return '-';
+  }
+
+  if (size < 1024) {
+    return `${size} B`;
+  }
+
+  if (size < 1024 * 1024) {
+    return `${(size / 1024).toFixed(1)} KB`;
+  }
+
+  return `${(size / 1024 / 1024).toFixed(1)} MB`;
+}
+
+function getBackupReasonLabel(reason) {
+  const labels = {
+    'manual-web': '웹 수동 백업',
+    manual: '수동 백업',
+    'server-start': '서버 시작',
+    'before-restore': '복구 전 안전 백업',
+    'before-add-stock': '종목 추가 전',
+    'after-add-stock': '종목 추가 후',
+    'before-update-stock': '종목 수정 전',
+    'after-update-stock': '종목 수정 후',
+    'before-delete-stock': '종목 삭제 전',
+    'after-delete-stock': '종목 삭제 후'
+  };
+
+  return labels[reason] || String(reason || '백업').replaceAll('-', ' ');
+}
+
 function getTodayInputValue() {
   const today = new Date();
   today.setMinutes(today.getMinutes() - today.getTimezoneOffset());
@@ -1036,4 +1181,5 @@ function escapeHtml(value) {
 
 syncResponsiveTabs();
 loadData();
+loadBackups();
 window.setInterval(loadData, 15000);

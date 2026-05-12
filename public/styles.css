@@ -200,6 +200,10 @@ input[type="date"] {
   padding: 20px;
 }
 
+.col-full .card + .card {
+  margin-top: 20px;
+}
+
 .card-header,
 .watch-header {
   display: flex;
@@ -791,6 +795,41 @@ select:focus {
   background: var(--surface-2);
 }
 
+.backup-note {
+  margin-bottom: 12px;
+  padding: 10px 12px;
+  border: 1px solid rgba(210, 153, 34, 0.28);
+  border-radius: var(--radius-sm);
+  background: rgba(210, 153, 34, 0.08);
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.backup-list {
+  display: grid;
+  gap: 8px;
+}
+
+.backup-row {
+  display: grid;
+  grid-template-columns: 54px minmax(220px, 1.6fr) minmax(84px, 0.45fr) minmax(160px, 0.8fr) auto;
+  gap: 12px;
+  align-items: center;
+  padding: 12px;
+  border: 1px solid var(--border-soft);
+  border-radius: var(--radius-sm);
+  background: var(--surface-2);
+}
+
+.backup-file {
+  text-align: left;
+}
+
+.backup-actions {
+  display: flex;
+  justify-content: flex-end;
+}
+
 .mobile-nav {
   display: none;
   position: fixed;
@@ -961,6 +1000,15 @@ select:focus {
   .alert-row {
     grid-template-columns: 1fr;
     gap: 7px;
+  }
+
+  .backup-row {
+    grid-template-columns: 1fr;
+    gap: 7px;
+  }
+
+  .backup-actions {
+    justify-content: flex-start;
   }
 }
 

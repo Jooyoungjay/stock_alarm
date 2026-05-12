@@ -1,7 +1,7 @@
 import http from 'node:http';
 import fs from 'node:fs/promises';
 import path from 'node:path';
-import { createBackup } from './backups.js';
+import { createBackup, listBackups, restoreBackup } from './backups.js';
 import { config } from './config.js';
 import { JsonStore } from './storage.js';
 import {
@@ -84,6 +84,20 @@ function sendError(response, statusCode, message) {
   sendJson(response, statusCode, {
     error: message
   });
+}
+
+function serializeBackup(backup) {
+  if (!backup) {
+    return null;
+  }
+
+  return {
+    created: backup.created,
+    name: backup.name,
+    reason: backup.reason,
+    size: backup.size,
+    createdAt: backup.createdAt
+  };
 }
 
 async function runCheckOnce() {
@@ -280,6 +294,49 @@ async function handleApi(request, response, url) {
     const limit = Number(url.searchParams.get('limit') || 50);
     const alerts = await store.listAlerts(Number.isFinite(limit) ? limit : 50);
     sendJson(response, 200, { alerts });
+    return;
+  }
+
+  if (request.method === 'GET' && url.pathname === '/api/backups') {
+    const limit = Number(url.searchParams.get('limit') || config.backupRetention);
+    const backups = await listBackups(config.dataDir, {
+      limit: Number.isFinite(limit) ? limit : config.backupRetention
+    });
+
+    sendJson(response, 200, {
+      backups: backups.map(serializeBackup),
+      retention: config.backupRetention
+    });
+    return;
+  }
+
+  if (request.method === 'POST' && url.pathname === '/api/backups') {
+    const backup = await createBackup(config.dataDir, {
+      reason: 'manual-web',
+      maxBackups: config.backupRetention
+    });
+    const backups = await listBackups(config.dataDir, { limit: config.backupRetention });
+
+    sendJson(response, 200, {
+      backup: serializeBackup(backup),
+      backups: backups.map(serializeBackup)
+    });
+    return;
+  }
+
+  if (request.method === 'POST' && url.pathname === '/api/backups/restore') {
+    const body = await readJsonBody(request);
+    const result = await restoreBackup(config.dataDir, body.target || body.name || body.index, {
+      maxBackups: config.backupRetention
+    });
+    const backups = await listBackups(config.dataDir, { limit: config.backupRetention });
+
+    sendJson(response, 200, {
+      restored: true,
+      backup: serializeBackup(result.backup),
+      safetyBackup: serializeBackup(result.safetyBackup),
+      backups: backups.map(serializeBackup)
+    });
     return;
   }
 

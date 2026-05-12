@@ -29,6 +29,41 @@ test('createBackup copies store.json into the backups directory', async () => {
   assert.equal(backupContent.stocks[0].symbol, 'AAPL');
 });
 
+test('createBackup accepts store.json with a UTF-8 BOM', async () => {
+  const dataDir = await createDataDir();
+  await fs.writeFile(
+    path.join(dataDir, 'store.json'),
+    '\uFEFF{"stocks":[{"symbol":"AAPL"}],"alerts":[],"meta":{}}\n',
+    'utf8'
+  );
+
+  const backup = await createBackup(dataDir, {
+    reason: 'bom test',
+    maxBackups: 5
+  });
+  const backupContent = await fs.readFile(path.join(getBackupDir(dataDir), backup.name), 'utf8');
+
+  assert.equal(backup.created, true);
+  assert.equal(backupContent.startsWith('\uFEFF'), false);
+  assert.equal(JSON.parse(backupContent).stocks[0].symbol, 'AAPL');
+});
+
+test('JsonStore reads store.json with a UTF-8 BOM', async () => {
+  const dataDir = await createDataDir();
+  await fs.writeFile(
+    path.join(dataDir, 'store.json'),
+    '\uFEFF{"stocks":[{"symbol":"AAPL"}],"alerts":[],"meta":{}}\n',
+    'utf8'
+  );
+
+  const store = new JsonStore(dataDir, {
+    defaultAlertCooldownMinutes: 30
+  });
+  const stocks = await store.listStocks();
+
+  assert.equal(stocks[0].symbol, 'AAPL');
+});
+
 test('createBackup prunes old backups by retention count', async () => {
   const dataDir = await createDataDir();
   await fs.writeFile(path.join(dataDir, 'store.json'), '{"stocks":[],"alerts":[],"meta":{}}\n', 'utf8');

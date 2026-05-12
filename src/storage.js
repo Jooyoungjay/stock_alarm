@@ -24,7 +24,7 @@ async function ensureDataDir(dataDir) {
 
 async function readJson(filePath, fallback) {
   try {
-    const content = await fs.readFile(filePath, 'utf8');
+    const content = stripBom(await fs.readFile(filePath, 'utf8'));
     return JSON.parse(content);
   } catch (error) {
     if (error.code === 'ENOENT') {
@@ -33,6 +33,10 @@ async function readJson(filePath, fallback) {
 
     throw error;
   }
+}
+
+function stripBom(value) {
+  return String(value || '').replace(/^\uFEFF/, '');
 }
 
 async function writeJson(filePath, data) {
