@@ -716,7 +716,7 @@ function renderStatus(data) {
   elements.telegramStatus.className = `status-chip ${data.telegramConfigured ? 'connected' : 'warn'}`;
   elements.quoteStatus.textContent = `시세 ${formatProviderList(data.quoteProviders)}`;
   elements.quoteStatus.className = 'status-chip pipeline';
-  elements.pollStatus.textContent = `시세 ${data.pollIntervalSeconds || 60}초 · 배당 ${formatInterval(data.dividendRefreshIntervalSeconds || 300)}`;
+  elements.pollStatus.textContent = `시세 ${data.pollIntervalSeconds || 60}초 · 배당 ${formatInterval(data.dividendRefreshIntervalSeconds || 86400)}`;
   elements.pollStatus.className = 'status-chip timer';
 }
 
@@ -734,7 +734,7 @@ function renderServerStatus(health) {
       ${renderServerMetric('서버', '정상 실행', `시작 ${formatDate(health.startedAt)}`)}
       ${renderServerMetric('Telegram', health.telegramConfigured ? '연결됨' : '미설정', health.telegramConfigured ? '알림 전송 가능' : '.env 설정 필요')}
       ${renderServerMetric('시세', formatProviderList(health.quoteProviders), `${health.pollIntervalSeconds || 60}초 주기`)}
-      ${renderServerMetric('배당', formatProviderList(health.dividendProviders), `${formatInterval(health.dividendRefreshIntervalSeconds || 300)} 주기`)}
+      ${renderServerMetric('배당', formatProviderList(health.dividendProviders), `${formatInterval(health.dividendRefreshIntervalSeconds || 86400)} 주기`)}
       ${renderServerMetric('명령', formatDate(health.lastTelegramCommandPoll?.checkedAt), `${health.telegramCommandPollSeconds || 5}초 주기`)}
       ${renderServerMetric('마지막 확인', formatDate(health.lastCheck?.checkedAt), getLastCheckDetail(health.lastCheck))}
       ${renderServerMetric('배당 갱신', formatDate(health.lastDividendRefresh?.checkedAt), getLastDividendRefreshDetail(health.lastDividendRefresh))}
@@ -879,6 +879,10 @@ function formatInterval(seconds) {
 
   if (!Number.isFinite(value) || value <= 0) {
     return '-';
+  }
+
+  if (value % 86400 === 0) {
+    return `${value / 86400}일`;
   }
 
   if (value % 60 === 0) {

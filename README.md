@@ -135,7 +135,7 @@ PORT=3000
 DATA_DIR=
 POLL_INTERVAL_SECONDS=60
 TELEGRAM_COMMAND_POLL_SECONDS=5
-DIVIDEND_REFRESH_INTERVAL_SECONDS=300
+DIVIDEND_REFRESH_INTERVAL_SECONDS=86400
 BACKUP_RETENTION=30
 DEFAULT_ALERT_COOLDOWN_MINUTES=30
 QUOTE_TIMEOUT_MS=10000
@@ -781,14 +781,14 @@ node --check scripts/local-server.js
 배당 자동 갱신 설정:
 
 ```text
-DIVIDEND_REFRESH_INTERVAL_SECONDS=300
+DIVIDEND_REFRESH_INTERVAL_SECONDS=86400
 DIVIDEND_PROVIDERS=publicdata,opendart,alphavantage,yahoo
 DATA_GO_KR_SERVICE_KEY=
 OPENDART_API_KEY=
 ALPHA_VANTAGE_API_KEY=
 ```
 
-현재 배당금은 설정된 provider 순서대로 5분마다 보조 갱신합니다. 국내 종목은 공공데이터포털과 OpenDART를 먼저 사용하고, 해외 종목은 Alpha Vantage를 먼저 사용한 뒤 Yahoo를 fallback으로 사용합니다. API 조회가 실패해도 기존에 수동 입력한 주당 연 배당금은 지우지 않습니다. 배당 주기와 지급월은 종목별 차이가 커서 여전히 수동 입력을 기준으로 계산합니다.
+현재 배당금은 설정된 provider 순서대로 하루 1회 보조 갱신합니다. 국내 종목은 공공데이터포털과 OpenDART를 먼저 사용하고, 해외 종목은 Alpha Vantage를 먼저 사용한 뒤 Yahoo를 fallback으로 사용합니다. API 조회가 실패해도 기존에 수동 입력한 주당 연 배당금은 지우지 않습니다. 배당 주기와 지급월은 종목별 차이가 커서 여전히 수동 입력을 기준으로 계산합니다.
 
 공공데이터포털 키는 `Encoding` 키와 `Decoding` 키를 모두 사용할 수 있습니다. 새로 설정한 뒤에는 서버를 재시작해야 합니다.
 

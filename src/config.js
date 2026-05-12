@@ -93,7 +93,7 @@ export const config = {
   isRailwayRuntime,
   pollIntervalSeconds: toNumber(process.env.POLL_INTERVAL_SECONDS, 60, { min: 10 }),
   telegramCommandPollSeconds: toNumber(process.env.TELEGRAM_COMMAND_POLL_SECONDS, 5, { min: 2 }),
-  dividendRefreshIntervalSeconds: toNumber(process.env.DIVIDEND_REFRESH_INTERVAL_SECONDS, 300, {
+  dividendRefreshIntervalSeconds: toNumber(process.env.DIVIDEND_REFRESH_INTERVAL_SECONDS, 86400, {
     min: 60
   }),
   backupRetention: toNumber(process.env.BACKUP_RETENTION, 30, { min: 1 }),
