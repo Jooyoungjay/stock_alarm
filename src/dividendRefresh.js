@@ -1,4 +1,5 @@
 import { fetchDividendInfo } from './dividendProvider.js';
+import { symbolCatalog } from './symbols.js';
 
 export async function runDividendRefresh(store, config, options = {}) {
   const dividendFetcher = options.fetchDividendInfo || fetchDividendInfo;
@@ -21,7 +22,13 @@ export async function runDividendRefresh(store, config, options = {}) {
     try {
       const info = await dividendFetcher(stock.symbol, {
         timeoutMs: config.quoteTimeoutMs,
-        providers: config.dividendProviders
+        providers: config.dividendProviders,
+        dataGoKrServiceKey: config.dataGoKrServiceKey,
+        openDartApiKey: config.openDartApiKey,
+        alphaVantageApiKey: config.alphaVantageApiKey,
+        companyName: getDividendCompanyName(stock),
+        displayName: stock.displayName || '',
+        now
       });
       const nextValue = normalizePositiveNumber(info.annualDividendPerShare);
 
@@ -88,4 +95,16 @@ function normalizePositiveNumber(value) {
   const number = Number(value);
 
   return Number.isFinite(number) && number > 0 ? number : null;
+}
+
+function getDividendCompanyName(stock) {
+  const displayName = String(stock.displayName || '').trim();
+
+  if (displayName) {
+    return displayName;
+  }
+
+  const catalogItem = symbolCatalog.find((item) => item.symbol === stock.symbol);
+
+  return catalogItem?.name || stock.symbol;
 }

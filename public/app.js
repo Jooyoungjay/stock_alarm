@@ -1687,6 +1687,8 @@ function getProviderLabel(provider) {
     naver: 'Naver',
     stooq: 'Stooq',
     alphavantage: 'Alpha Vantage',
+    publicdata: '공공데이터',
+    opendart: 'OpenDART',
     yahoo: 'Yahoo'
   };
 

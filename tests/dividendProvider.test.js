@@ -2,6 +2,9 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
   normalizeDividendProviders,
+  parseAlphaVantageDividends,
+  parseOpenDartAlotMatter,
+  parsePublicDataDividendResponse,
   parseYahooDividendSummary,
   toYahooDividendSymbol
 } from '../src/dividendProvider.js';
@@ -97,6 +100,123 @@ test('toYahooDividendSymbol maps plain Korean codes to Yahoo KOSPI symbols', () 
 });
 
 test('normalizeDividendProviders keeps supported provider order', () => {
-  assert.deepEqual(normalizeDividendProviders(' yahoo '), ['yahoo']);
-  assert.deepEqual(normalizeDividendProviders(''), ['yahoo']);
+  assert.deepEqual(normalizeDividendProviders(' public, open-dart, alpha-vantage, yahoo '), [
+    'publicdata',
+    'opendart',
+    'alphavantage',
+    'yahoo'
+  ]);
+  assert.deepEqual(normalizeDividendProviders(''), [
+    'publicdata',
+    'opendart',
+    'alphavantage',
+    'yahoo'
+  ]);
+});
+
+test('parseAlphaVantageDividends sums recent dividend events', () => {
+  const info = parseAlphaVantageDividends(
+    {
+      symbol: 'AAPL',
+      data: [
+        {
+          ex_dividend_date: '2026-02-10',
+          payment_date: '2026-02-18',
+          amount: '0.26'
+        },
+        {
+          ex_dividend_date: '2025-11-10',
+          payment_date: '2025-11-18',
+          amount: '0.26'
+        },
+        {
+          ex_dividend_date: '2025-08-10',
+          payment_date: '2025-08-18',
+          amount: '0.25'
+        },
+        {
+          ex_dividend_date: '2025-05-10',
+          payment_date: '2025-05-18',
+          amount: '0.25'
+        }
+      ]
+    },
+    'AAPL',
+    {
+      now: new Date('2026-05-12T00:00:00.000Z')
+    }
+  );
+
+  assert.equal(info.provider, 'alphavantage');
+  assert.equal(info.annualDividendPerShare, 1.02);
+  assert.equal(info.lastDividendValue, 0.26);
+  assert.equal(info.exDividendDate, '2026-02-10T00:00:00.000Z');
+  assert.equal(info.dividendDate, '2026-02-18T00:00:00.000Z');
+});
+
+test('parsePublicDataDividendResponse extracts Korean dividend rows', () => {
+  const info = parsePublicDataDividendResponse(
+    {
+      response: {
+        header: {
+          resultCode: '00',
+          resultMsg: 'NORMAL SERVICE.'
+        },
+        body: {
+          items: {
+            item: [
+              {
+                stckIssuCmpyNm: '두산퓨얼셀',
+                basDt: '20260401',
+                dvdnBseDt: '20260331',
+                cashDvdnPayDt: '20260420',
+                stckGenrDvdnAmt: '150'
+              },
+              {
+                stckIssuCmpyNm: '다른회사',
+                basDt: '20260401',
+                stckGenrDvdnAmt: '999'
+              }
+            ]
+          }
+        }
+      }
+    },
+    '336260',
+    '두산퓨얼셀',
+    {
+      now: new Date('2026-05-12T00:00:00.000Z')
+    }
+  );
+
+  assert.equal(info.provider, 'publicdata');
+  assert.equal(info.annualDividendPerShare, 150);
+  assert.equal(info.lastDividendValue, 150);
+  assert.equal(info.exDividendDate, '2026-03-31T00:00:00.000Z');
+  assert.equal(info.dividendDate, '2026-04-20T00:00:00.000Z');
+  assert.equal(info.currency, 'KRW');
+});
+
+test('parseOpenDartAlotMatter extracts common stock cash dividend row', () => {
+  const info = parseOpenDartAlotMatter(
+    {
+      status: '000',
+      message: '정상',
+      list: [
+        {
+          se: '주당 현금배당금(원)',
+          stock_knd: '보통주',
+          thstrm: '1,200',
+          stlm_dt: '2025-12-31'
+        }
+      ]
+    },
+    '005930',
+    '삼성전자'
+  );
+
+  assert.equal(info.provider, 'opendart');
+  assert.equal(info.annualDividendPerShare, 1200);
+  assert.equal(info.lastDividendValue, 1200);
+  assert.equal(info.currency, 'KRW');
 });

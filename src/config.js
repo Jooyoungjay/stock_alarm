@@ -102,7 +102,10 @@ export const config = {
   }),
   quoteTimeoutMs: toNumber(process.env.QUOTE_TIMEOUT_MS, 10000, { min: 1000 }),
   quoteProviders: process.env.QUOTE_PROVIDERS || 'naver,stooq,alphavantage,yahoo',
-  dividendProviders: process.env.DIVIDEND_PROVIDERS || 'yahoo',
+  dividendProviders:
+    process.env.DIVIDEND_PROVIDERS || 'publicdata,opendart,alphavantage,yahoo',
+  dataGoKrServiceKey: process.env.DATA_GO_KR_SERVICE_KEY || '',
+  openDartApiKey: process.env.OPENDART_API_KEY || '',
   alphaVantageApiKey: process.env.ALPHA_VANTAGE_API_KEY || '',
   telegramBotToken: process.env.TELEGRAM_BOT_TOKEN || '',
   telegramChatId: process.env.TELEGRAM_CHAT_ID || ''

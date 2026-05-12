@@ -140,7 +140,9 @@ BACKUP_RETENTION=30
 DEFAULT_ALERT_COOLDOWN_MINUTES=30
 QUOTE_TIMEOUT_MS=10000
 QUOTE_PROVIDERS=naver,stooq,alphavantage,yahoo
-DIVIDEND_PROVIDERS=yahoo
+DIVIDEND_PROVIDERS=publicdata,opendart,alphavantage,yahoo
+DATA_GO_KR_SERVICE_KEY=
+OPENDART_API_KEY=
 ALPHA_VANTAGE_API_KEY=
 TELEGRAM_BOT_TOKEN=
 TELEGRAM_CHAT_ID=
@@ -765,14 +767,13 @@ node --check scripts/local-server.js
 - 배당 주기와 지급월 기반 1회 예상 배당금 계산
 - 포트폴리오 요약에서 월별 예상 배당 현금흐름 표시
 - 감시 종목 카드와 전체 포트폴리오 요약에 배당 정보 표시
-- Yahoo 배당 데이터를 5분마다 자동 보조 갱신
+- 공공데이터포털, OpenDART, Alpha Vantage, Yahoo provider 체인으로 배당 데이터 자동 보조 갱신
 - 웹앱 `배당 새로고침` 버튼으로 즉시 수동 갱신
 - 텔레그램 `/edit <종목코드> dividend <주당연배당금>` 수정 지원
 - 텔레그램 `/edit <종목코드> dividendfreq <주기>`와 `/edit <종목코드> dividendmonths <월목록>` 수정 지원
 
 추가 후보:
 
-- 배당 데이터 provider 추가
 - 배당락일, 지급일 표시
 - 배당락일 전후 알림
 - 배당 성장률과 최근 배당 변경 내역 표시
@@ -781,10 +782,13 @@ node --check scripts/local-server.js
 
 ```text
 DIVIDEND_REFRESH_INTERVAL_SECONDS=300
-DIVIDEND_PROVIDERS=yahoo
+DIVIDEND_PROVIDERS=publicdata,opendart,alphavantage,yahoo
+DATA_GO_KR_SERVICE_KEY=
+OPENDART_API_KEY=
+ALPHA_VANTAGE_API_KEY=
 ```
 
-현재 배당금은 Yahoo 배당 데이터를 기준으로 5분마다 보조 갱신합니다. API 조회가 실패해도 기존에 수동 입력한 주당 연 배당금은 지우지 않습니다. 배당 주기와 지급월은 종목별 차이가 커서 여전히 수동 입력을 기준으로 계산합니다.
+현재 배당금은 설정된 provider 순서대로 5분마다 보조 갱신합니다. 국내 종목은 공공데이터포털과 OpenDART를 먼저 사용하고, 해외 종목은 Alpha Vantage를 먼저 사용한 뒤 Yahoo를 fallback으로 사용합니다. API 조회가 실패해도 기존에 수동 입력한 주당 연 배당금은 지우지 않습니다. 배당 주기와 지급월은 종목별 차이가 커서 여전히 수동 입력을 기준으로 계산합니다.
 
 ## 문제 해결
 

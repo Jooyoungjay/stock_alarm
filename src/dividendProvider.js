@@ -1,7 +1,17 @@
+import zlib from 'node:zlib';
 import { isKoreanStockSymbol } from './priceProvider.js';
 
+const publicDataDividendUrl =
+  'http://apis.data.go.kr/1160100/service/GetStocDiviInfoService/getDiviInfo';
+const openDartAlotMatterUrl = 'https://opendart.fss.or.kr/api/alotMatter.json';
+const openDartCorpCodeUrl = 'https://opendart.fss.or.kr/api/corpCode.xml';
+const alphaVantageUrl = 'https://www.alphavantage.co/query';
 const yahooQuoteSummaryUrl = 'https://query1.finance.yahoo.com/v10/finance/quoteSummary';
-const defaultProviders = ['yahoo'];
+const defaultProviders = ['publicdata', 'opendart', 'alphavantage', 'yahoo'];
+const openDartReportCodes = ['11011', '11014', '11012', '11013'];
+const oneYearMs = 370 * 24 * 60 * 60 * 1000;
+
+const openDartCorpCodeCache = new Map();
 
 export async function fetchDividendInfo(symbol, options = {}) {
   const providers = normalizeDividendProviders(options.providers);
@@ -9,9 +19,23 @@ export async function fetchDividendInfo(symbol, options = {}) {
 
   for (const provider of providers) {
     try {
+      if (provider === 'publicdata') {
+        return await fetchPublicDataDividendInfo(symbol, options);
+      }
+
+      if (provider === 'opendart') {
+        return await fetchOpenDartDividendInfo(symbol, options);
+      }
+
+      if (provider === 'alphavantage') {
+        return await fetchAlphaVantageDividendInfo(symbol, options);
+      }
+
       if (provider === 'yahoo') {
         return await fetchYahooDividendInfo(symbol, options);
       }
+
+      throw new Error(`지원하지 않는 배당 provider입니다: ${provider}`);
     } catch (error) {
       errors.push(`${provider}: ${error.message}`);
     }
@@ -32,9 +56,132 @@ export function normalizeDividendProviders(value) {
   const providers = Array.isArray(value) ? value : String(value).split(',');
   const normalized = providers
     .map((provider) => provider.trim().toLowerCase())
-    .filter(Boolean);
+    .filter(Boolean)
+    .map((provider) => {
+      if (['data', 'datagokr', 'data.go.kr', 'public'].includes(provider)) {
+        return 'publicdata';
+      }
+
+      if (['dart', 'open-dart', 'open_dart'].includes(provider)) {
+        return 'opendart';
+      }
+
+      if (['alpha', 'alpha-vantage', 'alpha_vantage'].includes(provider)) {
+        return 'alphavantage';
+      }
+
+      return provider;
+    });
 
   return normalized.length ? normalized : defaultProviders;
+}
+
+export function parsePublicDataDividendResponse(
+  payload,
+  requestedSymbol,
+  sourceName,
+  options = {}
+) {
+  const header = payload?.response?.header || {};
+
+  if (header.resultCode && !['00', '0000'].includes(String(header.resultCode))) {
+    throw new Error(header.resultMsg || '공공데이터 배당 조회 오류');
+  }
+
+  const items = normalizeItems(payload?.response?.body?.items?.item);
+  const matchingItems = sourceName
+    ? items.filter((item) => normalizeCompanyName(item.stckIssuCmpyNm) === normalizeCompanyName(sourceName))
+    : items;
+  const events = matchingItems
+    .map((item) => ({
+      amount: pickFirstPositiveNumber(
+        item.stckGenrDvdnAmt,
+        item.stckDvdnAmt,
+        item.cashDvdnAmt,
+        item.dvdnAmt,
+        findDividendAmountInRecord(item)
+      ),
+      exDate: parseCompactDate(item.dvdnBseDt || item.basDt || item.rghtStndDt),
+      payDate: parseCompactDate(item.cashDvdnPayDt || item.dvdnPayDt || item.payDt),
+      currency: 'KRW',
+      sourceSymbol: item.stckIssuCmpyNm || sourceName || requestedSymbol
+    }))
+    .filter((event) => event.amount !== null);
+
+  return buildDividendInfoFromEvents(events, {
+    symbol: requestedSymbol,
+    provider: 'publicdata',
+    sourceSymbol: sourceName || requestedSymbol,
+    currency: 'KRW',
+    now: options.now
+  });
+}
+
+export function parseOpenDartAlotMatter(payload, requestedSymbol, sourceSymbol, options = {}) {
+  if (payload?.status && payload.status !== '000') {
+    throw new Error(payload.message || 'OpenDART 배당 조회 오류');
+  }
+
+  const rows = normalizeItems(payload?.list);
+  const commonRows = rows.filter((row) => {
+    const stockKind = String(row.stock_knd || '').trim();
+    return !stockKind || stockKind.includes('보통') || /common/i.test(stockKind);
+  });
+  const dividendRows = commonRows.filter((row) => {
+    const label = String(row.se || '').replace(/\s+/g, '');
+    return (
+      label.includes('주당') &&
+      (label.includes('현금배당') || label.includes('배당금') || label.includes('cashdividend'))
+    );
+  });
+  const row = dividendRows[0] || commonRows.find((item) => parseLooseNumber(item.thstrm) !== null);
+  const amount = parseLooseNumber(row?.thstrm);
+
+  if (amount === null) {
+    throw new Error(`OpenDART 배당 정보를 찾을 수 없습니다: ${requestedSymbol}`);
+  }
+
+  return {
+    symbol: requestedSymbol,
+    sourceSymbol,
+    annualDividendPerShare: amount,
+    dividendYieldPercent: null,
+    lastDividendValue: amount,
+    exDividendDate: '',
+    dividendDate: '',
+    currency: 'KRW',
+    provider: 'opendart',
+    fiscalDate: row?.stlm_dt || ''
+  };
+}
+
+export function parseAlphaVantageDividends(payload, requestedSymbol, options = {}) {
+  if (payload?.['Error Message']) {
+    throw new Error(payload['Error Message']);
+  }
+
+  if (payload?.Note || payload?.Information) {
+    throw new Error(payload.Note || payload.Information);
+  }
+
+  const rows = normalizeItems(payload?.data);
+  const events = rows
+    .map((row) => ({
+      amount: pickFirstPositiveNumber(row.amount, row.dividend_amount, row.cash_amount),
+      exDate: parseDashedDate(row.ex_dividend_date || row.exDate),
+      payDate: parseDashedDate(row.payment_date || row.pay_date || row.payDate),
+      currency: row.currency || '',
+      sourceSymbol: payload.symbol || requestedSymbol
+    }))
+    .filter((event) => event.amount !== null);
+
+  return buildDividendInfoFromEvents(events, {
+    symbol: requestedSymbol,
+    provider: 'alphavantage',
+    sourceSymbol: payload.symbol || requestedSymbol,
+    currency: '',
+    now: options.now
+  });
 }
 
 export function parseYahooDividendSummary(payload, requestedSymbol, sourceSymbol = requestedSymbol) {
@@ -91,6 +238,84 @@ export function toYahooDividendSymbol(symbol) {
   return normalized;
 }
 
+async function fetchPublicDataDividendInfo(symbol, options = {}) {
+  if (!isKoreanStockSymbol(symbol)) {
+    throw new Error('공공데이터 배당정보는 한국 종목만 조회합니다.');
+  }
+
+  if (!options.dataGoKrServiceKey) {
+    throw new Error('DATA_GO_KR_SERVICE_KEY가 설정되지 않았습니다.');
+  }
+
+  const sourceName = String(options.companyName || options.displayName || '').trim();
+
+  if (!sourceName) {
+    throw new Error('공공데이터 배당정보 조회에는 종목 표시 이름이 필요합니다.');
+  }
+
+  const url = new URL(publicDataDividendUrl);
+  url.searchParams.set('serviceKey', options.dataGoKrServiceKey);
+  url.searchParams.set('pageNo', '1');
+  url.searchParams.set('numOfRows', '100');
+  url.searchParams.set('resultType', 'json');
+  url.searchParams.set('stckIssuCmpyNm', sourceName);
+  const payload = await fetchJson(url, options);
+
+  return parsePublicDataDividendResponse(payload, symbol, sourceName, options);
+}
+
+async function fetchOpenDartDividendInfo(symbol, options = {}) {
+  if (!isKoreanStockSymbol(symbol)) {
+    throw new Error('OpenDART 배당정보는 한국 종목만 조회합니다.');
+  }
+
+  if (!options.openDartApiKey) {
+    throw new Error('OPENDART_API_KEY가 설정되지 않았습니다.');
+  }
+
+  const corp = await findOpenDartCorpByStockCode(symbol, options);
+  const now = options.now || new Date();
+  const currentYear = now.getUTCFullYear();
+  const errors = [];
+
+  for (let year = currentYear; year >= currentYear - 3; year -= 1) {
+    for (const reportCode of openDartReportCodes) {
+      try {
+        const url = new URL(openDartAlotMatterUrl);
+        url.searchParams.set('crtfc_key', options.openDartApiKey);
+        url.searchParams.set('corp_code', corp.corpCode);
+        url.searchParams.set('bsns_year', String(year));
+        url.searchParams.set('reprt_code', reportCode);
+        const payload = await fetchJson(url, options);
+
+        return parseOpenDartAlotMatter(payload, symbol, corp.stockName || corp.corpName || corp.corpCode, options);
+      } catch (error) {
+        errors.push(`${year}/${reportCode}: ${error.message}`);
+      }
+    }
+  }
+
+  throw new Error(errors.join(' | '));
+}
+
+async function fetchAlphaVantageDividendInfo(symbol, options = {}) {
+  if (isKoreanStockSymbol(symbol)) {
+    throw new Error('Alpha Vantage 배당정보는 한국 종목 조회에 사용하지 않습니다.');
+  }
+
+  if (!options.alphaVantageApiKey) {
+    throw new Error('ALPHA_VANTAGE_API_KEY가 설정되지 않았습니다.');
+  }
+
+  const url = new URL(alphaVantageUrl);
+  url.searchParams.set('function', 'DIVIDENDS');
+  url.searchParams.set('symbol', symbol);
+  url.searchParams.set('apikey', options.alphaVantageApiKey);
+  const payload = await fetchJson(url, options);
+
+  return parseAlphaVantageDividends(payload, symbol, options);
+}
+
 async function fetchYahooDividendInfo(symbol, options = {}) {
   const sourceSymbols = getYahooDividendSymbols(symbol);
   const errors = [];
@@ -110,6 +335,123 @@ async function fetchYahooDividendInfo(symbol, options = {}) {
   throw new Error(errors.join(' | '));
 }
 
+async function findOpenDartCorpByStockCode(symbol, options = {}) {
+  const stockCode = String(symbol || '').trim().slice(0, 6);
+  const companies = await loadOpenDartCompanies(options);
+  const company = companies.find((item) => item.stockCode === stockCode);
+
+  if (!company) {
+    throw new Error(`OpenDART 고유번호를 찾을 수 없습니다: ${symbol}`);
+  }
+
+  return company;
+}
+
+async function loadOpenDartCompanies(options = {}) {
+  const apiKey = String(options.openDartApiKey || '').trim();
+
+  if (!apiKey) {
+    throw new Error('OPENDART_API_KEY가 설정되지 않았습니다.');
+  }
+
+  if (!openDartCorpCodeCache.has(apiKey)) {
+    openDartCorpCodeCache.set(apiKey, fetchOpenDartCompanies(options));
+  }
+
+  return openDartCorpCodeCache.get(apiKey);
+}
+
+async function fetchOpenDartCompanies(options = {}) {
+  const url = new URL(openDartCorpCodeUrl);
+  url.searchParams.set('crtfc_key', options.openDartApiKey);
+  const response = await fetchWithTimeout(url, options);
+
+  if (!response.ok) {
+    throw new Error(`HTTP ${response.status}`);
+  }
+
+  const buffer = Buffer.from(await response.arrayBuffer());
+  const xml = extractFirstZipTextFile(buffer);
+
+  return parseOpenDartCorpCodeXml(xml);
+}
+
+function parseOpenDartCorpCodeXml(xml) {
+  return [...String(xml || '').matchAll(/<list>([\s\S]*?)<\/list>/g)]
+    .map((match) => ({
+      corpCode: getXmlValue(match[1], 'corp_code'),
+      corpName: getXmlValue(match[1], 'corp_name'),
+      stockCode: getXmlValue(match[1], 'stock_code'),
+      modifyDate: getXmlValue(match[1], 'modify_date')
+    }))
+    .filter((item) => item.corpCode && item.stockCode);
+}
+
+function extractFirstZipTextFile(buffer) {
+  const eocdOffset = findZipEndOfCentralDirectory(buffer);
+
+  if (eocdOffset === -1) {
+    throw new Error('OpenDART 고유번호 ZIP 파일을 해석할 수 없습니다.');
+  }
+
+  const centralDirectoryOffset = buffer.readUInt32LE(eocdOffset + 16);
+  const entryCount = buffer.readUInt16LE(eocdOffset + 10);
+  let offset = centralDirectoryOffset;
+
+  for (let index = 0; index < entryCount; index += 1) {
+    if (buffer.readUInt32LE(offset) !== 0x02014b50) {
+      throw new Error('OpenDART 고유번호 ZIP 중앙 디렉터리를 해석할 수 없습니다.');
+    }
+
+    const compressionMethod = buffer.readUInt16LE(offset + 10);
+    const compressedSize = buffer.readUInt32LE(offset + 20);
+    const fileNameLength = buffer.readUInt16LE(offset + 28);
+    const extraLength = buffer.readUInt16LE(offset + 30);
+    const commentLength = buffer.readUInt16LE(offset + 32);
+    const localHeaderOffset = buffer.readUInt32LE(offset + 42);
+    const fileName = buffer.slice(offset + 46, offset + 46 + fileNameLength).toString('utf8');
+
+    if (fileName.toLowerCase().endsWith('.xml')) {
+      return extractZipEntry(buffer, localHeaderOffset, compressionMethod, compressedSize).toString('utf8');
+    }
+
+    offset += 46 + fileNameLength + extraLength + commentLength;
+  }
+
+  throw new Error('OpenDART 고유번호 XML 파일을 찾을 수 없습니다.');
+}
+
+function extractZipEntry(buffer, localHeaderOffset, compressionMethod, compressedSize) {
+  if (buffer.readUInt32LE(localHeaderOffset) !== 0x04034b50) {
+    throw new Error('OpenDART 고유번호 ZIP 로컬 헤더를 해석할 수 없습니다.');
+  }
+
+  const fileNameLength = buffer.readUInt16LE(localHeaderOffset + 26);
+  const extraLength = buffer.readUInt16LE(localHeaderOffset + 28);
+  const dataOffset = localHeaderOffset + 30 + fileNameLength + extraLength;
+  const compressed = buffer.slice(dataOffset, dataOffset + compressedSize);
+
+  if (compressionMethod === 0) {
+    return compressed;
+  }
+
+  if (compressionMethod === 8) {
+    return zlib.inflateRawSync(compressed);
+  }
+
+  throw new Error(`지원하지 않는 ZIP 압축 방식입니다: ${compressionMethod}`);
+}
+
+function findZipEndOfCentralDirectory(buffer) {
+  for (let offset = buffer.length - 22; offset >= 0; offset -= 1) {
+    if (buffer.readUInt32LE(offset) === 0x06054b50) {
+      return offset;
+    }
+  }
+
+  return -1;
+}
+
 function getYahooDividendSymbols(symbol) {
   const normalized = String(symbol || '').trim().toUpperCase();
 
@@ -118,6 +460,120 @@ function getYahooDividendSymbols(symbol) {
   }
 
   return [toYahooDividendSymbol(normalized)];
+}
+
+function buildDividendInfoFromEvents(events, meta = {}) {
+  const validEvents = events
+    .map((event) => ({
+      ...event,
+      amount: normalizePositiveNumber(event.amount),
+      exDate: event.exDate || '',
+      payDate: event.payDate || ''
+    }))
+    .filter((event) => event.amount !== null)
+    .sort((left, right) => getEventTime(right) - getEventTime(left));
+
+  if (!validEvents.length) {
+    throw new Error(`배당 정보를 찾을 수 없습니다: ${meta.symbol}`);
+  }
+
+  const now = meta.now || new Date();
+  const cutoff = now.getTime() - oneYearMs;
+  const recentEvents = validEvents.filter((event) => getEventTime(event) >= cutoff);
+  const annualDividendPerShare =
+    recentEvents.length > 1
+      ? sumAmounts(recentEvents)
+      : inferAnnualDividendFromEvents(validEvents);
+  const latest = validEvents[0];
+
+  if (!annualDividendPerShare) {
+    throw new Error(`배당 정보를 찾을 수 없습니다: ${meta.symbol}`);
+  }
+
+  return {
+    symbol: meta.symbol,
+    sourceSymbol: latest.sourceSymbol || meta.sourceSymbol || meta.symbol,
+    annualDividendPerShare,
+    dividendYieldPercent: null,
+    lastDividendValue: latest.amount,
+    exDividendDate: latest.exDate || '',
+    dividendDate: latest.payDate || '',
+    currency: latest.currency || meta.currency || '',
+    provider: meta.provider
+  };
+}
+
+function inferAnnualDividendFromEvents(events) {
+  const latest = events[0];
+
+  if (!latest) {
+    return null;
+  }
+
+  if (events.length < 2) {
+    return latest.amount;
+  }
+
+  const latestTime = getEventTime(events[0]);
+  const previousTime = getEventTime(events[1]);
+  const gapDays = Math.abs(latestTime - previousTime) / (24 * 60 * 60 * 1000);
+  const frequency = inferFrequencyFromGapDays(gapDays);
+
+  return latest.amount * frequency;
+}
+
+function inferFrequencyFromGapDays(gapDays) {
+  if (!Number.isFinite(gapDays) || gapDays <= 0) {
+    return 1;
+  }
+
+  if (gapDays <= 40) {
+    return 12;
+  }
+
+  if (gapDays <= 130) {
+    return 4;
+  }
+
+  if (gapDays <= 230) {
+    return 2;
+  }
+
+  return 1;
+}
+
+function sumAmounts(events) {
+  return events.reduce((sum, event) => sum + event.amount, 0);
+}
+
+function getEventTime(event) {
+  const value = event.exDate || event.payDate || '';
+  const time = value ? new Date(value).getTime() : 0;
+
+  return Number.isFinite(time) ? time : 0;
+}
+
+function findDividendAmountInRecord(record) {
+  const candidates = Object.entries(record || {}).filter(([key]) => {
+    const normalized = key.toLowerCase();
+    return (
+      (normalized.includes('dvdn') || normalized.includes('divi')) &&
+      !normalized.includes('rt') &&
+      !normalized.includes('rate') &&
+      !normalized.includes('dt') &&
+      !normalized.includes('date')
+    );
+  });
+
+  for (const [, value] of candidates) {
+    const number = parseLooseNumber(value);
+
+    if (number !== null) {
+      return number;
+    }
+  }
+
+  return null;
 }
 
 function inferAnnualDividendFromYield(dividendYield, marketPrice) {
@@ -155,9 +611,55 @@ function pickFirstPositiveNumber(...values) {
 }
 
 function normalizePositiveNumber(value) {
-  const number = Number(value);
+  const number = parseLooseNumber(value);
 
-  return Number.isFinite(number) && number > 0 ? number : null;
+  return number !== null && number > 0 ? number : null;
+}
+
+function parseLooseNumber(value) {
+  if (value === undefined || value === null || value === '') {
+    return null;
+  }
+
+  const text = String(value).replace(/,/g, '').trim();
+
+  if (!text || text === '-' || text.toLowerCase() === 'nan') {
+    return null;
+  }
+
+  const number = Number(text);
+
+  return Number.isFinite(number) ? number : null;
+}
+
+function normalizeItems(value) {
+  if (!value) {
+    return [];
+  }
+
+  return Array.isArray(value) ? value : [value];
+}
+
+function parseCompactDate(value) {
+  const text = String(value || '').replace(/\D/g, '');
+
+  if (text.length !== 8) {
+    return '';
+  }
+
+  return parseDashedDate(`${text.slice(0, 4)}-${text.slice(4, 6)}-${text.slice(6, 8)}`);
+}
+
+function parseDashedDate(value) {
+  const text = String(value || '').trim();
+
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(text)) {
+    return '';
+  }
+
+  const date = new Date(`${text}T00:00:00.000Z`);
+
+  return Number.isFinite(date.getTime()) ? date.toISOString() : '';
 }
 
 function parseUnixDate(value) {
@@ -168,6 +670,25 @@ function parseUnixDate(value) {
   }
 
   return new Date(timestamp * 1000).toISOString();
+}
+
+function normalizeCompanyName(value) {
+  return String(value || '').replace(/\s+/g, '').toLowerCase();
+}
+
+function getXmlValue(xml, tagName) {
+  const match = String(xml || '').match(new RegExp(`<${tagName}>([\\s\\S]*?)<\\/${tagName}>`));
+
+  return match ? decodeXmlEntities(match[1].trim()) : '';
+}
+
+function decodeXmlEntities(value) {
+  return String(value || '')
+    .replaceAll('&lt;', '<')
+    .replaceAll('&gt;', '>')
+    .replaceAll('&amp;', '&')
+    .replaceAll('&quot;', '"')
+    .replaceAll('&apos;', "'");
 }
 
 async function fetchJson(url, options = {}) {
@@ -188,7 +709,7 @@ async function fetchWithTimeout(url, options = {}) {
   try {
     return await fetch(url, {
       headers: {
-        accept: 'application/json'
+        accept: 'application/json, text/plain, */*'
       },
       signal: controller.signal
     });
