@@ -190,6 +190,21 @@
         <div class="card">
           <div class="card-header">
             <div>
+              <h2 id="serverStatusTitle" class="card-title">서버 상태</h2>
+              <p id="serverStatusSummary" class="card-subtitle">상태를 확인하는 중입니다.</p>
+            </div>
+            <div class="watch-actions">
+              <button id="refreshServerStatusButton" type="button" class="btn btn-outline btn-sm secondary-button">
+                새로고침
+              </button>
+            </div>
+          </div>
+          <div id="serverStatusPanel" class="server-status-panel" aria-live="polite"></div>
+        </div>
+
+        <div class="card">
+          <div class="card-header">
+            <div>
               <h2 id="alertsTitle" class="card-title">알림 기록</h2>
             </div>
           </div>

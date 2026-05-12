@@ -2,6 +2,7 @@ const state = {
   stocks: [],
   alerts: [],
   backups: [],
+  health: null,
   backupRetention: 0,
   loading: false,
   editingStockId: null
@@ -14,6 +15,8 @@ const elements = {
   message: document.querySelector('#message'),
   backupList: document.querySelector('#backupList'),
   backupSummary: document.querySelector('#backupSummary'),
+  serverStatusPanel: document.querySelector('#serverStatusPanel'),
+  serverStatusSummary: document.querySelector('#serverStatusSummary'),
   summaryText: document.querySelector('#summaryText'),
   telegramStatus: document.querySelector('#telegramStatus'),
   quoteStatus: document.querySelector('#quoteStatus'),
@@ -25,6 +28,7 @@ const elements = {
   testTelegramButton: document.querySelector('#testTelegramButton'),
   createBackupButton: document.querySelector('#createBackupButton'),
   refreshBackupsButton: document.querySelector('#refreshBackupsButton'),
+  refreshServerStatusButton: document.querySelector('#refreshServerStatusButton'),
   tabSections: document.querySelectorAll('.tab-section'),
   mobileNavButtons: document.querySelectorAll('.nav-item')
 };
@@ -138,6 +142,30 @@ elements.createBackupButton.addEventListener('click', async () => {
 elements.refreshBackupsButton.addEventListener('click', async () => {
   await withBusy(elements.refreshBackupsButton, loadBackups);
 });
+
+elements.refreshServerStatusButton.addEventListener('click', async () => {
+  await withBusy(elements.refreshServerStatusButton, loadHealth);
+});
+
+elements.serverStatusPanel.addEventListener('click', async (event) => {
+  const button = event.target.closest('[data-copy]');
+
+  if (!button) {
+    return;
+  }
+
+  await copyText(button.dataset.copy);
+});
+
+async function loadHealth() {
+  try {
+    const health = await api('/api/health');
+    state.health = health;
+    renderServerStatus(health);
+  } catch (error) {
+    renderServerStatusError(error);
+  }
+}
 
 async function loadData() {
   try {
@@ -422,6 +450,125 @@ function renderStatus(data) {
   elements.quoteStatus.className = 'status-chip pipeline';
   elements.pollStatus.textContent = `${data.pollIntervalSeconds || 60}초 주기`;
   elements.pollStatus.className = 'status-chip timer';
+}
+
+function renderServerStatus(health) {
+  const accessUrls = health.accessUrls || {};
+  const currentUrl = window.location.origin;
+  const localUrl = accessUrls.local || currentUrl;
+  const lanUrls = Array.isArray(accessUrls.lan) ? accessUrls.lan : [];
+  const phoneUrl = getPhoneAccessUrl(lanUrls, currentUrl);
+  const serverMode = lanUrls.length ? '휴대폰 접속 가능' : 'PC 전용';
+
+  elements.serverStatusSummary.textContent = `정상 · PID ${health.pid} · ${serverMode}`;
+  elements.serverStatusPanel.innerHTML = `
+    <div class="server-status-grid">
+      ${renderServerMetric('서버', '정상 실행', `시작 ${formatDate(health.startedAt)}`)}
+      ${renderServerMetric('Telegram', health.telegramConfigured ? '연결됨' : '미설정', health.telegramConfigured ? '알림 전송 가능' : '.env 설정 필요')}
+      ${renderServerMetric('시세', formatProviderList(health.quoteProviders), `${health.pollIntervalSeconds || 60}초 주기`)}
+      ${renderServerMetric('명령', formatDate(health.lastTelegramCommandPoll?.checkedAt), `${health.telegramCommandPollSeconds || 5}초 주기`)}
+      ${renderServerMetric('마지막 확인', formatDate(health.lastCheck?.checkedAt), getLastCheckDetail(health.lastCheck))}
+      ${renderServerMetric('포트', String(health.port || '-'), `HOST ${health.host || '-'}`)}
+      ${renderServerMetric('데이터', shortenPath(health.dataDir), '로컬 저장소')}
+      ${renderServerMetric('실행 방식', health.railwayRuntime ? 'Railway' : '로컬 PC', health.cwd || '')}
+    </div>
+    <div class="server-access">
+      <div class="server-url-list">
+        ${renderUrlRow('현재 주소', currentUrl)}
+        ${renderUrlRow('PC 주소', localUrl)}
+        ${
+          lanUrls.length
+            ? lanUrls.map((url, index) => renderUrlRow(index === 0 ? '휴대폰' : `휴대폰 ${index + 1}`, url)).join('')
+            : renderInstructionRow('휴대폰', '같은 Wi-Fi 테스트는 start-phone.bat으로 서버를 시작하세요.')
+        }
+      </div>
+      <div class="server-qr">
+        ${
+          phoneUrl
+            ? `<img src="/api/qr.svg?text=${encodeURIComponent(phoneUrl)}" alt="휴대폰 접속 QR 코드" />`
+            : '<div class="server-qr-empty">휴대폰 접속 주소 없음</div>'
+        }
+        <div class="server-qr-label">${phoneUrl ? '휴대폰으로 QR 스캔' : 'start-phone.bat 필요'}</div>
+      </div>
+    </div>
+  `;
+}
+
+function renderServerStatusError(error) {
+  elements.serverStatusSummary.textContent = '상태 확인 실패';
+  elements.serverStatusPanel.innerHTML = `
+    <div class="message show error">${escapeHtml(error.message || '서버 상태를 확인하지 못했습니다.')}</div>
+  `;
+}
+
+function renderServerMetric(label, value, detail = '') {
+  return `
+    <div class="server-metric">
+      <span class="server-metric-label">${escapeHtml(label)}</span>
+      <span class="server-metric-value">${escapeHtml(value || '-')}</span>
+      <span class="server-metric-detail">${escapeHtml(detail || '-')}</span>
+    </div>
+  `;
+}
+
+function renderUrlRow(label, url) {
+  return `
+    <div class="server-url-row">
+      <span class="server-url-label">${escapeHtml(label)}</span>
+      <a class="server-url" href="${escapeHtml(url)}" target="_blank" rel="noreferrer">${escapeHtml(url)}</a>
+      <button type="button" class="btn btn-ghost btn-sm text-button" data-copy="${escapeHtml(url)}">복사</button>
+    </div>
+  `;
+}
+
+function renderInstructionRow(label, text) {
+  return `
+    <div class="server-url-row">
+      <span class="server-url-label">${escapeHtml(label)}</span>
+      <span class="server-url">${escapeHtml(text)}</span>
+    </div>
+  `;
+}
+
+function getPhoneAccessUrl(lanUrls, currentUrl) {
+  if (lanUrls.length) {
+    return lanUrls[0];
+  }
+
+  try {
+    const url = new URL(currentUrl);
+
+    if (!['127.0.0.1', 'localhost', '[::1]'].includes(url.hostname)) {
+      return currentUrl;
+    }
+  } catch {
+    return '';
+  }
+
+  return '';
+}
+
+function getLastCheckDetail(lastCheck) {
+  if (!lastCheck) {
+    return '아직 실행 전';
+  }
+
+  if (lastCheck.skipped) {
+    return lastCheck.reason || '건너뜀';
+  }
+
+  const checked = Array.isArray(lastCheck.results) ? lastCheck.results.length : 0;
+  return `${checked}개 종목 확인`;
+}
+
+function shortenPath(value) {
+  const text = String(value || '');
+
+  if (text.length <= 36) {
+    return text || '-';
+  }
+
+  return `...${text.slice(-33)}`;
 }
 
 function renderStocks() {
@@ -983,6 +1130,34 @@ function showMessage(text, isError = false) {
   }, 4500);
 }
 
+async function copyText(text) {
+  const value = String(text || '');
+
+  if (!value) {
+    return;
+  }
+
+  try {
+    if (navigator.clipboard?.writeText) {
+      await navigator.clipboard.writeText(value);
+    } else {
+      const textarea = document.createElement('textarea');
+      textarea.value = value;
+      textarea.setAttribute('readonly', '');
+      textarea.style.position = 'fixed';
+      textarea.style.opacity = '0';
+      document.body.append(textarea);
+      textarea.select();
+      document.execCommand('copy');
+      textarea.remove();
+    }
+
+    showMessage('주소를 복사했습니다.');
+  } catch {
+    showMessage('주소 복사에 실패했습니다.', true);
+  }
+}
+
 function calculateThreshold(highPrice, thresholdPercent) {
   const high = parseFiniteNumber(highPrice);
   const threshold = Number(thresholdPercent);
@@ -1181,9 +1356,11 @@ function escapeHtml(value) {
 
 syncResponsiveTabs();
 initWebApp();
+loadHealth();
 loadData();
 loadBackups();
 window.setInterval(loadData, 15000);
+window.setInterval(loadHealth, 15000);
 
 function initWebApp() {
   if (!('serviceWorker' in navigator)) {

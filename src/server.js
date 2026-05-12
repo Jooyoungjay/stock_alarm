@@ -1,8 +1,10 @@
 import http from 'node:http';
 import fs from 'node:fs/promises';
 import path from 'node:path';
+import { buildAccessUrls } from './accessUrls.js';
 import { createBackup, listBackups, restoreBackup } from './backups.js';
 import { config } from './config.js';
+import { createQrSvg } from './qrCode.js';
 import { JsonStore } from './storage.js';
 import {
   buildRegistrationPreview,
@@ -194,6 +196,7 @@ async function handleApi(request, response, url) {
       runtimeFile: getRuntimeInfoPath(config.dataDir),
       telegramConfigured: isTelegramConfigured(config),
       port: activePort,
+      accessUrls: buildAccessUrls({ host: config.host, port: activePort }),
       quoteProviders: config.quoteProviders,
       pollIntervalSeconds: config.pollIntervalSeconds,
       telegramCommandPollSeconds: config.telegramCommandPollSeconds,
@@ -222,6 +225,22 @@ async function handleApi(request, response, url) {
   if (request.method === 'GET' && url.pathname === '/api/symbol-search') {
     const query = url.searchParams.get('q');
     sendJson(response, 200, { results: searchSymbols(query) });
+    return;
+  }
+
+  if (request.method === 'GET' && url.pathname === '/api/qr.svg') {
+    const text = String(url.searchParams.get('text') || '').trim();
+
+    if (!text) {
+      sendError(response, 400, 'QR 코드로 만들 주소가 필요합니다.');
+      return;
+    }
+
+    response.writeHead(200, {
+      'content-type': 'image/svg+xml; charset=utf-8',
+      'cache-control': 'no-store'
+    });
+    response.end(createQrSvg(text));
     return;
   }
 

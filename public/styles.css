@@ -784,6 +784,130 @@ select:focus {
   gap: 8px;
 }
 
+.server-status-panel {
+  display: grid;
+  gap: 14px;
+}
+
+.server-status-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(120px, 1fr));
+  gap: 10px;
+}
+
+.server-metric {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+  padding: 12px;
+  border: 1px solid var(--border-soft);
+  border-radius: var(--radius-sm);
+  background: var(--surface-2);
+}
+
+.server-metric-label {
+  color: var(--muted);
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.server-metric-value {
+  overflow-wrap: anywhere;
+  color: var(--text);
+  font-size: 13px;
+  font-weight: 800;
+}
+
+.server-metric-detail {
+  overflow-wrap: anywhere;
+  color: var(--dim);
+  font-size: 11px;
+}
+
+.server-access {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 168px;
+  gap: 14px;
+  align-items: stretch;
+}
+
+.server-url-list {
+  display: grid;
+  gap: 8px;
+}
+
+.server-url-row {
+  display: grid;
+  grid-template-columns: 92px minmax(0, 1fr) auto;
+  gap: 8px;
+  align-items: center;
+  min-height: 40px;
+  padding: 8px 10px;
+  border: 1px solid var(--border-soft);
+  border-radius: var(--radius-sm);
+  background: var(--bg);
+}
+
+.server-url-label {
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 800;
+}
+
+.server-url {
+  overflow-wrap: anywhere;
+  color: var(--text);
+  font-size: 12px;
+  font-weight: 700;
+  text-decoration: none;
+}
+
+.server-url:hover {
+  color: var(--accent-hover);
+}
+
+.server-qr {
+  display: grid;
+  gap: 8px;
+  justify-items: center;
+  align-content: start;
+  min-width: 0;
+  padding: 12px;
+  border: 1px solid var(--border-soft);
+  border-radius: var(--radius-sm);
+  background: var(--surface-2);
+}
+
+.server-qr img {
+  display: block;
+  width: 132px;
+  height: 132px;
+  border-radius: var(--radius-sm);
+  background: #fff;
+}
+
+.server-qr-label {
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 700;
+  text-align: center;
+}
+
+.server-qr-empty {
+  display: grid;
+  place-items: center;
+  width: 132px;
+  height: 132px;
+  padding: 12px;
+  border: 1px dashed var(--border);
+  border-radius: var(--radius-sm);
+  color: var(--dim);
+  font-size: 12px;
+  text-align: center;
+}
+
 .alert-row {
   display: grid;
   grid-template-columns: minmax(140px, 1fr) minmax(90px, 0.6fr) minmax(110px, 0.6fr) minmax(160px, 1fr);
@@ -1002,6 +1126,19 @@ select:focus {
     gap: 7px;
   }
 
+  .server-status-grid,
+  .server-access {
+    grid-template-columns: 1fr;
+  }
+
+  .server-url-row {
+    grid-template-columns: 1fr;
+  }
+
+  .server-url-row .btn {
+    justify-self: start;
+  }
+
   .backup-row {
     grid-template-columns: 1fr;
     gap: 7px;
@@ -1020,6 +1157,7 @@ select:focus {
   .form-row,
   .field-grid,
   .quote-preview-grid,
+  .server-status-grid,
   .stock-top,
   .stock-edit-form {
     grid-template-columns: 1fr;
