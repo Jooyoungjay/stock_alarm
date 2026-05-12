@@ -76,6 +76,10 @@ function normalizeStock(input, defaults) {
     displayName: String(input.displayName || '').trim(),
     purchasePrice: normalizeOptionalPositiveNumber(input.purchasePrice, '매수가는 0보다 큰 숫자여야 합니다.'),
     quantity: normalizeOptionalPositiveNumber(input.quantity, '보유 수량은 0보다 큰 숫자여야 합니다.'),
+    annualDividendPerShare: normalizeOptionalPositiveNumber(
+      input.annualDividendPerShare,
+      '주당 연 배당금은 0보다 큰 숫자여야 합니다.'
+    ),
     purchaseDate: normalizeOptionalDate(input.purchaseDate),
     alertType,
     thresholdPercent,
@@ -160,6 +164,13 @@ function applyStockPatch(stock, patch) {
     );
   }
 
+  if (patch.annualDividendPerShare !== undefined) {
+    next.annualDividendPerShare = normalizeOptionalPositiveNumber(
+      patch.annualDividendPerShare,
+      '주당 연 배당금은 0보다 큰 숫자여야 합니다.'
+    );
+  }
+
   if (patch.purchaseDate !== undefined) {
     next.purchaseDate = normalizeOptionalDate(patch.purchaseDate);
     alertConditionChanged = true;
@@ -216,6 +227,7 @@ function applyStockPatch(stock, patch) {
 function normalizeStoredStock(stock) {
   const purchasePrice = Number(stock.purchasePrice);
   const quantity = Number(stock.quantity);
+  const annualDividendPerShare = Number(stock.annualDividendPerShare);
   const targetPrice = Number(stock.targetPrice);
   const alertType = normalizeStoredAlertType(stock.alertType);
   const normalizedTargetPrice =
@@ -240,6 +252,14 @@ function normalizeStoredStock(stock) {
         ? null
         : Number.isFinite(quantity) && quantity > 0
           ? quantity
+          : null,
+    annualDividendPerShare:
+      stock.annualDividendPerShare === undefined ||
+      stock.annualDividendPerShare === null ||
+      stock.annualDividendPerShare === ''
+        ? null
+        : Number.isFinite(annualDividendPerShare) && annualDividendPerShare > 0
+          ? annualDividendPerShare
           : null,
     purchaseDate: stock.purchaseDate || '',
     alertType:

@@ -44,6 +44,7 @@ test('parseAddArgs supports keyed quantity commands', () => {
     'name=두산퓨얼셀',
     'price=88779',
     'qty=10',
+    'dividend=1200',
     'date=2026-05-11',
     'type=high',
     'rate=10'
@@ -51,6 +52,7 @@ test('parseAddArgs supports keyed quantity commands', () => {
 
   assert.equal(input.symbol, '336260');
   assert.equal(input.quantity, '10');
+  assert.equal(input.annualDividendPerShare, '1200');
 });
 
 test('parseEditArgs supports alert rule and metadata edits', () => {
@@ -94,6 +96,14 @@ test('parseEditArgs supports alert rule and metadata edits', () => {
     label: '보유 수량',
     patch: {
       quantity: '10'
+    }
+  });
+
+  assert.deepEqual(parseEditArgs(['336260', 'dividend', '1200']), {
+    query: '336260',
+    label: '주당 연 배당금',
+    patch: {
+      annualDividendPerShare: '1200'
     }
   });
 });

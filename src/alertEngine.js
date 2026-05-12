@@ -157,6 +157,7 @@ export function buildRegistrationPreview(input, quote, historicalHigh = null) {
 
   const purchasePrice = Number(input.purchasePrice);
   const quantity = Number(input.quantity);
+  const annualDividendPerShare = Number(input.annualDividendPerShare);
 
   if (
     (alertType === ALERT_TYPES.HIGH_DRAWDOWN || alertType === ALERT_TYPES.PURCHASE_LOSS) &&
@@ -190,6 +191,18 @@ export function buildRegistrationPreview(input, quote, historicalHigh = null) {
     investmentAmount !== null && marketValue !== null ? marketValue - investmentAmount : null;
   const unrealizedProfitPercent =
     unrealizedProfit !== null && investmentAmount > 0 ? (unrealizedProfit / investmentAmount) * 100 : null;
+  const normalizedAnnualDividendPerShare =
+    Number.isFinite(annualDividendPerShare) && annualDividendPerShare > 0
+      ? annualDividendPerShare
+      : null;
+  const expectedAnnualDividend =
+    normalizedQuantity && normalizedAnnualDividendPerShare
+      ? normalizedQuantity * normalizedAnnualDividendPerShare
+      : null;
+  const dividendYieldPercent =
+    expectedAnnualDividend !== null && investmentAmount > 0
+      ? (expectedAnnualDividend / investmentAmount) * 100
+      : null;
 
   return {
     quote,
@@ -202,6 +215,9 @@ export function buildRegistrationPreview(input, quote, historicalHigh = null) {
       marketValue,
       unrealizedProfit,
       unrealizedProfitPercent,
+      annualDividendPerShare: normalizedAnnualDividendPerShare,
+      expectedAnnualDividend,
+      dividendYieldPercent,
       purchaseDate: input.purchaseDate,
       highPrice: baseline?.highPrice ?? null,
       highPriceAt: baseline?.highPriceAt ?? null,

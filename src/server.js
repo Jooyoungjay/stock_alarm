@@ -344,6 +344,7 @@ async function handleApi(request, response, url) {
         {
           purchasePrice: url.searchParams.get('purchasePrice'),
           quantity: url.searchParams.get('quantity'),
+          annualDividendPerShare: url.searchParams.get('annualDividendPerShare'),
           purchaseDate,
           alertType: url.searchParams.get('alertType'),
           thresholdPercent: url.searchParams.get('thresholdPercent'),

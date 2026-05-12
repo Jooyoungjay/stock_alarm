@@ -74,17 +74,33 @@ test('JsonStore scopes stocks and alerts by anonymous device', async () => {
 
 test('JsonStore stores and updates optional stock quantity', async () => {
   const store = await createStore();
-  const stock = await store.addStock(stockInput({ quantity: 12.5 }));
+  const stock = await store.addStock(
+    stockInput({
+      quantity: 12.5,
+      annualDividendPerShare: 1200
+    })
+  );
 
   assert.equal(stock.quantity, 12.5);
+  assert.equal(stock.annualDividendPerShare, 1200);
   assert.equal((await store.listStocks())[0].quantity, 12.5);
+  assert.equal((await store.listStocks())[0].annualDividendPerShare, 1200);
 
-  const updated = await store.updateStock(stock.id, { quantity: '' });
+  const updated = await store.updateStock(stock.id, {
+    quantity: '',
+    annualDividendPerShare: ''
+  });
   assert.equal(updated.quantity, null);
+  assert.equal(updated.annualDividendPerShare, null);
 
   await assert.rejects(
     () => store.updateStock(stock.id, { quantity: 0 }),
     /보유 수량/
+  );
+
+  await assert.rejects(
+    () => store.updateStock(stock.id, { annualDividendPerShare: 0 }),
+    /배당금/
   );
 });
 

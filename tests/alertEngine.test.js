@@ -230,6 +230,7 @@ test('registration preview calculates threshold and drawdown before saving', () 
     {
       purchasePrice: 90,
       quantity: 10,
+      annualDividendPerShare: 2,
       purchaseDate: '2026-05-01',
       thresholdPercent: 5
     },
@@ -260,6 +261,9 @@ test('registration preview calculates threshold and drawdown before saving', () 
   assert.equal(preview.position.marketValue, 1140);
   assert.equal(preview.position.unrealizedProfit, 240);
   assert.ok(Math.abs(preview.position.unrealizedProfitPercent - 26.6666666667) < 0.000001);
+  assert.equal(preview.position.annualDividendPerShare, 2);
+  assert.equal(preview.position.expectedAnnualDividend, 20);
+  assert.ok(Math.abs(preview.position.dividendYieldPercent - 2.2222222222) < 0.000001);
 });
 
 test('registration preview uses purchase price when it is the highest baseline', () => {

@@ -287,6 +287,9 @@ function normalizeStockPayload(payload) {
   normalized.alertType = normalized.alertType || 'high_drawdown';
   normalized.purchasePrice = normalized.purchasePrice ? Number(normalized.purchasePrice) : null;
   normalized.quantity = normalized.quantity ? Number(normalized.quantity) : null;
+  normalized.annualDividendPerShare = normalized.annualDividendPerShare
+    ? Number(normalized.annualDividendPerShare)
+    : null;
   normalized.targetPrice =
     normalized.alertType === 'target_price' && normalized.targetPrice
       ? Number(normalized.targetPrice)
@@ -358,7 +361,12 @@ function updateRegistrationStep(step) {
 function validateRegistrationStep(step) {
   const controlsByStep = {
     1: [elements.form.elements.symbol],
-    2: [elements.form.elements.purchasePrice, elements.form.elements.quantity, elements.form.elements.purchaseDate],
+    2: [
+      elements.form.elements.purchasePrice,
+      elements.form.elements.quantity,
+      elements.form.elements.annualDividendPerShare,
+      elements.form.elements.purchaseDate
+    ],
     3: [
       elements.form.elements.alertType,
       elements.form.elements.targetPrice,
@@ -427,6 +435,7 @@ async function previewQuote(button) {
       symbol,
       purchasePrice: elements.form.elements.purchasePrice.value,
       quantity: elements.form.elements.quantity.value,
+      annualDividendPerShare: elements.form.elements.annualDividendPerShare.value,
       purchaseDate: elements.form.elements.purchaseDate.value,
       alertType: elements.form.elements.alertType.value,
       thresholdPercent: elements.form.elements.thresholdPercent.value,
@@ -587,6 +596,8 @@ function renderQuotePreview(preview) {
       }
       ${position?.investmentAmount ? renderPreviewItem('총 매수금액', formatMoney(position.investmentAmount, position.currency)) : ''}
       ${position?.marketValue ? renderPreviewItem('현재 평가금액', formatMoney(position.marketValue, position.currency)) : ''}
+      ${position?.annualDividendPerShare ? renderPreviewItem('주당 연 배당금', formatMoney(position.annualDividendPerShare, position.currency)) : ''}
+      ${position?.expectedAnnualDividend ? renderPreviewItem('예상 연 배당금', formatMoney(position.expectedAnnualDividend, position.currency), formatPercent(position.dividendYieldPercent)) : ''}
       ${
         position?.unrealizedProfit !== null && position?.unrealizedProfit !== undefined
           ? renderPreviewItem(
@@ -619,6 +630,7 @@ function renderRegistrationSummary() {
   const displayName = form.elements.displayName.value.trim();
   const purchasePrice = parseFiniteNumber(form.elements.purchasePrice.value);
   const quantity = parseFiniteNumber(form.elements.quantity.value);
+  const annualDividendPerShare = parseFiniteNumber(form.elements.annualDividendPerShare.value);
   const purchaseDate = form.elements.purchaseDate.value || '-';
   const alertType = form.elements.alertType.value;
   const thresholdPercent = parseFiniteNumber(form.elements.thresholdPercent.value);
@@ -631,12 +643,17 @@ function renderRegistrationSummary() {
       : `${alertType === 'purchase_loss' ? '손절률' : '하락률'} ${thresholdPercent ?? '-'}%`;
   const purchaseAmount =
     purchasePrice !== null && quantity !== null ? purchasePrice * quantity : null;
+  const expectedAnnualDividend =
+    quantity !== null && annualDividendPerShare !== null ? quantity * annualDividendPerShare : null;
+  const dividendYield =
+    expectedAnnualDividend !== null && purchaseAmount ? (expectedAnnualDividend / purchaseAmount) * 100 : null;
 
   elements.registrationSummary.innerHTML = `
     <div class="registration-summary-grid">
       ${renderSummaryItem('종목', displayName ? `${displayName} · ${symbol}` : symbol)}
       ${renderSummaryItem('매수가', formatMoney(purchasePrice), purchaseDate)}
       ${renderSummaryItem('보유 수량', quantity ? formatQuantity(quantity) : '-', purchaseAmount ? `총 ${formatMoney(purchaseAmount)}` : '선택 입력')}
+      ${renderSummaryItem('배당', annualDividendPerShare ? `주당 ${formatMoney(annualDividendPerShare)}` : '-', expectedAnnualDividend ? `연 ${formatMoney(expectedAnnualDividend)} · ${formatPercent(dividendYield)}` : '선택 입력')}
       ${renderSummaryItem('알림 기준', getAlertTypeLabel({ alertType }), alertDetail)}
       ${renderSummaryItem('반복 알림', cooldown ? `${cooldown}분마다` : '-', notes || '메모 없음')}
     </div>
@@ -948,6 +965,10 @@ function renderPortfolioSummary(items) {
           <strong class="${profitClass}">${escapeHtml(formatSignedMoney(group.profit, group.currency))}</strong>
           <span>수익률</span>
           <strong class="${profitClass}">${escapeHtml(formatSignedPercent(group.profitPercent))}</strong>
+          <span>예상 연 배당금</span>
+          <strong>${escapeHtml(group.expectedAnnualDividend === null ? '-' : formatMoney(group.expectedAnnualDividend, group.currency))}</strong>
+          <span>배당수익률</span>
+          <strong>${escapeHtml(formatPercent(group.dividendYieldPercent))}</strong>
         </div>
         ${group.pendingCount ? `<div class="portfolio-summary-note">${group.pendingCount}개 종목은 현재가 확인 후 평가금액에 반영됩니다.</div>` : ''}
       `;
@@ -979,7 +1000,10 @@ function buildPortfolioSummaryGroups(stocks) {
         valuedInvestmentAmount: 0,
         marketValue: 0,
         profit: 0,
-        profitPercent: null
+        profitPercent: null,
+        dividendInvestmentAmount: 0,
+        expectedAnnualDividend: 0,
+        dividendYieldPercent: null
       };
 
     group.count += 1;
@@ -993,6 +1017,11 @@ function buildPortfolioSummaryGroups(stocks) {
       group.profit += metrics.profit;
     }
 
+    if (metrics.expectedAnnualDividend !== null) {
+      group.expectedAnnualDividend += metrics.expectedAnnualDividend;
+      group.dividendInvestmentAmount += metrics.investmentAmount;
+    }
+
     groups.set(key, group);
   }
 
@@ -1002,7 +1031,13 @@ function buildPortfolioSummaryGroups(stocks) {
       marketValue: group.valuedInvestmentAmount > 0 ? group.marketValue : null,
       profit: group.valuedInvestmentAmount > 0 ? group.profit : null,
       profitPercent:
-        group.valuedInvestmentAmount > 0 ? (group.profit / group.valuedInvestmentAmount) * 100 : null
+        group.valuedInvestmentAmount > 0 ? (group.profit / group.valuedInvestmentAmount) * 100 : null,
+      expectedAnnualDividend:
+        group.dividendInvestmentAmount > 0 ? group.expectedAnnualDividend : null,
+      dividendYieldPercent:
+        group.dividendInvestmentAmount > 0
+          ? (group.expectedAnnualDividend / group.dividendInvestmentAmount) * 100
+          : null
     }))
     .sort((left, right) => left.currencyLabel.localeCompare(right.currencyLabel, 'ko-KR'));
 }
@@ -1110,6 +1145,10 @@ function editStockForm(stock) {
     <label>
       <span>보유 수량</span>
       <input name="quantity" type="text" inputmode="decimal" pattern="[0-9]*[.]?[0-9]*" value="${escapeHtml(stock.quantity || '')}" />
+    </label>
+    <label>
+      <span>주당 연 배당금</span>
+      <input name="annualDividendPerShare" type="text" inputmode="decimal" pattern="[0-9]*[.]?[0-9]*" value="${escapeHtml(stock.annualDividendPerShare || '')}" />
     </label>
     <label>
       <span>구매일</span>
@@ -1534,6 +1573,8 @@ function renderHoldingSummary(stock) {
       ${renderHoldingMetric('현재 평가금액', metrics.marketValue === null ? '-' : formatMoney(metrics.marketValue, stock.currency))}
       ${renderHoldingMetric('평가손익', formatSignedMoney(metrics.profit, stock.currency), profitClass)}
       ${renderHoldingMetric('수익률', formatSignedPercent(metrics.profitPercent), profitClass)}
+      ${renderHoldingMetric('예상 연 배당금', metrics.expectedAnnualDividend === null ? '-' : formatMoney(metrics.expectedAnnualDividend, stock.currency))}
+      ${renderHoldingMetric('배당수익률', formatPercent(metrics.dividendYieldPercent))}
     </div>
   `;
 }
@@ -1564,6 +1605,10 @@ function renderPositionSummary(stock) {
 
   if (stock.quantity) {
     parts.push(`수량 ${formatQuantity(stock.quantity)}`);
+  }
+
+  if (stock.annualDividendPerShare) {
+    parts.push(`주당 배당 ${formatMoney(stock.annualDividendPerShare, stock.currency)}`);
   }
 
   parts.push(getAlertTypeLabel(stock));
@@ -1712,6 +1757,7 @@ function calculateHoldingMetrics(stock) {
   const quantity = parseFiniteNumber(stock.quantity);
   const purchasePrice = parseFiniteNumber(stock.purchasePrice);
   const lastPrice = parseFiniteNumber(stock.lastPrice);
+  const annualDividendPerShare = parseFiniteNumber(stock.annualDividendPerShare);
   const hasQuantity = quantity !== null && quantity > 0;
   const investmentAmount =
     hasQuantity && purchasePrice !== null && purchasePrice > 0 ? quantity * purchasePrice : null;
@@ -1720,16 +1766,27 @@ function calculateHoldingMetrics(stock) {
     investmentAmount !== null && marketValue !== null ? marketValue - investmentAmount : null;
   const profitPercent =
     profit !== null && investmentAmount > 0 ? (profit / investmentAmount) * 100 : null;
+  const expectedAnnualDividend =
+    hasQuantity && annualDividendPerShare !== null && annualDividendPerShare > 0
+      ? quantity * annualDividendPerShare
+      : null;
+  const dividendYieldPercent =
+    expectedAnnualDividend !== null && investmentAmount > 0
+      ? (expectedAnnualDividend / investmentAmount) * 100
+      : null;
 
   return {
     hasQuantity,
     quantity,
     purchasePrice,
     lastPrice,
+    annualDividendPerShare,
     investmentAmount,
     marketValue,
     profit,
-    profitPercent
+    profitPercent,
+    expectedAnnualDividend,
+    dividendYieldPercent
   };
 }
 
@@ -1839,6 +1896,16 @@ function formatSignedPercent(value) {
 
   const prefix = number > 0 ? '+' : '';
   return `${prefix}${number.toFixed(2)}%`;
+}
+
+function formatPercent(value) {
+  const number = parseFiniteNumber(value);
+
+  if (number === null) {
+    return '-';
+  }
+
+  return `${number.toFixed(2)}%`;
 }
 
 function getProfitClass(value) {

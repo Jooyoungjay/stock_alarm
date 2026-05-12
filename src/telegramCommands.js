@@ -33,6 +33,7 @@ const helpMessage = [
   '/edit 336260 target 93000',
   '/edit 336260 cooldown 60',
   '/edit 336260 qty 10',
+  '/edit 336260 dividend 1200',
   '/edit 336260 name 두산퓨얼셀',
   '',
   '기준값: high=최고가 대비 하락률, loss=매수가 대비 손절률, target=직접 기준가'
@@ -254,6 +255,7 @@ async function addStockFromCommand(store, config, command, options) {
       ? `직접 기준가: ${formatNumber(stock.targetPrice)}`
       : `비율: ${stock.thresholdPercent}%`,
     stock.quantity ? `보유 수량: ${formatNumber(stock.quantity)}` : '',
+    stock.annualDividendPerShare ? `주당 연 배당금: ${formatNumber(stock.annualDividendPerShare)}` : '',
     stock.highPrice ? `구매일 이후 최고가: ${formatNumber(stock.highPrice)}${stock.currency ? ` ${stock.currency}` : ''}` : ''
   ]
     .filter(Boolean)
@@ -281,6 +283,7 @@ async function editStockFromCommand(store, config, command, options) {
     `반복 알림: ${stock.alertCooldownMinutes}분`,
     stock.purchasePrice ? `매수가: ${formatNumber(stock.purchasePrice)}` : '',
     stock.quantity ? `보유 수량: ${formatNumber(stock.quantity)}` : '',
+    stock.annualDividendPerShare ? `주당 연 배당금: ${formatNumber(stock.annualDividendPerShare)}` : '',
     stock.purchaseDate ? `매수일: ${stock.purchaseDate}` : '',
     stock.highPrice ? `구매일 이후 최고가: ${formatNumber(stock.highPrice)}${stock.currency ? ` ${stock.currency}` : ''}` : ''
   ]
@@ -301,6 +304,11 @@ export function parseAddArgs(args) {
       displayName: keyed.name || keyed.displayName || '',
       purchasePrice: keyed.price || keyed.purchasePrice,
       quantity: keyed.qty || keyed.quantity || keyed.shares,
+      annualDividendPerShare:
+        keyed.dividend ||
+        keyed.dividendPerShare ||
+        keyed.annualDividendPerShare ||
+        keyed.annualDividend,
       purchaseDate: keyed.date || keyed.purchaseDate,
       alertType: keyed.type || keyed.alertType || keyed.basis,
       thresholdPercent: keyed.rate || keyed.threshold || keyed.thresholdPercent,
@@ -424,6 +432,15 @@ export function parseEditArgs(args) {
           quantity: firstValue
         }
       };
+    case 'dividend':
+      requireValue(value, '주당 연 배당금을 입력하세요.');
+      return {
+        query,
+        label: '주당 연 배당금',
+        patch: {
+          annualDividendPerShare: firstValue
+        }
+      };
     case 'date':
       requireValue(value, '매수일을 YYYY-MM-DD 형식으로 입력하세요.');
       return {
@@ -444,7 +461,7 @@ export function parseEditArgs(args) {
         }
       };
     default:
-      throw new Error('수정 항목은 high, loss, target, cooldown, name, price, qty, date, notes 중 하나로 입력하세요.');
+      throw new Error('수정 항목은 high, loss, target, cooldown, name, price, qty, dividend, date, notes 중 하나로 입력하세요.');
   }
 }
 
@@ -456,6 +473,7 @@ function normalizeAddInput(input) {
     displayName: input.displayName || '',
     purchasePrice: input.purchasePrice,
     quantity: input.quantity,
+    annualDividendPerShare: input.annualDividendPerShare,
     purchaseDate: input.purchaseDate,
     alertType,
     thresholdPercent:
@@ -551,6 +569,22 @@ function normalizeEditField(value) {
     return 'quantity';
   }
 
+  if (
+    [
+      'dividend',
+      'div',
+      'annualdividend',
+      'annual_dividend',
+      'dividendpershare',
+      'dividend_per_share',
+      '배당',
+      '배당금',
+      '주당배당금'
+    ].includes(token)
+  ) {
+    return 'dividend';
+  }
+
   if (['date', 'purchasedate', 'purchase_date', 'buydate', '매수일', '구매일'].includes(token)) {
     return 'date';
   }
@@ -644,8 +678,10 @@ function formatStockLine(stock) {
     stock.purchaseDate ? `매수일: ${stock.purchaseDate}` : '',
     stock.purchasePrice ? `매수가: ${formatNumber(stock.purchasePrice)}` : '',
     stock.quantity ? `보유 수량: ${formatNumber(stock.quantity)}` : '',
+    stock.annualDividendPerShare ? `주당 연 배당금: ${formatNumber(stock.annualDividendPerShare)}` : '',
     Number.isFinite(currentPrice) ? `현재가: ${formatNumber(currentPrice)}${stock.currency ? ` ${stock.currency}` : ''}` : '',
     formatHoldingLine(stock),
+    formatDividendLine(stock),
     formatAlertStateLine(stock),
     formatThresholdLine(stock)
   ];
@@ -676,6 +712,31 @@ function formatHoldingLine(stock) {
   const currency = stock.currency ? ` ${stock.currency}` : '';
 
   return `평가손익: ${formatSignedNumber(profit)}${currency} (${formatSignedPercent(profitPercent)})`;
+}
+
+function formatDividendLine(stock) {
+  const quantity = Number(stock.quantity);
+  const purchasePrice = Number(stock.purchasePrice);
+  const annualDividendPerShare = Number(stock.annualDividendPerShare);
+
+  if (
+    !Number.isFinite(quantity) ||
+    quantity <= 0 ||
+    !Number.isFinite(purchasePrice) ||
+    purchasePrice <= 0 ||
+    !Number.isFinite(annualDividendPerShare) ||
+    annualDividendPerShare <= 0
+  ) {
+    return '';
+  }
+
+  const investmentAmount = quantity * purchasePrice;
+  const expectedAnnualDividend = quantity * annualDividendPerShare;
+  const dividendYieldPercent =
+    investmentAmount > 0 ? (expectedAnnualDividend / investmentAmount) * 100 : 0;
+  const currency = stock.currency ? ` ${stock.currency}` : '';
+
+  return `예상 연 배당금: ${formatNumber(expectedAnnualDividend)}${currency} (${formatPercent(dividendYieldPercent)})`;
 }
 
 function formatAlertStateLine(stock) {
@@ -743,6 +804,16 @@ function formatSignedPercent(value) {
   }
 
   return `${number > 0 ? '+' : ''}${number.toFixed(2)}%`;
+}
+
+function formatPercent(value) {
+  const number = Number(value);
+
+  if (!Number.isFinite(number)) {
+    return '-';
+  }
+
+  return `${number.toFixed(2)}%`;
 }
 
 function formatDateOnly(value) {
