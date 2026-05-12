@@ -34,6 +34,8 @@ const helpMessage = [
   '/edit 336260 cooldown 60',
   '/edit 336260 qty 10',
   '/edit 336260 dividend 1200',
+  '/edit 336260 dividendfreq quarterly',
+  '/edit 336260 dividendmonths 3,6,9,12',
   '/edit 336260 name 두산퓨얼셀',
   '',
   '기준값: high=최고가 대비 하락률, loss=매수가 대비 손절률, target=직접 기준가'
@@ -256,6 +258,7 @@ async function addStockFromCommand(store, config, command, options) {
       : `비율: ${stock.thresholdPercent}%`,
     stock.quantity ? `보유 수량: ${formatNumber(stock.quantity)}` : '',
     stock.annualDividendPerShare ? `주당 연 배당금: ${formatNumber(stock.annualDividendPerShare)}` : '',
+    formatDividendScheduleLine(stock),
     stock.highPrice ? `구매일 이후 최고가: ${formatNumber(stock.highPrice)}${stock.currency ? ` ${stock.currency}` : ''}` : ''
   ]
     .filter(Boolean)
@@ -284,6 +287,7 @@ async function editStockFromCommand(store, config, command, options) {
     stock.purchasePrice ? `매수가: ${formatNumber(stock.purchasePrice)}` : '',
     stock.quantity ? `보유 수량: ${formatNumber(stock.quantity)}` : '',
     stock.annualDividendPerShare ? `주당 연 배당금: ${formatNumber(stock.annualDividendPerShare)}` : '',
+    formatDividendScheduleLine(stock),
     stock.purchaseDate ? `매수일: ${stock.purchaseDate}` : '',
     stock.highPrice ? `구매일 이후 최고가: ${formatNumber(stock.highPrice)}${stock.currency ? ` ${stock.currency}` : ''}` : ''
   ]
@@ -309,6 +313,12 @@ export function parseAddArgs(args) {
         keyed.dividendPerShare ||
         keyed.annualDividendPerShare ||
         keyed.annualDividend,
+      dividendFrequency:
+        keyed.dividendFrequency ||
+        keyed.frequency ||
+        keyed.dividendFreq ||
+        keyed.dividendCycle,
+      dividendMonths: keyed.dividendMonths || keyed.months || keyed.payMonths || keyed.payoutMonths,
       purchaseDate: keyed.date || keyed.purchaseDate,
       alertType: keyed.type || keyed.alertType || keyed.basis,
       thresholdPercent: keyed.rate || keyed.threshold || keyed.thresholdPercent,
@@ -441,6 +451,24 @@ export function parseEditArgs(args) {
           annualDividendPerShare: firstValue
         }
       };
+    case 'dividendFrequency':
+      requireValue(value, '배당 주기를 입력하세요.');
+      return {
+        query,
+        label: '배당 주기',
+        patch: {
+          dividendFrequency: firstValue
+        }
+      };
+    case 'dividendMonths':
+      requireValue(value, '배당 지급월을 입력하세요.');
+      return {
+        query,
+        label: '배당 지급월',
+        patch: {
+          dividendMonths: value
+        }
+      };
     case 'date':
       requireValue(value, '매수일을 YYYY-MM-DD 형식으로 입력하세요.');
       return {
@@ -461,7 +489,7 @@ export function parseEditArgs(args) {
         }
       };
     default:
-      throw new Error('수정 항목은 high, loss, target, cooldown, name, price, qty, dividend, date, notes 중 하나로 입력하세요.');
+      throw new Error('수정 항목은 high, loss, target, cooldown, name, price, qty, dividend, dividendfreq, dividendmonths, date, notes 중 하나로 입력하세요.');
   }
 }
 
@@ -474,6 +502,8 @@ function normalizeAddInput(input) {
     purchasePrice: input.purchasePrice,
     quantity: input.quantity,
     annualDividendPerShare: input.annualDividendPerShare,
+    dividendFrequency: input.dividendFrequency,
+    dividendMonths: input.dividendMonths,
     purchaseDate: input.purchaseDate,
     alertType,
     thresholdPercent:
@@ -585,6 +615,34 @@ function normalizeEditField(value) {
     return 'dividend';
   }
 
+  if (
+    [
+      'dividendfreq',
+      'dividendfrequency',
+      'dividend_frequency',
+      'frequency',
+      'cycle',
+      '배당주기'
+    ].includes(token)
+  ) {
+    return 'dividendFrequency';
+  }
+
+  if (
+    [
+      'dividendmonths',
+      'dividend_months',
+      'months',
+      'paymonths',
+      'payoutmonths',
+      '배당월',
+      '지급월',
+      '배당지급월'
+    ].includes(token)
+  ) {
+    return 'dividendMonths';
+  }
+
   if (['date', 'purchasedate', 'purchase_date', 'buydate', '매수일', '구매일'].includes(token)) {
     return 'date';
   }
@@ -680,6 +738,7 @@ function formatStockLine(stock) {
     stock.quantity ? `보유 수량: ${formatNumber(stock.quantity)}` : '',
     stock.annualDividendPerShare ? `주당 연 배당금: ${formatNumber(stock.annualDividendPerShare)}` : '',
     Number.isFinite(currentPrice) ? `현재가: ${formatNumber(currentPrice)}${stock.currency ? ` ${stock.currency}` : ''}` : '',
+    formatDividendScheduleLine(stock),
     formatHoldingLine(stock),
     formatDividendLine(stock),
     formatAlertStateLine(stock),
@@ -739,6 +798,16 @@ function formatDividendLine(stock) {
   return `예상 연 배당금: ${formatNumber(expectedAnnualDividend)}${currency} (${formatPercent(dividendYieldPercent)})`;
 }
 
+function formatDividendScheduleLine(stock) {
+  const schedule = getDividendSchedule(stock);
+
+  if (!schedule.frequency && !schedule.months.length) {
+    return '';
+  }
+
+  return `배당 일정: ${formatDividendFrequency(schedule.frequency)} · ${formatDividendMonths(schedule.months)}`;
+}
+
 function formatAlertStateLine(stock) {
   if (stock.alertState === 'triggered') {
     const count = Number(stock.alertRepeatCount || 0);
@@ -772,6 +841,84 @@ function formatAlertType(alertType) {
   };
 
   return labels[alertType] || labels[ALERT_TYPES.HIGH_DRAWDOWN];
+}
+
+function getDividendSchedule(stock) {
+  const frequency = normalizeDividendFrequency(stock.dividendFrequency);
+  const explicitMonths = parseDividendMonths(stock.dividendMonths);
+  const months = explicitMonths.length ? explicitMonths : getDefaultDividendMonths(frequency);
+
+  return {
+    frequency,
+    months
+  };
+}
+
+function normalizeDividendFrequency(value) {
+  const frequency = String(value || '').trim().toLowerCase();
+  const allowed = ['', 'monthly', 'quarterly', 'semiannual', 'annual', 'custom'];
+
+  return allowed.includes(frequency) ? frequency : '';
+}
+
+function getDefaultDividendMonths(frequency) {
+  switch (normalizeDividendFrequency(frequency)) {
+    case 'monthly':
+      return [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12];
+    case 'quarterly':
+      return [3, 6, 9, 12];
+    case 'semiannual':
+      return [6, 12];
+    case 'annual':
+      return [12];
+    default:
+      return [];
+  }
+}
+
+function parseDividendMonths(value) {
+  if (value === undefined || value === null || value === '') {
+    return [];
+  }
+
+  const rawItems = Array.isArray(value)
+    ? value
+    : String(value)
+        .split(/[\s,]+/)
+        .map((item) => item.trim())
+        .filter(Boolean);
+  const months = rawItems
+    .map((item) => Number(item))
+    .filter((month) => Number.isInteger(month) && month >= 1 && month <= 12);
+
+  return [...new Set(months)].sort((left, right) => left - right);
+}
+
+function formatDividendFrequency(value) {
+  const labels = {
+    monthly: '월배당',
+    quarterly: '분기배당',
+    semiannual: '반기배당',
+    annual: '연배당',
+    custom: '직접 입력',
+    '': '-'
+  };
+
+  return labels[normalizeDividendFrequency(value)] || '-';
+}
+
+function formatDividendMonths(value) {
+  const months = parseDividendMonths(value);
+
+  if (!months.length) {
+    return '-';
+  }
+
+  if (months.length === 12) {
+    return '매월';
+  }
+
+  return months.map((month) => `${month}월`).join(', ');
 }
 
 function formatNumber(value) {

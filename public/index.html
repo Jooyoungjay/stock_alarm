@@ -130,6 +130,29 @@
               </label>
 
               <label class="form-group">
+                <span class="form-label">배당 주기</span>
+                <select class="form-input" name="dividendFrequency">
+                  <option value="" selected>미입력</option>
+                  <option value="monthly">월배당</option>
+                  <option value="quarterly">분기배당</option>
+                  <option value="semiannual">반기배당</option>
+                  <option value="annual">연배당</option>
+                  <option value="custom">직접 입력</option>
+                </select>
+              </label>
+
+              <label class="form-group">
+                <span class="form-label">배당 지급월</span>
+                <input
+                  class="form-input"
+                  name="dividendMonths"
+                  type="text"
+                  inputmode="numeric"
+                  placeholder="예: 3,6,9,12"
+                />
+              </label>
+
+              <label class="form-group">
                 <span class="form-label">구매일</span>
                 <input class="form-input" name="purchaseDate" type="date" required />
               </label>

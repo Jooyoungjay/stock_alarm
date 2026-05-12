@@ -45,6 +45,8 @@ test('parseAddArgs supports keyed quantity commands', () => {
     'price=88779',
     'qty=10',
     'dividend=1200',
+    'frequency=quarterly',
+    'months=3,6,9,12',
     'date=2026-05-11',
     'type=high',
     'rate=10'
@@ -53,6 +55,8 @@ test('parseAddArgs supports keyed quantity commands', () => {
   assert.equal(input.symbol, '336260');
   assert.equal(input.quantity, '10');
   assert.equal(input.annualDividendPerShare, '1200');
+  assert.equal(input.dividendFrequency, 'quarterly');
+  assert.equal(input.dividendMonths, '3,6,9,12');
 });
 
 test('parseEditArgs supports alert rule and metadata edits', () => {
@@ -104,6 +108,22 @@ test('parseEditArgs supports alert rule and metadata edits', () => {
     label: '주당 연 배당금',
     patch: {
       annualDividendPerShare: '1200'
+    }
+  });
+
+  assert.deepEqual(parseEditArgs(['336260', 'dividendfreq', 'quarterly']), {
+    query: '336260',
+    label: '배당 주기',
+    patch: {
+      dividendFrequency: 'quarterly'
+    }
+  });
+
+  assert.deepEqual(parseEditArgs(['336260', 'dividendmonths', '3,6,9,12']), {
+    query: '336260',
+    label: '배당 지급월',
+    patch: {
+      dividendMonths: '3,6,9,12'
     }
   });
 });

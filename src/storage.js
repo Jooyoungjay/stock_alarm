@@ -80,6 +80,8 @@ function normalizeStock(input, defaults) {
       input.annualDividendPerShare,
       '주당 연 배당금은 0보다 큰 숫자여야 합니다.'
     ),
+    dividendFrequency: normalizeDividendFrequency(input.dividendFrequency),
+    dividendMonths: normalizeDividendMonths(input.dividendMonths),
     purchaseDate: normalizeOptionalDate(input.purchaseDate),
     alertType,
     thresholdPercent,
@@ -169,6 +171,14 @@ function applyStockPatch(stock, patch) {
       patch.annualDividendPerShare,
       '주당 연 배당금은 0보다 큰 숫자여야 합니다.'
     );
+  }
+
+  if (patch.dividendFrequency !== undefined) {
+    next.dividendFrequency = normalizeDividendFrequency(patch.dividendFrequency);
+  }
+
+  if (patch.dividendMonths !== undefined) {
+    next.dividendMonths = normalizeDividendMonths(patch.dividendMonths);
   }
 
   if (patch.purchaseDate !== undefined) {
@@ -261,6 +271,8 @@ function normalizeStoredStock(stock) {
         : Number.isFinite(annualDividendPerShare) && annualDividendPerShare > 0
           ? annualDividendPerShare
           : null,
+    dividendFrequency: normalizeStoredDividendFrequency(stock.dividendFrequency),
+    dividendMonths: normalizeStoredDividendMonths(stock.dividendMonths),
     purchaseDate: stock.purchaseDate || '',
     alertType:
       alertType === ALERT_TYPES.TARGET_PRICE && normalizedTargetPrice === null
@@ -431,6 +443,58 @@ function normalizeOptionalDate(value) {
   }
 
   return raw;
+}
+
+function normalizeDividendFrequency(value) {
+  const frequency = String(value || '').trim().toLowerCase();
+  const allowed = ['', 'monthly', 'quarterly', 'semiannual', 'annual', 'custom'];
+
+  if (allowed.includes(frequency)) {
+    return frequency;
+  }
+
+  throw new Error('배당 주기는 monthly, quarterly, semiannual, annual, custom 중 하나여야 합니다.');
+}
+
+function normalizeStoredDividendFrequency(value) {
+  try {
+    return normalizeDividendFrequency(value);
+  } catch {
+    return '';
+  }
+}
+
+function normalizeDividendMonths(value) {
+  if (value === undefined || value === null || value === '') {
+    return [];
+  }
+
+  const rawItems = Array.isArray(value)
+    ? value
+    : String(value)
+        .split(/[\s,]+/)
+        .map((item) => item.trim())
+        .filter(Boolean);
+
+  if (!rawItems.length) {
+    return [];
+  }
+
+  const months = rawItems.map((item) => Number(item));
+
+  if (months.some((month) => !Number.isInteger(month) || month < 1 || month > 12)) {
+    throw new Error('배당 지급월은 1부터 12까지의 숫자로 입력해야 합니다.');
+  }
+
+  return [...new Set(months)].sort((left, right) => left - right);
+}
+
+function normalizeStoredDividendMonths(value) {
+  try {
+    return normalizeDividendMonths(value);
+  } catch {
+    return [];
+  }
 }
 
 export class JsonStore {

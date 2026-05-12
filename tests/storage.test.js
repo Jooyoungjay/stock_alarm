@@ -77,21 +77,31 @@ test('JsonStore stores and updates optional stock quantity', async () => {
   const stock = await store.addStock(
     stockInput({
       quantity: 12.5,
-      annualDividendPerShare: 1200
+      annualDividendPerShare: 1200,
+      dividendFrequency: 'quarterly',
+      dividendMonths: '3,6,9,12'
     })
   );
 
   assert.equal(stock.quantity, 12.5);
   assert.equal(stock.annualDividendPerShare, 1200);
+  assert.equal(stock.dividendFrequency, 'quarterly');
+  assert.deepEqual(stock.dividendMonths, [3, 6, 9, 12]);
   assert.equal((await store.listStocks())[0].quantity, 12.5);
   assert.equal((await store.listStocks())[0].annualDividendPerShare, 1200);
+  assert.equal((await store.listStocks())[0].dividendFrequency, 'quarterly');
+  assert.deepEqual((await store.listStocks())[0].dividendMonths, [3, 6, 9, 12]);
 
   const updated = await store.updateStock(stock.id, {
     quantity: '',
-    annualDividendPerShare: ''
+    annualDividendPerShare: '',
+    dividendFrequency: '',
+    dividendMonths: ''
   });
   assert.equal(updated.quantity, null);
   assert.equal(updated.annualDividendPerShare, null);
+  assert.equal(updated.dividendFrequency, '');
+  assert.deepEqual(updated.dividendMonths, []);
 
   await assert.rejects(
     () => store.updateStock(stock.id, { quantity: 0 }),
@@ -101,6 +111,16 @@ test('JsonStore stores and updates optional stock quantity', async () => {
   await assert.rejects(
     () => store.updateStock(stock.id, { annualDividendPerShare: 0 }),
     /배당금/
+  );
+
+  await assert.rejects(
+    () => store.updateStock(stock.id, { dividendFrequency: 'weekly' }),
+    /배당 주기/
+  );
+
+  await assert.rejects(
+    () => store.updateStock(stock.id, { dividendMonths: '0,13' }),
+    /배당 지급월/
   );
 });
 

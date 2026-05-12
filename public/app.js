@@ -290,6 +290,8 @@ function normalizeStockPayload(payload) {
   normalized.annualDividendPerShare = normalized.annualDividendPerShare
     ? Number(normalized.annualDividendPerShare)
     : null;
+  normalized.dividendFrequency = normalized.dividendFrequency || '';
+  normalized.dividendMonths = normalized.dividendMonths || '';
   normalized.targetPrice =
     normalized.alertType === 'target_price' && normalized.targetPrice
       ? Number(normalized.targetPrice)
@@ -365,6 +367,8 @@ function validateRegistrationStep(step) {
       elements.form.elements.purchasePrice,
       elements.form.elements.quantity,
       elements.form.elements.annualDividendPerShare,
+      elements.form.elements.dividendFrequency,
+      elements.form.elements.dividendMonths,
       elements.form.elements.purchaseDate
     ],
     3: [
@@ -436,6 +440,8 @@ async function previewQuote(button) {
       purchasePrice: elements.form.elements.purchasePrice.value,
       quantity: elements.form.elements.quantity.value,
       annualDividendPerShare: elements.form.elements.annualDividendPerShare.value,
+      dividendFrequency: elements.form.elements.dividendFrequency.value,
+      dividendMonths: elements.form.elements.dividendMonths.value,
       purchaseDate: elements.form.elements.purchaseDate.value,
       alertType: elements.form.elements.alertType.value,
       thresholdPercent: elements.form.elements.thresholdPercent.value,
@@ -559,6 +565,12 @@ function renderQuotePreview(preview) {
   const quote = preview.quote || preview;
   const position = preview.position;
   const previewCurrency = position?.currency || quote.currency;
+  const dividendSchedule = position ? getDividendSchedule({
+    quantity: position.quantity,
+    annualDividendPerShare: position.annualDividendPerShare,
+    dividendFrequency: elements.form.elements.dividendFrequency.value,
+    dividendMonths: elements.form.elements.dividendMonths.value
+  }) : null;
   const statusClass = position?.alertNow ? 'down' : 'ok';
   const statusText = position
     ? position.alertNow
@@ -598,6 +610,8 @@ function renderQuotePreview(preview) {
       ${position?.marketValue ? renderPreviewItem('현재 평가금액', formatMoney(position.marketValue, position.currency)) : ''}
       ${position?.annualDividendPerShare ? renderPreviewItem('주당 연 배당금', formatMoney(position.annualDividendPerShare, position.currency)) : ''}
       ${position?.expectedAnnualDividend ? renderPreviewItem('예상 연 배당금', formatMoney(position.expectedAnnualDividend, position.currency), formatPercent(position.dividendYieldPercent)) : ''}
+      ${dividendSchedule?.frequency ? renderPreviewItem('배당 주기', getDividendFrequencyLabel(dividendSchedule.frequency), formatDividendMonths(dividendSchedule.months)) : ''}
+      ${dividendSchedule?.paymentAmount ? renderPreviewItem('1회 예상 배당금', formatMoney(dividendSchedule.paymentAmount, position.currency), `${dividendSchedule.paymentCount}회 기준`) : ''}
       ${
         position?.unrealizedProfit !== null && position?.unrealizedProfit !== undefined
           ? renderPreviewItem(
@@ -631,6 +645,8 @@ function renderRegistrationSummary() {
   const purchasePrice = parseFiniteNumber(form.elements.purchasePrice.value);
   const quantity = parseFiniteNumber(form.elements.quantity.value);
   const annualDividendPerShare = parseFiniteNumber(form.elements.annualDividendPerShare.value);
+  const dividendFrequency = form.elements.dividendFrequency.value;
+  const dividendMonths = parseDividendMonths(form.elements.dividendMonths.value);
   const purchaseDate = form.elements.purchaseDate.value || '-';
   const alertType = form.elements.alertType.value;
   const thresholdPercent = parseFiniteNumber(form.elements.thresholdPercent.value);
@@ -647,6 +663,18 @@ function renderRegistrationSummary() {
     quantity !== null && annualDividendPerShare !== null ? quantity * annualDividendPerShare : null;
   const dividendYield =
     expectedAnnualDividend !== null && purchaseAmount ? (expectedAnnualDividend / purchaseAmount) * 100 : null;
+  const dividendSchedule = getDividendSchedule({
+    quantity,
+    annualDividendPerShare,
+    dividendFrequency,
+    dividendMonths
+  });
+  const dividendScheduleDetail =
+    dividendSchedule.paymentAmount !== null
+      ? `1회 ${formatMoney(dividendSchedule.paymentAmount)} · ${formatDividendMonths(dividendSchedule.months)}`
+      : dividendSchedule.frequency
+        ? formatDividendMonths(dividendSchedule.months)
+        : '선택 입력';
 
   elements.registrationSummary.innerHTML = `
     <div class="registration-summary-grid">
@@ -654,6 +682,7 @@ function renderRegistrationSummary() {
       ${renderSummaryItem('매수가', formatMoney(purchasePrice), purchaseDate)}
       ${renderSummaryItem('보유 수량', quantity ? formatQuantity(quantity) : '-', purchaseAmount ? `총 ${formatMoney(purchaseAmount)}` : '선택 입력')}
       ${renderSummaryItem('배당', annualDividendPerShare ? `주당 ${formatMoney(annualDividendPerShare)}` : '-', expectedAnnualDividend ? `연 ${formatMoney(expectedAnnualDividend)} · ${formatPercent(dividendYield)}` : '선택 입력')}
+      ${renderSummaryItem('배당 일정', getDividendFrequencyLabel(dividendFrequency), dividendScheduleDetail)}
       ${renderSummaryItem('알림 기준', getAlertTypeLabel({ alertType }), alertDetail)}
       ${renderSummaryItem('반복 알림', cooldown ? `${cooldown}분마다` : '-', notes || '메모 없음')}
     </div>
@@ -970,6 +999,7 @@ function renderPortfolioSummary(items) {
           <span>배당수익률</span>
           <strong>${escapeHtml(formatPercent(group.dividendYieldPercent))}</strong>
         </div>
+        ${renderDividendCashFlow(group)}
         ${group.pendingCount ? `<div class="portfolio-summary-note">${group.pendingCount}개 종목은 현재가 확인 후 평가금액에 반영됩니다.</div>` : ''}
       `;
       return item;
@@ -1003,7 +1033,8 @@ function buildPortfolioSummaryGroups(stocks) {
         profitPercent: null,
         dividendInvestmentAmount: 0,
         expectedAnnualDividend: 0,
-        dividendYieldPercent: null
+        dividendYieldPercent: null,
+        dividendCashFlow: Array(12).fill(0)
       };
 
     group.count += 1;
@@ -1022,6 +1053,12 @@ function buildPortfolioSummaryGroups(stocks) {
       group.dividendInvestmentAmount += metrics.investmentAmount;
     }
 
+    if (metrics.dividendPaymentAmount !== null && metrics.dividendMonths.length) {
+      for (const month of metrics.dividendMonths) {
+        group.dividendCashFlow[month - 1] += metrics.dividendPaymentAmount;
+      }
+    }
+
     groups.set(key, group);
   }
 
@@ -1037,9 +1074,39 @@ function buildPortfolioSummaryGroups(stocks) {
       dividendYieldPercent:
         group.dividendInvestmentAmount > 0
           ? (group.expectedAnnualDividend / group.dividendInvestmentAmount) * 100
-          : null
+          : null,
+      dividendCashFlow: group.dividendCashFlow
     }))
     .sort((left, right) => left.currencyLabel.localeCompare(right.currencyLabel, 'ko-KR'));
+}
+
+function renderDividendCashFlow(group) {
+  const cashFlow = Array.isArray(group.dividendCashFlow) ? group.dividendCashFlow : [];
+  const items = cashFlow
+    .map((amount, index) => ({
+      month: index + 1,
+      amount
+    }))
+    .filter((item) => item.amount > 0);
+
+  if (!items.length) {
+    return '';
+  }
+
+  return `
+    <div class="dividend-cashflow-list" aria-label="월별 예상 배당금">
+      ${items
+        .map(
+          (item) => `
+            <span class="dividend-cashflow-item">
+              <span>${item.month}월</span>
+              <strong>${escapeHtml(formatMoney(item.amount, group.currency))}</strong>
+            </span>
+          `
+        )
+        .join('')}
+    </div>
+  `;
 }
 
 function renderWatchControls() {
@@ -1149,6 +1216,21 @@ function editStockForm(stock) {
     <label>
       <span>주당 연 배당금</span>
       <input name="annualDividendPerShare" type="text" inputmode="decimal" pattern="[0-9]*[.]?[0-9]*" value="${escapeHtml(stock.annualDividendPerShare || '')}" />
+    </label>
+    <label>
+      <span>배당 주기</span>
+      <select name="dividendFrequency">
+        <option value="" ${getDividendFrequency(stock) === '' ? 'selected' : ''}>미입력</option>
+        <option value="monthly" ${getDividendFrequency(stock) === 'monthly' ? 'selected' : ''}>월배당</option>
+        <option value="quarterly" ${getDividendFrequency(stock) === 'quarterly' ? 'selected' : ''}>분기배당</option>
+        <option value="semiannual" ${getDividendFrequency(stock) === 'semiannual' ? 'selected' : ''}>반기배당</option>
+        <option value="annual" ${getDividendFrequency(stock) === 'annual' ? 'selected' : ''}>연배당</option>
+        <option value="custom" ${getDividendFrequency(stock) === 'custom' ? 'selected' : ''}>직접 입력</option>
+      </select>
+    </label>
+    <label>
+      <span>배당 지급월</span>
+      <input name="dividendMonths" type="text" inputmode="numeric" value="${escapeHtml(formatDividendMonthInput(stock.dividendMonths))}" placeholder="예: 3,6,9,12" />
     </label>
     <label>
       <span>구매일</span>
@@ -1575,6 +1657,8 @@ function renderHoldingSummary(stock) {
       ${renderHoldingMetric('수익률', formatSignedPercent(metrics.profitPercent), profitClass)}
       ${renderHoldingMetric('예상 연 배당금', metrics.expectedAnnualDividend === null ? '-' : formatMoney(metrics.expectedAnnualDividend, stock.currency))}
       ${renderHoldingMetric('배당수익률', formatPercent(metrics.dividendYieldPercent))}
+      ${renderHoldingMetric('1회 예상 배당금', metrics.dividendPaymentAmount === null ? '-' : formatMoney(metrics.dividendPaymentAmount, stock.currency))}
+      ${renderHoldingMetric('배당 지급월', formatDividendMonths(metrics.dividendMonths))}
     </div>
   `;
 }
@@ -1609,6 +1693,10 @@ function renderPositionSummary(stock) {
 
   if (stock.annualDividendPerShare) {
     parts.push(`주당 배당 ${formatMoney(stock.annualDividendPerShare, stock.currency)}`);
+  }
+
+  if (stock.dividendFrequency) {
+    parts.push(getDividendFrequencyLabel(stock.dividendFrequency));
   }
 
   parts.push(getAlertTypeLabel(stock));
@@ -1753,11 +1841,114 @@ async function copyText(text) {
   }
 }
 
+function getDividendSchedule(input) {
+  const frequency = getDividendFrequency(input);
+  const explicitMonths = parseDividendMonths(input?.dividendMonths);
+  const months = explicitMonths.length ? explicitMonths : getDefaultDividendMonths(frequency);
+  const quantity = parseFiniteNumber(input?.quantity);
+  const annualDividendPerShare = parseFiniteNumber(input?.annualDividendPerShare);
+  const expectedAnnualDividend =
+    quantity !== null && quantity > 0 && annualDividendPerShare !== null && annualDividendPerShare > 0
+      ? quantity * annualDividendPerShare
+      : null;
+  const paymentCount = months.length;
+  const paymentAmount =
+    expectedAnnualDividend !== null && paymentCount > 0 ? expectedAnnualDividend / paymentCount : null;
+
+  return {
+    frequency,
+    months,
+    paymentCount,
+    paymentAmount
+  };
+}
+
+function getDividendFrequency(input) {
+  const value = typeof input === 'string' ? input : input?.dividendFrequency;
+  const frequency = String(value || '').trim().toLowerCase();
+  const allowed = ['', 'monthly', 'quarterly', 'semiannual', 'annual', 'custom'];
+
+  return allowed.includes(frequency) ? frequency : '';
+}
+
+function getDividendFrequencyLabel(value) {
+  const labels = {
+    monthly: '월배당',
+    quarterly: '분기배당',
+    semiannual: '반기배당',
+    annual: '연배당',
+    custom: '직접 입력',
+    '': '-'
+  };
+
+  return labels[getDividendFrequency(value)] || '-';
+}
+
+function getDefaultDividendMonths(frequency) {
+  const normalized = getDividendFrequency(frequency);
+
+  if (normalized === 'monthly') {
+    return [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12];
+  }
+
+  if (normalized === 'quarterly') {
+    return [3, 6, 9, 12];
+  }
+
+  if (normalized === 'semiannual') {
+    return [6, 12];
+  }
+
+  if (normalized === 'annual') {
+    return [12];
+  }
+
+  return [];
+}
+
+function parseDividendMonths(value) {
+  if (value === undefined || value === null || value === '') {
+    return [];
+  }
+
+  const rawItems = Array.isArray(value)
+    ? value
+    : String(value)
+        .split(/[\s,]+/)
+        .map((item) => item.trim())
+        .filter(Boolean);
+
+  const months = rawItems
+    .map((item) => Number(item))
+    .filter((month) => Number.isInteger(month) && month >= 1 && month <= 12);
+
+  return [...new Set(months)].sort((left, right) => left - right);
+}
+
+function formatDividendMonthInput(value) {
+  return parseDividendMonths(value).join(',');
+}
+
+function formatDividendMonths(value) {
+  const months = parseDividendMonths(value);
+
+  if (!months.length) {
+    return '-';
+  }
+
+  if (months.length === 12) {
+    return '매월';
+  }
+
+  return months.map((month) => `${month}월`).join(', ');
+}
+
 function calculateHoldingMetrics(stock) {
   const quantity = parseFiniteNumber(stock.quantity);
   const purchasePrice = parseFiniteNumber(stock.purchasePrice);
   const lastPrice = parseFiniteNumber(stock.lastPrice);
   const annualDividendPerShare = parseFiniteNumber(stock.annualDividendPerShare);
+  const dividendSchedule = getDividendSchedule(stock);
   const hasQuantity = quantity !== null && quantity > 0;
   const investmentAmount =
     hasQuantity && purchasePrice !== null && purchasePrice > 0 ? quantity * purchasePrice : null;
@@ -1774,6 +1965,10 @@ function calculateHoldingMetrics(stock) {
     expectedAnnualDividend !== null && investmentAmount > 0
       ? (expectedAnnualDividend / investmentAmount) * 100
       : null;
+  const dividendPaymentAmount =
+    expectedAnnualDividend !== null && dividendSchedule.paymentCount > 0
+      ? expectedAnnualDividend / dividendSchedule.paymentCount
+      : null;
 
   return {
     hasQuantity,
@@ -1786,7 +1981,10 @@ function calculateHoldingMetrics(stock) {
     profit,
     profitPercent,
     expectedAnnualDividend,
-    dividendYieldPercent
+    dividendYieldPercent,
+    dividendFrequency: dividendSchedule.frequency,
+    dividendMonths: dividendSchedule.months,
+    dividendPaymentAmount
   };
 }
 
