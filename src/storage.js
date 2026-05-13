@@ -94,6 +94,7 @@ function normalizeStock(input, defaults) {
     dividendLastCheckedAt: null,
     dividendLastError: '',
     dividendLastErrorAt: null,
+    dividendLastDiagnostic: null,
     purchaseDate: normalizeOptionalDate(input.purchaseDate),
     alertType,
     thresholdPercent,
@@ -194,6 +195,7 @@ function applyStockPatch(stock, patch) {
     next.dividendUpdatedAt = next.annualDividendPerShare ? next.updatedAt : null;
     next.dividendLastError = '';
     next.dividendLastErrorAt = null;
+    next.dividendLastDiagnostic = null;
   }
 
   if (patch.dividendFrequency !== undefined) {
@@ -309,6 +311,7 @@ function normalizeStoredStock(stock) {
     dividendLastCheckedAt: stock.dividendLastCheckedAt || null,
     dividendLastError: stock.dividendLastError || '',
     dividendLastErrorAt: stock.dividendLastErrorAt || null,
+    dividendLastDiagnostic: normalizeDividendDiagnostic(stock.dividendLastDiagnostic),
     purchaseDate: stock.purchaseDate || '',
     alertType:
       alertType === ALERT_TYPES.TARGET_PRICE && normalizedTargetPrice === null
@@ -375,6 +378,49 @@ function normalizeOptionalStoredNumber(value) {
 
   const number = Number(value);
   return Number.isFinite(number) ? number : null;
+}
+
+function normalizeDividendDiagnostic(value) {
+  if (!value || typeof value !== 'object') {
+    return null;
+  }
+
+  return {
+    checkedAt: value.checkedAt || null,
+    status: ['updated', 'checked', 'error', 'skipped'].includes(value.status)
+      ? value.status
+      : '',
+    reason: String(value.reason || ''),
+    error: String(value.error || ''),
+    provider: String(value.provider || ''),
+    sourceSymbol: String(value.sourceSymbol || ''),
+    currency: String(value.currency || ''),
+    annualDividendPerShare: normalizeOptionalStoredNumber(value.annualDividendPerShare),
+    previousAnnualDividendPerShare: normalizeOptionalStoredNumber(
+      value.previousAnnualDividendPerShare
+    ),
+    preservedAnnualDividendPerShare: normalizeOptionalStoredNumber(
+      value.preservedAnnualDividendPerShare
+    ),
+    attempts: Array.isArray(value.attempts)
+      ? value.attempts.map(normalizeDividendAttempt).filter((attempt) => attempt.provider)
+      : []
+  };
+}
+
+function normalizeDividendAttempt(value) {
+  return {
+    provider: String(value?.provider || ''),
+    status: value?.status === 'success' ? 'success' : 'error',
+    startedAt: value?.startedAt || '',
+    finishedAt: value?.finishedAt || '',
+    sourceSymbol: String(value?.sourceSymbol || ''),
+    annualDividendPerShare: normalizeOptionalStoredNumber(value?.annualDividendPerShare),
+    dividendYieldPercent: normalizeOptionalStoredNumber(value?.dividendYieldPercent),
+    lastDividendValue: normalizeOptionalStoredNumber(value?.lastDividendValue),
+    currency: String(value?.currency || ''),
+    error: String(value?.error || '')
+  };
 }
 
 function normalizeDeviceId(value) {

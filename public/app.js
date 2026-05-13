@@ -18,6 +18,7 @@ const elements = {
   message: document.querySelector('#message'),
   watchSummaryBar: document.querySelector('#watchSummaryBar'),
   portfolioSummaryBar: document.querySelector('#portfolioSummaryBar'),
+  dividendDiagnosticsPanel: document.querySelector('#dividendDiagnosticsPanel'),
   watchFilterButtons: document.querySelectorAll('[data-watch-filter]'),
   watchSortSelect: document.querySelector('#watchSortSelect'),
   backupList: document.querySelector('#backupList'),
@@ -257,6 +258,7 @@ async function loadData() {
     state.alerts = data.alerts || [];
     renderStatus(data);
     renderStocks();
+    renderDividendDiagnostics(data.lastDividendRefresh);
     renderAlerts();
   } catch (error) {
     showMessage(error.message, true);
@@ -872,6 +874,126 @@ function countDividendRefreshResults(result) {
   }
 
   return counts;
+}
+
+function renderDividendDiagnostics(lastRefresh) {
+  if (!elements.dividendDiagnosticsPanel) {
+    return;
+  }
+
+  const stocksWithDiagnostics = state.stocks
+    .map((stock) => ({
+      stock,
+      diagnostic: stock.dividendLastDiagnostic
+    }))
+    .filter((item) => item.diagnostic)
+    .sort((left, right) => getDiagnosticTime(right.diagnostic) - getDiagnosticTime(left.diagnostic));
+
+  if (!state.stocks.length) {
+    elements.dividendDiagnosticsPanel.innerHTML = '';
+    return;
+  }
+
+  const counts = countDividendRefreshResults(lastRefresh);
+  const latestRows = stocksWithDiagnostics.slice(0, 5);
+  const checkedAt = lastRefresh?.checkedAt || latestRows[0]?.diagnostic?.checkedAt || '';
+  const summaryDetail = lastRefresh
+    ? `확인 ${counts.checked}개 · 업데이트 ${counts.updated}개 · 실패 ${counts.error}개`
+    : latestRows.length
+      ? `${latestRows.length}개 종목에 이전 진단 이력이 있습니다.`
+      : '아직 자동 갱신 이력이 없습니다.';
+
+  elements.dividendDiagnosticsPanel.innerHTML = `
+    <div class="dividend-diagnostics-head">
+      <div>
+        <div class="dividend-diagnostics-title">배당 API 진단</div>
+        <div class="dividend-diagnostics-subtitle">${escapeHtml(summaryDetail)}</div>
+      </div>
+      <div class="dividend-diagnostics-time">${escapeHtml(formatDate(checkedAt))}</div>
+    </div>
+    ${
+      latestRows.length
+        ? `<div class="dividend-diagnostics-list">${latestRows.map(renderDividendDiagnosticRow).join('')}</div>`
+        : '<div class="dividend-diagnostics-empty">배당 새로고침을 실행하면 provider별 성공/실패 내역이 표시됩니다.</div>'
+    }
+  `;
+}
+
+function renderDividendDiagnosticRow({ stock, diagnostic }) {
+  const statusClass = getDividendDiagnosticStatusClass(diagnostic.status);
+  const statusLabel = getDividendDiagnosticStatusLabel(diagnostic.status);
+  const attempts = Array.isArray(diagnostic.attempts) ? diagnostic.attempts : [];
+  const provider = diagnostic.provider ? getProviderLabel(diagnostic.provider) : '-';
+  const appliedValue =
+    diagnostic.annualDividendPerShare !== null && diagnostic.annualDividendPerShare !== undefined
+      ? formatMoney(diagnostic.annualDividendPerShare, diagnostic.currency || stock.currency)
+      : diagnostic.preservedAnnualDividendPerShare
+        ? `${formatMoney(diagnostic.preservedAnnualDividendPerShare, stock.currency)} 유지`
+        : '-';
+
+  return `
+    <div class="dividend-diagnostic-row ${statusClass}">
+      <div class="dividend-diagnostic-main">
+        <span class="dividend-diagnostic-stock">${escapeHtml(stock.displayName || stock.symbol)}</span>
+        <span class="dividend-diagnostic-symbol">${escapeHtml(stock.symbol)}</span>
+        <span class="status-badge ${statusClass}">${escapeHtml(statusLabel)}</span>
+      </div>
+      <div class="dividend-diagnostic-meta">
+        <span>적용값 ${escapeHtml(appliedValue)}</span>
+        <span>출처 ${escapeHtml(provider)}</span>
+        <span>${escapeHtml(formatDate(diagnostic.checkedAt))}</span>
+      </div>
+      ${diagnostic.error ? `<div class="dividend-diagnostic-error">${escapeHtml(diagnostic.error)}</div>` : ''}
+      ${
+        attempts.length
+          ? `<div class="dividend-attempt-list">${attempts.map((attempt) => renderDividendAttempt(attempt, stock)).join('')}</div>`
+          : ''
+      }
+    </div>
+  `;
+}
+
+function renderDividendAttempt(attempt, stock) {
+  const status = attempt.status === 'success' ? 'success' : 'error';
+  const value =
+    status === 'success'
+      ? formatMoney(attempt.annualDividendPerShare, attempt.currency || stock.currency)
+      : attempt.error || '실패';
+
+  return `
+    <span class="dividend-attempt ${status}">
+      <strong>${escapeHtml(getProviderLabel(attempt.provider))}</strong>
+      <span>${escapeHtml(value)}</span>
+    </span>
+  `;
+}
+
+function getDividendDiagnosticStatusClass(status) {
+  if (status === 'updated' || status === 'checked') {
+    return 'ok';
+  }
+
+  if (status === 'skipped') {
+    return 'muted';
+  }
+
+  return 'error';
+}
+
+function getDividendDiagnosticStatusLabel(status) {
+  const labels = {
+    updated: '업데이트',
+    checked: '확인',
+    error: '실패',
+    skipped: '건너뜀'
+  };
+
+  return labels[status] || '대기';
+}
+
+function getDiagnosticTime(diagnostic) {
+  const time = new Date(diagnostic?.checkedAt || 0).getTime();
+  return Number.isFinite(time) ? time : 0;
 }
 
 function formatInterval(seconds) {

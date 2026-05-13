@@ -787,6 +787,124 @@ select:focus {
   color: var(--text);
 }
 
+.dividend-diagnostics-panel {
+  display: grid;
+  gap: 10px;
+  margin-bottom: 12px;
+  padding: 12px;
+  border: 1px solid var(--border-soft);
+  border-radius: var(--radius-sm);
+  background: var(--surface-2);
+}
+
+.dividend-diagnostics-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.dividend-diagnostics-title {
+  color: var(--text);
+  font-size: 13px;
+  font-weight: 900;
+}
+
+.dividend-diagnostics-subtitle,
+.dividend-diagnostics-time,
+.dividend-diagnostics-empty {
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.dividend-diagnostics-time {
+  text-align: right;
+  white-space: nowrap;
+}
+
+.dividend-diagnostics-list {
+  display: grid;
+  gap: 8px;
+}
+
+.dividend-diagnostic-row {
+  display: grid;
+  gap: 8px;
+  padding: 10px;
+  border: 1px solid var(--border-soft);
+  border-radius: var(--radius-sm);
+  background: var(--bg);
+}
+
+.dividend-diagnostic-row.ok {
+  border-color: rgba(46, 168, 77, 0.28);
+}
+
+.dividend-diagnostic-row.error {
+  border-color: rgba(224, 92, 92, 0.34);
+}
+
+.dividend-diagnostic-row.muted {
+  opacity: 0.78;
+}
+
+.dividend-diagnostic-main,
+.dividend-diagnostic-meta,
+.dividend-attempt-list {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.dividend-diagnostic-stock {
+  color: var(--text);
+  font-size: 13px;
+  font-weight: 900;
+}
+
+.dividend-diagnostic-symbol,
+.dividend-diagnostic-meta,
+.dividend-diagnostic-error {
+  color: var(--dim);
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.dividend-diagnostic-error {
+  overflow-wrap: anywhere;
+  color: var(--danger);
+}
+
+.dividend-attempt {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  max-width: 100%;
+  min-height: 24px;
+  padding: 3px 8px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 800;
+}
+
+.dividend-attempt span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.dividend-attempt.success {
+  background: var(--ok-soft);
+  color: var(--ok);
+}
+
+.dividend-attempt.error {
+  background: var(--danger-soft);
+  color: var(--danger);
+}
+
 .watch-controls {
   display: flex;
   align-items: center;

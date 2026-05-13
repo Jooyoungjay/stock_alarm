@@ -180,6 +180,18 @@ async function runDividendRefreshOnce() {
   }
 }
 
+async function getLastDividendRefreshSnapshot() {
+  if (lastDividendRefresh) {
+    return lastDividendRefresh;
+  }
+
+  if (typeof store.getMetaValue !== 'function') {
+    return null;
+  }
+
+  return store.getMetaValue('lastDividendRefresh', null);
+}
+
 async function initializePurchaseHigh(stock) {
   if (!stock?.purchaseDate) {
     return stock;
@@ -205,6 +217,8 @@ async function handleApi(request, response, url) {
   const segments = url.pathname.split('/').filter(Boolean);
 
   if (request.method === 'GET' && url.pathname === '/api/health') {
+    const dividendRefreshSnapshot = await getLastDividendRefreshSnapshot();
+
     sendJson(response, 200, {
       ok: true,
       appName: APP_NAME,
@@ -226,14 +240,18 @@ async function handleApi(request, response, url) {
       dividendRefreshIntervalSeconds: config.dividendRefreshIntervalSeconds,
       telegramCommandPollSeconds: config.telegramCommandPollSeconds,
       lastTelegramCommandPoll,
-      lastDividendRefresh,
+      lastDividendRefresh: dividendRefreshSnapshot,
       lastCheck
     });
     return;
   }
 
   if (request.method === 'GET' && url.pathname === '/api/stocks') {
-    const [stocks, alerts] = await Promise.all([store.listStocks(), store.listAlerts(30)]);
+    const [stocks, alerts, dividendRefreshSnapshot] = await Promise.all([
+      store.listStocks(),
+      store.listAlerts(30),
+      getLastDividendRefreshSnapshot()
+    ]);
 
     sendJson(response, 200, {
       stocks,
@@ -245,7 +263,7 @@ async function handleApi(request, response, url) {
       dividendRefreshIntervalSeconds: config.dividendRefreshIntervalSeconds,
       telegramCommandPollSeconds: config.telegramCommandPollSeconds,
       lastTelegramCommandPoll,
-      lastDividendRefresh,
+      lastDividendRefresh: dividendRefreshSnapshot,
       lastCheck
     });
     return;

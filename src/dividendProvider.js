@@ -16,36 +16,89 @@ const openDartCorpCodeCache = new Map();
 export async function fetchDividendInfo(symbol, options = {}) {
   const providers = normalizeDividendProviders(options.providers);
   const errors = [];
+  const attempts = [];
 
   for (const provider of providers) {
+    const startedAt = new Date().toISOString();
+
     try {
-      if (provider === 'publicdata') {
-        return await fetchPublicDataDividendInfo(symbol, options);
-      }
+      const info = await fetchDividendInfoFromProvider(provider, symbol, options);
+      const attempt = createDividendAttempt(provider, {
+        status: 'success',
+        startedAt,
+        info
+      });
+      attempts.push(attempt);
 
-      if (provider === 'opendart') {
-        return await fetchOpenDartDividendInfo(symbol, options);
-      }
-
-      if (provider === 'alphavantage') {
-        return await fetchAlphaVantageDividendInfo(symbol, options);
-      }
-
-      if (provider === 'yahoo') {
-        return await fetchYahooDividendInfo(symbol, options);
-      }
-
-      throw new Error(`지원하지 않는 배당 provider입니다: ${provider}`);
+      return {
+        ...info,
+        attempts
+      };
     } catch (error) {
-      errors.push(`${provider}: ${error.message}`);
+      const message = error.message || '배당 정보 조회 중 오류가 발생했습니다.';
+      errors.push(`${provider}: ${message}`);
+      attempts.push(
+        createDividendAttempt(provider, {
+          status: 'error',
+          startedAt,
+          error: message
+        })
+      );
     }
   }
 
   if (!errors.length) {
-    throw new Error('배당 정보 조회 실패: 사용할 수 있는 배당 provider가 없습니다.');
+    const error = new Error('배당 정보 조회 실패: 사용할 수 있는 배당 provider가 없습니다.');
+    error.attempts = attempts;
+    throw error;
   }
 
-  throw new Error(`배당 정보 조회 실패: ${errors.join(' | ')}`);
+  const error = new Error(`배당 정보 조회 실패: ${errors.join(' | ')}`);
+  error.attempts = attempts;
+  throw error;
+}
+
+async function fetchDividendInfoFromProvider(provider, symbol, options) {
+  if (provider === 'publicdata') {
+    return fetchPublicDataDividendInfo(symbol, options);
+  }
+
+  if (provider === 'opendart') {
+    return fetchOpenDartDividendInfo(symbol, options);
+  }
+
+  if (provider === 'alphavantage') {
+    return fetchAlphaVantageDividendInfo(symbol, options);
+  }
+
+  if (provider === 'yahoo') {
+    return fetchYahooDividendInfo(symbol, options);
+  }
+
+  throw new Error(`지원하지 않는 배당 provider입니다: ${provider}`);
+}
+
+function createDividendAttempt(provider, input) {
+  const attempt = {
+    provider,
+    status: input.status,
+    startedAt: input.startedAt || '',
+    finishedAt: new Date().toISOString()
+  };
+
+  if (input.info) {
+    attempt.sourceSymbol = input.info.sourceSymbol || input.info.symbol || '';
+    attempt.annualDividendPerShare = normalizePositiveNumber(input.info.annualDividendPerShare);
+    attempt.dividendYieldPercent = normalizePositiveNumber(input.info.dividendYieldPercent);
+    attempt.lastDividendValue = normalizePositiveNumber(input.info.lastDividendValue);
+    attempt.currency = input.info.currency || '';
+  }
+
+  if (input.error) {
+    attempt.error = String(input.error);
+  }
+
+  return attempt;
 }
 
 export function normalizeDividendProviders(value) {

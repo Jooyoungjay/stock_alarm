@@ -89,6 +89,7 @@ stop-local.bat
 - 주당 연 배당금 기반 예상 연 배당금, 배당수익률 표시
 - 배당 주기와 지급월 기반 월별 예상 배당 현금흐름 표시
 - 공공데이터포털, OpenDART, Alpha Vantage, Yahoo provider 체인 기반 배당 데이터 보조 갱신
+- 배당 provider별 성공/실패 진단 화면과 마지막 갱신 로그
 - 웹 대시보드와 텔레그램 명령어 기반 백업/복구
 - 서버 시작과 종목 변경 시 자동 백업
 - 브라우저에서 앱처럼 실행할 수 있는 PWA 기본 설정
@@ -520,6 +521,7 @@ provider 역할:
 - 포트폴리오 요약에서 월별 예상 배당 현금흐름 표시
 - 감시 종목 카드와 전체 포트폴리오 요약에 배당 정보 표시
 - 공공데이터포털, OpenDART, Alpha Vantage, Yahoo provider 체인으로 배당 데이터 자동 보조 갱신
+- provider별 성공/실패 사유와 적용된 배당금 출처를 웹 대시보드에 표시
 - 웹앱 `배당 새로고침` 버튼으로 즉시 수동 갱신
 - 텔레그램 `/edit <종목코드> dividend <주당연배당금>` 수정 지원
 - 텔레그램 `/edit <종목코드> dividendfreq <주기>`와 `/edit <종목코드> dividendmonths <월목록>` 수정 지원
@@ -883,15 +885,18 @@ Invoke-RestMethod http://127.0.0.1:3001/api/health
 
 상세 WBS와 예상 작업량은 [개발 WBS 및 로드맵](docs/development-roadmap.md)에서 관리합니다.
 
+최근 완료:
+
+- 배당 API provider별 성공/실패 진단 화면과 상세 로그
+
 우선순위가 높은 순서:
 
-1. 개발 WBS/일정 문서 관리와 웹 대시보드 표시
-2. 배당 API provider별 성공/실패 진단 화면과 상세 로그
-3. 공공데이터포털/OpenDART 국내 종목 매칭 보정
-4. 위험도 순위와 일일 브리핑 알림
-5. 배당락일, 지급일, 배당 변경 내역 표시
-6. NXT 포함 시세 API 가능성 검토
-7. 공식 또는 유료 시세 API 후보 검토
-8. Postgres 저장소 설계와 JSON 데이터 이전 준비
-9. Expo 모바일 앱 초기 프로젝트 생성
-10. App Store / Play Store 출시 준비
+1. 공공데이터포털/OpenDART 국내 종목 매칭 보정
+2. 위험도 순위와 일일 브리핑 알림
+3. 배당락일, 지급일, 배당 변경 내역 표시
+4. NXT 포함 시세 API 가능성 검토
+5. 공식 또는 유료 시세 API 후보 검토
+6. 개발 WBS/일정의 웹 대시보드 표시
+7. Postgres 저장소 설계와 JSON 데이터 이전 준비
+8. Expo 모바일 앱 초기 프로젝트 생성
+9. App Store / Play Store 출시 준비

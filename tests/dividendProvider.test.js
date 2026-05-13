@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
+  fetchDividendInfo,
   normalizeDividendProviders,
   parseAlphaVantageDividends,
   parseOpenDartAlotMatter,
@@ -8,6 +9,64 @@ import {
   parseYahooDividendSummary,
   toYahooDividendSymbol
 } from '../src/dividendProvider.js';
+
+test('fetchDividendInfo records provider attempts until success', async () => {
+  const originalFetch = globalThis.fetch;
+
+  globalThis.fetch = async () => ({
+    ok: true,
+    async json() {
+      return {
+        quoteSummary: {
+          result: [
+            {
+              price: {
+                currency: 'USD',
+                regularMarketPrice: { raw: 200 }
+              },
+              summaryDetail: {
+                dividendRate: { raw: 4.8 }
+              }
+            }
+          ],
+          error: null
+        }
+      };
+    }
+  });
+
+  try {
+    const info = await fetchDividendInfo('AAPL', {
+      providers: 'unknown,yahoo'
+    });
+
+    assert.equal(info.provider, 'yahoo');
+    assert.equal(info.attempts.length, 2);
+    assert.equal(info.attempts[0].provider, 'unknown');
+    assert.equal(info.attempts[0].status, 'error');
+    assert.equal(info.attempts[1].provider, 'yahoo');
+    assert.equal(info.attempts[1].status, 'success');
+    assert.equal(info.attempts[1].annualDividendPerShare, 4.8);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+test('fetchDividendInfo attaches provider attempts to failures', async () => {
+  await assert.rejects(
+    () =>
+      fetchDividendInfo('AAPL', {
+        providers: 'unknown'
+      }),
+    (error) => {
+      assert.match(error.message, /배당 정보 조회 실패/);
+      assert.equal(error.attempts.length, 1);
+      assert.equal(error.attempts[0].provider, 'unknown');
+      assert.equal(error.attempts[0].status, 'error');
+      return true;
+    }
+  );
+});
 
 test('parseYahooDividendSummary extracts annual dividend data', () => {
   const info = parseYahooDividendSummary(
