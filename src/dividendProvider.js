@@ -142,10 +142,19 @@ export function parsePublicDataDividendResponse(
   }
 
   const items = normalizeItems(payload?.response?.body?.items?.item);
-  const matchingItems = sourceName
-    ? items.filter((item) => normalizeCompanyName(item.stckIssuCmpyNm) === normalizeCompanyName(sourceName))
-    : items;
-  const events = matchingItems
+  const stockCode = getKoreanStockCode(requestedSymbol);
+  const sourceNames = normalizeCompanyNameCandidates([
+    sourceName,
+    ...(options.companyNameCandidates || []),
+    options.companyName,
+    options.displayName
+  ]);
+  const matchingItems =
+    sourceNames.length || stockCode
+      ? items.filter((item) => isPublicDataDividendItemMatch(item, stockCode, sourceNames))
+      : items;
+  const selectedItems = matchingItems.length === 0 && items.length === 1 ? items : matchingItems;
+  const events = selectedItems
     .map((item) => ({
       amount: pickFirstPositiveNumber(
         item.stckGenrDvdnAmt,
@@ -157,14 +166,14 @@ export function parsePublicDataDividendResponse(
       exDate: parseCompactDate(item.dvdnBasDt || item.dvdnBseDt || item.basDt || item.rghtStndDt),
       payDate: parseCompactDate(item.cashDvdnPayDt || item.dvdnPayDt || item.payDt),
       currency: 'KRW',
-      sourceSymbol: item.stckIssuCmpyNm || sourceName || requestedSymbol
+      sourceSymbol: findCompanyNameInRecord(item) || sourceNames[0] || requestedSymbol
     }))
     .filter((event) => event.amount !== null);
 
   return buildDividendInfoFromEvents(events, {
     symbol: requestedSymbol,
     provider: 'publicdata',
-    sourceSymbol: sourceName || requestedSymbol,
+    sourceSymbol: selectedItems[0] ? findCompanyNameInRecord(selectedItems[0]) : sourceNames[0] || requestedSymbol,
     currency: 'KRW',
     now: options.now
   });
@@ -300,20 +309,37 @@ async function fetchPublicDataDividendInfo(symbol, options = {}) {
     throw new Error('DATA_GO_KR_SERVICE_KEY가 설정되지 않았습니다.');
   }
 
-  const sourceName = String(options.companyName || options.displayName || '').trim();
+  const sourceNames = normalizeCompanyNameCandidates([
+    ...(options.companyNameCandidates || []),
+    options.companyName,
+    options.displayName
+  ]);
 
-  if (!sourceName) {
+  if (!sourceNames.length) {
     throw new Error('공공데이터 배당정보 조회에는 종목 표시 이름이 필요합니다.');
   }
 
-  const url = createPublicDataUrl(options.dataGoKrServiceKey);
-  url.searchParams.set('pageNo', '1');
-  url.searchParams.set('numOfRows', '100');
-  url.searchParams.set('resultType', 'json');
-  url.searchParams.set('stckIssuCmpyNm', sourceName);
-  const payload = await fetchJson(url, options);
+  const errors = [];
 
-  return parsePublicDataDividendResponse(payload, symbol, sourceName, options);
+  for (const sourceName of sourceNames) {
+    try {
+      const url = createPublicDataUrl(options.dataGoKrServiceKey);
+      url.searchParams.set('pageNo', '1');
+      url.searchParams.set('numOfRows', '100');
+      url.searchParams.set('resultType', 'json');
+      url.searchParams.set('stckIssuCmpyNm', sourceName);
+      const payload = await fetchJson(url, options);
+
+      return parsePublicDataDividendResponse(payload, symbol, sourceName, {
+        ...options,
+        companyNameCandidates: sourceNames
+      });
+    } catch (error) {
+      errors.push(`${sourceName}: ${error.message}`);
+    }
+  }
+
+  throw new Error(`공공데이터 배당정보 조회 실패: ${errors.join(' | ')}`);
 }
 
 async function fetchOpenDartDividendInfo(symbol, options = {}) {
@@ -388,15 +414,42 @@ async function fetchYahooDividendInfo(symbol, options = {}) {
 }
 
 async function findOpenDartCorpByStockCode(symbol, options = {}) {
-  const stockCode = String(symbol || '').trim().slice(0, 6);
   const companies = await loadOpenDartCompanies(options);
-  const company = companies.find((item) => item.stockCode === stockCode);
+  const company = findOpenDartCorpMatch(companies, symbol, options);
 
-  if (!company) {
-    throw new Error(`OpenDART 고유번호를 찾을 수 없습니다: ${symbol}`);
+  if (company) {
+    return company;
   }
 
-  return company;
+  throw new Error(`OpenDART 고유번호를 찾을 수 없습니다: ${symbol}`);
+}
+
+export function findOpenDartCorpMatch(companies, symbol, options = {}) {
+  const stockCode = getKoreanStockCode(symbol);
+  const company = companies.find((item) => item.stockCode === stockCode);
+
+  if (company) {
+    return company;
+  }
+
+  const sourceNames = normalizeCompanyNameCandidates([
+    ...(options.companyNameCandidates || []),
+    options.companyName,
+    options.displayName
+  ]);
+  const matchedByName = companies.find((item) =>
+    sourceNames.some(
+      (sourceName) =>
+        isCompanyNameMatch(item.corpName, sourceName) ||
+        isCompanyNameMatch(item.stockName, sourceName)
+    )
+  );
+
+  if (matchedByName) {
+    return matchedByName;
+  }
+
+  return null;
 }
 
 async function loadOpenDartCompanies(options = {}) {
@@ -428,15 +481,16 @@ async function fetchOpenDartCompanies(options = {}) {
   return parseOpenDartCorpCodeXml(xml);
 }
 
-function parseOpenDartCorpCodeXml(xml) {
+export function parseOpenDartCorpCodeXml(xml) {
   return [...String(xml || '').matchAll(/<list>([\s\S]*?)<\/list>/g)]
     .map((match) => ({
       corpCode: getXmlValue(match[1], 'corp_code'),
       corpName: getXmlValue(match[1], 'corp_name'),
+      stockName: getXmlValue(match[1], 'stock_name'),
       stockCode: getXmlValue(match[1], 'stock_code'),
       modifyDate: getXmlValue(match[1], 'modify_date')
     }))
-    .filter((item) => item.corpCode && item.stockCode);
+    .filter((item) => item.corpCode);
 }
 
 function extractFirstZipTextFile(buffer) {
@@ -740,8 +794,157 @@ function parseUnixDate(value) {
   return new Date(timestamp * 1000).toISOString();
 }
 
+function getKoreanStockCode(symbol) {
+  const match = String(symbol || '').trim().match(/^(\d{6})(?:\.(KS|KQ))?$/i);
+  return match ? match[1] : '';
+}
+
+function normalizeCompanyNameCandidates(values) {
+  const seen = new Set();
+  const result = [];
+
+  for (const value of values.flatMap((item) => (Array.isArray(item) ? item : [item]))) {
+    const text = String(value || '').trim();
+
+    if (!text) {
+      continue;
+    }
+
+    for (const candidate of expandCompanyNameCandidate(text)) {
+      const normalized = normalizeCompanyName(candidate);
+
+      if (!normalized || seen.has(normalized)) {
+        continue;
+      }
+
+      seen.add(normalized);
+      result.push(candidate);
+    }
+  }
+
+  return result;
+}
+
+function expandCompanyNameCandidate(value) {
+  const text = String(value || '').trim();
+  const withoutStockClass = text.replace(/보통주|우선주|우선|[0-9]*우B?$/gi, '').trim();
+  const withoutCorpPrefix = withoutStockClass
+    .replace(/^\(?주\)?\s*/i, '')
+    .replace(/^㈜\s*/i, '')
+    .replace(/^주식회사\s*/i, '')
+    .trim();
+  const withoutCorpSuffix = withoutCorpPrefix
+    .replace(/\s*\(?주\)?$/i, '')
+    .replace(/\s*㈜$/i, '')
+    .replace(/\s*주식회사$/i, '')
+    .trim();
+
+  return [text, withoutStockClass, withoutCorpPrefix, withoutCorpSuffix];
+}
+
+function isPublicDataDividendItemMatch(item, stockCode, sourceNames) {
+  if (stockCode && recordContainsStockCode(item, stockCode)) {
+    return true;
+  }
+
+  const companyName = findCompanyNameInRecord(item);
+
+  if (!companyName) {
+    return false;
+  }
+
+  return sourceNames.some((sourceName) => isCompanyNameMatch(companyName, sourceName));
+}
+
+function recordContainsStockCode(record, stockCode) {
+  const code = String(stockCode || '').trim();
+
+  if (!code) {
+    return false;
+  }
+
+  return Object.entries(record || {}).some(([key, value]) => {
+    const normalizedKey = String(key || '').toLowerCase();
+    const text = String(value || '').replace(/\D/g, '');
+
+    if (!text) {
+      return false;
+    }
+
+    if (text === code || text.includes(code)) {
+      return true;
+    }
+
+    return (
+      (normalizedKey.includes('srtn') ||
+        normalizedKey.includes('stock') ||
+        normalizedKey.includes('stck') ||
+        normalizedKey.includes('isin')) &&
+      text.endsWith(code)
+    );
+  });
+}
+
+function findCompanyNameInRecord(record) {
+  const preferredKeys = [
+    'stckIssuCmpyNm',
+    'isinCdNm',
+    'corpNm',
+    'corpName',
+    'stockName',
+    'stckNm',
+    'itmsNm'
+  ];
+
+  for (const key of preferredKeys) {
+    const value = record?.[key];
+
+    if (value) {
+      return String(value).trim();
+    }
+  }
+
+  for (const [key, value] of Object.entries(record || {})) {
+    const normalizedKey = key.toLowerCase();
+
+    if (
+      value &&
+      (normalizedKey.includes('cmpynm') ||
+        normalizedKey.includes('corp') ||
+        normalizedKey.includes('name') ||
+        normalizedKey.includes('nm'))
+    ) {
+      return String(value).trim();
+    }
+  }
+
+  return '';
+}
+
+function isCompanyNameMatch(left, right) {
+  const normalizedLeft = normalizeCompanyName(left);
+  const normalizedRight = normalizeCompanyName(right);
+
+  if (!normalizedLeft || !normalizedRight) {
+    return false;
+  }
+
+  if (normalizedLeft === normalizedRight) {
+    return true;
+  }
+
+  const minLength = Math.min(normalizedLeft.length, normalizedRight.length);
+
+  return minLength >= 2 && (normalizedLeft.includes(normalizedRight) || normalizedRight.includes(normalizedLeft));
+}
+
 function normalizeCompanyName(value) {
-  return String(value || '').replace(/\s+/g, '').toLowerCase();
+  return String(value || '')
+    .normalize('NFKC')
+    .toLowerCase()
+    .replace(/\(주\)|㈜|주식회사/g, '')
+    .replace(/보통주|우선주|우선/g, '')
+    .replace(/[^0-9a-z가-힣]/g, '');
 }
 
 function getXmlValue(xml, tagName) {

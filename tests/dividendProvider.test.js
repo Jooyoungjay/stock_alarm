@@ -2,8 +2,10 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
   fetchDividendInfo,
+  findOpenDartCorpMatch,
   normalizeDividendProviders,
   parseAlphaVantageDividends,
+  parseOpenDartCorpCodeXml,
   parseOpenDartAlotMatter,
   parsePublicDataDividendResponse,
   parseYahooDividendSummary,
@@ -256,6 +258,77 @@ test('parsePublicDataDividendResponse extracts Korean dividend rows', () => {
   assert.equal(info.currency, 'KRW');
 });
 
+test('parsePublicDataDividendResponse matches by stock code when company names differ', () => {
+  const info = parsePublicDataDividendResponse(
+    {
+      response: {
+        header: {
+          resultCode: '00',
+          resultMsg: 'NORMAL SERVICE.'
+        },
+        body: {
+          items: {
+            item: [
+              {
+                srtnCd: '336260',
+                stckIssuCmpyNm: '두산퓨얼셀보통주',
+                dvdnBasDt: '20260331',
+                stckGenrDvdnAmt: '150'
+              },
+              {
+                srtnCd: '000000',
+                stckIssuCmpyNm: '다른회사',
+                dvdnBasDt: '20260331',
+                stckGenrDvdnAmt: '999'
+              }
+            ]
+          }
+        }
+      }
+    },
+    '336260',
+    '두산 퓨얼셀',
+    {
+      now: new Date('2026-05-12T00:00:00.000Z')
+    }
+  );
+
+  assert.equal(info.provider, 'publicdata');
+  assert.equal(info.annualDividendPerShare, 150);
+  assert.equal(info.sourceSymbol, '두산퓨얼셀보통주');
+});
+
+test('parsePublicDataDividendResponse matches company name variants', () => {
+  const info = parsePublicDataDividendResponse(
+    {
+      response: {
+        header: {
+          resultCode: '00',
+          resultMsg: 'NORMAL SERVICE.'
+        },
+        body: {
+          items: {
+            item: {
+              stckIssuCmpyNm: '두산퓨얼셀보통주',
+              dvdnBasDt: '20260331',
+              stckGenrDvdnAmt: '150'
+            }
+          }
+        }
+      }
+    },
+    '336260',
+    '두산 퓨얼셀',
+    {
+      companyNameCandidates: ['두산퓨얼셀', 'Doosan Fuelcell'],
+      now: new Date('2026-05-12T00:00:00.000Z')
+    }
+  );
+
+  assert.equal(info.annualDividendPerShare, 150);
+  assert.equal(info.sourceSymbol, '두산퓨얼셀보통주');
+});
+
 test('parseOpenDartAlotMatter extracts common stock cash dividend row', () => {
   const info = parseOpenDartAlotMatter(
     {
@@ -278,4 +351,32 @@ test('parseOpenDartAlotMatter extracts common stock cash dividend row', () => {
   assert.equal(info.annualDividendPerShare, 1200);
   assert.equal(info.lastDividendValue, 1200);
   assert.equal(info.currency, 'KRW');
+});
+
+test('parseOpenDartCorpCodeXml keeps companies for name fallback matching', () => {
+  const companies = parseOpenDartCorpCodeXml(`
+    <result>
+      <list>
+        <corp_code>00126380</corp_code>
+        <corp_name>삼성전자</corp_name>
+        <stock_code>005930</stock_code>
+        <modify_date>20260101</modify_date>
+      </list>
+      <list>
+        <corp_code>00999999</corp_code>
+        <corp_name>두산퓨얼셀</corp_name>
+        <stock_code></stock_code>
+        <modify_date>20260101</modify_date>
+      </list>
+    </result>
+  `);
+
+  assert.equal(companies.length, 2);
+  assert.equal(findOpenDartCorpMatch(companies, '005930')?.corpCode, '00126380');
+  assert.equal(
+    findOpenDartCorpMatch(companies, '336260', {
+      companyNameCandidates: ['두산 퓨얼셀']
+    })?.corpCode,
+    '00999999'
+  );
 });

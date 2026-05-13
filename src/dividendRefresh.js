@@ -34,6 +34,7 @@ export async function runDividendRefresh(store, config, options = {}) {
         openDartApiKey: config.openDartApiKey,
         alphaVantageApiKey: config.alphaVantageApiKey,
         companyName: getDividendCompanyName(stock),
+        companyNameCandidates: getDividendCompanyNameCandidates(stock),
         displayName: stock.displayName || '',
         now
       });
@@ -204,17 +205,42 @@ function summarizeDividendResults(results) {
 }
 
 function getDividendCompanyName(stock) {
-  const catalogItem = symbolCatalog.find((item) => item.symbol === stock.symbol);
+  return getDividendCompanyNameCandidates(stock)[0] || stock.symbol;
+}
 
-  if (catalogItem?.name && /^\d{6}(\.(KS|KQ))?$/i.test(String(stock.symbol || ''))) {
-    return catalogItem.name;
+function getDividendCompanyNameCandidates(stock) {
+  const plainSymbol = getPlainKoreanSymbol(stock.symbol);
+  const catalogItem = symbolCatalog.find(
+    (item) => item.symbol === stock.symbol || (plainSymbol && item.symbol === plainSymbol)
+  );
+  const candidates = [
+    stock.displayName,
+    catalogItem?.name,
+    ...(catalogItem?.aliases || [])
+  ];
+
+  return uniqueNonEmpty(candidates);
+}
+
+function getPlainKoreanSymbol(symbol) {
+  const match = String(symbol || '').trim().match(/^(\d{6})(?:\.(KS|KQ))?$/i);
+  return match ? match[1] : '';
+}
+
+function uniqueNonEmpty(values) {
+  const seen = new Set();
+  const result = [];
+
+  for (const value of values) {
+    const text = String(value || '').trim();
+
+    if (!text || seen.has(text)) {
+      continue;
+    }
+
+    seen.add(text);
+    result.push(text);
   }
 
-  const displayName = String(stock.displayName || '').trim();
-
-  if (displayName) {
-    return displayName;
-  }
-
-  return catalogItem?.name || stock.symbol;
+  return result;
 }
