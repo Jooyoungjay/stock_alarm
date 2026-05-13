@@ -47,13 +47,29 @@ export async function runDividendRefresh(store, config, options = {}) {
       }
 
       const previousValue = normalizePositiveNumber(stock.annualDividendPerShare);
-      const changed = previousValue === null || Math.abs(previousValue - nextValue) > 0.000001;
+      const previousLastDividendValue = normalizePositiveNumber(stock.lastDividendValue);
+      const nextLastDividendValue = normalizePositiveNumber(info.lastDividendValue);
+      const nextExDividendDate = info.exDividendDate || '';
+      const nextDividendDate = info.dividendDate || '';
+      const change = getDividendChange(stock, {
+        annualDividendPerShare: nextValue,
+        lastDividendValue: nextLastDividendValue,
+        exDividendDate: nextExDividendDate,
+        dividendDate: nextDividendDate
+      });
+      const changed = change.changed;
       const diagnostic = createDividendDiagnostic({
         checkedAt,
         status: changed ? 'updated' : 'checked',
         stock,
         annualDividendPerShare: nextValue,
         previousAnnualDividendPerShare: previousValue,
+        lastDividendValue: nextLastDividendValue,
+        previousLastDividendValue,
+        exDividendDate: nextExDividendDate,
+        previousExDividendDate: stock.exDividendDate || '',
+        dividendDate: nextDividendDate,
+        previousDividendDate: stock.dividendDate || '',
         provider: info.provider || '',
         sourceSymbol: info.sourceSymbol || info.symbol || stock.symbol,
         currency: info.currency || stock.dividendCurrency || stock.currency || '',
@@ -67,14 +83,31 @@ export async function runDividendRefresh(store, config, options = {}) {
         dividendSourceSymbol: info.sourceSymbol || info.symbol || stock.symbol,
         dividendCurrency: info.currency || stock.dividendCurrency || stock.currency || '',
         dividendYieldPercent: normalizePositiveNumber(info.dividendYieldPercent),
-        lastDividendValue: normalizePositiveNumber(info.lastDividendValue),
-        exDividendDate: info.exDividendDate || '',
-        dividendDate: info.dividendDate || '',
+        lastDividendValue: nextLastDividendValue,
+        exDividendDate: nextExDividendDate,
+        dividendDate: nextDividendDate,
         dividendUpdatedAt: changed ? checkedAt : stock.dividendUpdatedAt || checkedAt,
         dividendLastCheckedAt: checkedAt,
         dividendLastError: '',
         dividendLastErrorAt: null,
         dividendLastDiagnostic: diagnostic,
+        dividendHistory: changed
+          ? appendDividendHistory(stock.dividendHistory, {
+              checkedAt,
+              reason: change.reason,
+              provider: info.provider || '',
+              sourceSymbol: info.sourceSymbol || info.symbol || stock.symbol,
+              currency: info.currency || stock.dividendCurrency || stock.currency || '',
+              previousAnnualDividendPerShare: previousValue,
+              annualDividendPerShare: nextValue,
+              previousLastDividendValue,
+              lastDividendValue: nextLastDividendValue,
+              previousExDividendDate: stock.exDividendDate || '',
+              exDividendDate: nextExDividendDate,
+              previousDividendDate: stock.dividendDate || '',
+              dividendDate: nextDividendDate
+            })
+          : stock.dividendHistory || [],
         updatedAt: checkedAt
       };
 
@@ -87,6 +120,9 @@ export async function runDividendRefresh(store, config, options = {}) {
         previousAnnualDividendPerShare: previousValue,
         provider: info.provider || '',
         sourceSymbol: info.sourceSymbol || '',
+        lastDividendValue: nextLastDividendValue,
+        exDividendDate: nextExDividendDate,
+        dividendDate: nextDividendDate,
         attempts: diagnostic.attempts,
         diagnostic
       });
@@ -154,6 +190,12 @@ function createDividendDiagnostic(input) {
     currency: input.currency || input.stock?.dividendCurrency || input.stock?.currency || '',
     annualDividendPerShare: currentValue,
     previousAnnualDividendPerShare: previousValue,
+    lastDividendValue: normalizePositiveNumber(input.lastDividendValue),
+    previousLastDividendValue: normalizePositiveNumber(input.previousLastDividendValue),
+    exDividendDate: input.exDividendDate || '',
+    previousExDividendDate: input.previousExDividendDate || '',
+    dividendDate: input.dividendDate || '',
+    previousDividendDate: input.previousDividendDate || '',
     preservedAnnualDividendPerShare: input.status === 'error' ? preservedValue : null,
     attempts: normalizeDividendAttempts(input.attempts)
   };
@@ -173,6 +215,8 @@ function normalizeDividendAttempts(attempts) {
     annualDividendPerShare: normalizePositiveNumber(attempt.annualDividendPerShare),
     dividendYieldPercent: normalizePositiveNumber(attempt.dividendYieldPercent),
     lastDividendValue: normalizePositiveNumber(attempt.lastDividendValue),
+    exDividendDate: attempt.exDividendDate || '',
+    dividendDate: attempt.dividendDate || '',
     currency: attempt.currency || '',
     error: attempt.error || ''
   }));
@@ -206,6 +250,80 @@ function summarizeDividendResults(results) {
 
 function getDividendCompanyName(stock) {
   return getDividendCompanyNameCandidates(stock)[0] || stock.symbol;
+}
+
+function getDividendChange(stock, next) {
+  const reasons = [];
+
+  if (hasNumberChanged(stock.annualDividendPerShare, next.annualDividendPerShare)) {
+    reasons.push('amount');
+  }
+
+  if (hasNumberChanged(stock.lastDividendValue, next.lastDividendValue)) {
+    reasons.push('lastDividend');
+  }
+
+  if (hasTextChanged(stock.exDividendDate, next.exDividendDate)) {
+    reasons.push('exDate');
+  }
+
+  if (hasTextChanged(stock.dividendDate, next.dividendDate)) {
+    reasons.push('payDate');
+  }
+
+  return {
+    changed: reasons.length > 0,
+    reason: reasons.join(',')
+  };
+}
+
+function hasNumberChanged(left, right) {
+  const leftValue = normalizePositiveNumber(left);
+  const rightValue = normalizePositiveNumber(right);
+
+  if (leftValue === null && rightValue === null) {
+    return false;
+  }
+
+  if (leftValue === null || rightValue === null) {
+    return true;
+  }
+
+  return Math.abs(leftValue - rightValue) > 0.000001;
+}
+
+function hasTextChanged(left, right) {
+  return String(left || '') !== String(right || '');
+}
+
+function appendDividendHistory(history, entry) {
+  return [normalizeDividendHistoryEntry(entry), ...normalizeDividendHistory(history)].slice(0, 20);
+}
+
+function normalizeDividendHistory(history) {
+  return Array.isArray(history) ? history.map(normalizeDividendHistoryEntry).filter(Boolean) : [];
+}
+
+function normalizeDividendHistoryEntry(entry) {
+  if (!entry || typeof entry !== 'object') {
+    return null;
+  }
+
+  return {
+    checkedAt: entry.checkedAt || '',
+    reason: String(entry.reason || ''),
+    provider: String(entry.provider || ''),
+    sourceSymbol: String(entry.sourceSymbol || ''),
+    currency: String(entry.currency || ''),
+    previousAnnualDividendPerShare: normalizePositiveNumber(entry.previousAnnualDividendPerShare),
+    annualDividendPerShare: normalizePositiveNumber(entry.annualDividendPerShare),
+    previousLastDividendValue: normalizePositiveNumber(entry.previousLastDividendValue),
+    lastDividendValue: normalizePositiveNumber(entry.lastDividendValue),
+    previousExDividendDate: entry.previousExDividendDate || '',
+    exDividendDate: entry.exDividendDate || '',
+    previousDividendDate: entry.previousDividendDate || '',
+    dividendDate: entry.dividendDate || ''
+  };
 }
 
 function getDividendCompanyNameCandidates(stock) {

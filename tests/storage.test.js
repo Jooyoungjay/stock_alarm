@@ -106,6 +106,10 @@ test('JsonStore stores and updates optional stock quantity', async () => {
   assert.deepEqual(updated.dividendMonths, []);
   assert.equal(updated.dividendDataSource, '');
   assert.equal(updated.dividendUpdatedAt, null);
+  assert.equal(updated.dividendHistory.length, 1);
+  assert.equal(updated.dividendHistory[0].provider, 'manual');
+  assert.equal(updated.dividendHistory[0].previousAnnualDividendPerShare, 1200);
+  assert.equal(updated.dividendHistory[0].annualDividendPerShare, null);
 
   await assert.rejects(
     () => store.updateStock(stock.id, { quantity: 0 }),

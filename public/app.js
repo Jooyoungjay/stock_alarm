@@ -995,6 +995,9 @@ function renderDividendDiagnosticRow({ stock, diagnostic }) {
       </div>
       <div class="dividend-diagnostic-meta">
         <span>적용값 ${escapeHtml(appliedValue)}</span>
+        ${diagnostic.lastDividendValue ? `<span>최근 배당 ${escapeHtml(formatMoney(diagnostic.lastDividendValue, diagnostic.currency || stock.currency))}</span>` : ''}
+        ${diagnostic.exDividendDate ? `<span>배당락 ${escapeHtml(formatDateOnly(diagnostic.exDividendDate))}</span>` : ''}
+        ${diagnostic.dividendDate ? `<span>지급 ${escapeHtml(formatDateOnly(diagnostic.dividendDate))}</span>` : ''}
         <span>출처 ${escapeHtml(provider)}</span>
         <span>${escapeHtml(formatDate(diagnostic.checkedAt))}</span>
       </div>
@@ -1012,7 +1015,7 @@ function renderDividendAttempt(attempt, stock) {
   const status = attempt.status === 'success' ? 'success' : 'error';
   const value =
     status === 'success'
-      ? formatMoney(attempt.annualDividendPerShare, attempt.currency || stock.currency)
+      ? formatDividendAttemptValue(attempt, stock)
       : attempt.error || '실패';
 
   return `
@@ -1021,6 +1024,22 @@ function renderDividendAttempt(attempt, stock) {
       <span>${escapeHtml(value)}</span>
     </span>
   `;
+}
+
+function formatDividendAttemptValue(attempt, stock) {
+  const parts = [
+    formatMoney(attempt.annualDividendPerShare, attempt.currency || stock.currency)
+  ];
+
+  if (attempt.exDividendDate) {
+    parts.push(`락 ${formatDateOnly(attempt.exDividendDate)}`);
+  }
+
+  if (attempt.dividendDate) {
+    parts.push(`지급 ${formatDateOnly(attempt.dividendDate)}`);
+  }
+
+  return parts.filter(Boolean).join(' · ');
 }
 
 function getDividendDiagnosticStatusClass(status) {
@@ -1139,6 +1158,7 @@ function renderStocks() {
           </div>
         </div>
         ${renderHoldingSummary(stock)}
+        ${renderDividendEventSummary(stock)}
         <div class="stock-bottom">
           <div class="status-block">
             <span class="status-badge ${getStockStatusClass(stock)}"><span class="dot"></span>${getStockStatusLabel(stock)}</span>
@@ -1929,6 +1949,74 @@ function renderHoldingSummary(stock) {
       ${renderHoldingMetric('1회 예상 배당금', metrics.dividendPaymentAmount === null ? '-' : formatMoney(metrics.dividendPaymentAmount, stock.currency))}
       ${renderHoldingMetric('배당 지급월', formatDividendMonths(metrics.dividendMonths))}
       ${renderHoldingMetric('배당 갱신', formatDividendRefreshStatus(stock), stock.dividendLastError ? 'down' : '')}
+    </div>
+  `;
+}
+
+function renderDividendEventSummary(stock) {
+  const history = Array.isArray(stock.dividendHistory) ? stock.dividendHistory : [];
+  const hasDividendEvent =
+    stock.lastDividendValue ||
+    stock.exDividendDate ||
+    stock.dividendDate ||
+    history.length;
+
+  if (!hasDividendEvent) {
+    return '';
+  }
+
+  return `
+    <div class="stock-dividend-panel">
+      <div class="stock-dividend-grid">
+        ${renderHoldingMetric('최근 1주 배당', stock.lastDividendValue ? formatMoney(stock.lastDividendValue, stock.dividendCurrency || stock.currency) : '-')}
+        ${renderHoldingMetric('배당락일', formatDateOnly(stock.exDividendDate))}
+        ${renderHoldingMetric('지급일', formatDateOnly(stock.dividendDate))}
+        ${renderHoldingMetric('배당 출처', stock.dividendProvider ? getProviderLabel(stock.dividendProvider) : stock.dividendDataSource ? getProviderLabel(stock.dividendDataSource) : '-')}
+      </div>
+      ${
+        history.length
+          ? `<div class="dividend-history-list">${history.slice(0, 3).map((item) => renderDividendHistoryItem(item, stock)).join('')}</div>`
+          : ''
+      }
+    </div>
+  `;
+}
+
+function renderDividendHistoryItem(item, stock) {
+  const currency = item.currency || stock.dividendCurrency || stock.currency;
+  const amountChanged = item.previousAnnualDividendPerShare !== item.annualDividendPerShare;
+  const lastValueChanged = item.previousLastDividendValue !== item.lastDividendValue;
+  const dateChanged =
+    item.previousExDividendDate !== item.exDividendDate ||
+    item.previousDividendDate !== item.dividendDate;
+  const changeParts = [];
+
+  if (amountChanged) {
+    changeParts.push(
+      `연 ${formatMoney(item.previousAnnualDividendPerShare, currency)} -> ${formatMoney(item.annualDividendPerShare, currency)}`
+    );
+  }
+
+  if (lastValueChanged) {
+    changeParts.push(
+      `1주 ${formatMoney(item.previousLastDividendValue, currency)} -> ${formatMoney(item.lastDividendValue, currency)}`
+    );
+  }
+
+  if (dateChanged) {
+    changeParts.push(
+      `락 ${formatDateOnly(item.previousExDividendDate)} -> ${formatDateOnly(item.exDividendDate)}`
+    );
+    changeParts.push(
+      `지급 ${formatDateOnly(item.previousDividendDate)} -> ${formatDateOnly(item.dividendDate)}`
+    );
+  }
+
+  return `
+    <div class="dividend-history-item">
+      <span>${escapeHtml(formatDate(item.checkedAt))}</span>
+      <strong>${escapeHtml(changeParts.filter(Boolean).join(' · ') || '배당 정보 변경')}</strong>
+      <span>${escapeHtml(item.provider ? getProviderLabel(item.provider) : '-')}</span>
     </div>
   `;
 }

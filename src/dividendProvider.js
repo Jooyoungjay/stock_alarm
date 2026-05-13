@@ -91,6 +91,8 @@ function createDividendAttempt(provider, input) {
     attempt.annualDividendPerShare = normalizePositiveNumber(input.info.annualDividendPerShare);
     attempt.dividendYieldPercent = normalizePositiveNumber(input.info.dividendYieldPercent);
     attempt.lastDividendValue = normalizePositiveNumber(input.info.lastDividendValue);
+    attempt.exDividendDate = input.info.exDividendDate || '';
+    attempt.dividendDate = input.info.dividendDate || '';
     attempt.currency = input.info.currency || '';
   }
 

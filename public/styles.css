@@ -1206,6 +1206,44 @@ select:focus {
   background: rgba(13, 17, 23, 0.36);
 }
 
+.stock-dividend-panel {
+  display: grid;
+  gap: 8px;
+  padding: 10px;
+  border: 1px solid rgba(26, 158, 110, 0.24);
+  border-radius: var(--radius-sm);
+  background: rgba(26, 158, 110, 0.06);
+}
+
+.stock-dividend-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(110px, 1fr));
+  gap: 8px;
+}
+
+.dividend-history-list {
+  display: grid;
+  gap: 6px;
+  padding-top: 8px;
+  border-top: 1px solid rgba(26, 158, 110, 0.18);
+}
+
+.dividend-history-item {
+  display: grid;
+  grid-template-columns: minmax(112px, 0.65fr) minmax(0, 1fr) auto;
+  gap: 8px;
+  align-items: baseline;
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.dividend-history-item strong {
+  overflow-wrap: anywhere;
+  color: var(--text);
+  font-size: 12px;
+}
+
 .stock-holding-metric {
   display: grid;
   gap: 3px;
@@ -1541,6 +1579,11 @@ select:focus {
     grid-template-columns: 1fr 1fr;
   }
 
+  .dividend-history-item {
+    grid-template-columns: 1fr;
+    gap: 3px;
+  }
+
   .metric,
   .price-block,
   .change-block,
@@ -1684,6 +1727,11 @@ select:focus {
   .backup-actions {
     justify-content: flex-start;
   }
+
+  .dividend-history-item {
+    grid-template-columns: 1fr;
+    gap: 3px;
+  }
 }
 
 @media (max-width: 520px) {
@@ -1698,6 +1746,7 @@ select:focus {
   .server-status-grid,
   .stock-top,
   .stock-holding-grid,
+  .stock-dividend-grid,
   .stock-edit-form {
     grid-template-columns: 1fr;
   }

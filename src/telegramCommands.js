@@ -754,6 +754,8 @@ function formatStockLine(stock) {
     stock.annualDividendPerShare ? `주당 연 배당금: ${formatNumber(stock.annualDividendPerShare)}` : '',
     Number.isFinite(currentPrice) ? `현재가: ${formatNumber(currentPrice)}${stock.currency ? ` ${stock.currency}` : ''}` : '',
     formatDividendScheduleLine(stock),
+    formatDividendEventLine(stock),
+    formatDividendHistoryLine(stock),
     formatHoldingLine(stock),
     formatDividendLine(stock),
     formatAlertStateLine(stock),
@@ -821,6 +823,52 @@ function formatDividendScheduleLine(stock) {
   }
 
   return `배당 일정: ${formatDividendFrequency(schedule.frequency)} · ${formatDividendMonths(schedule.months)}`;
+}
+
+function formatDividendEventLine(stock) {
+  const parts = [];
+  const currency = stock.dividendCurrency || stock.currency || '';
+
+  if (stock.lastDividendValue) {
+    parts.push(`최근 1주 배당 ${formatNumber(stock.lastDividendValue)}${currency ? ` ${currency}` : ''}`);
+  }
+
+  if (stock.exDividendDate) {
+    parts.push(`배당락 ${formatDateOnly(stock.exDividendDate)}`);
+  }
+
+  if (stock.dividendDate) {
+    parts.push(`지급 ${formatDateOnly(stock.dividendDate)}`);
+  }
+
+  return parts.length ? `배당 이벤트: ${parts.join(' · ')}` : '';
+}
+
+function formatDividendHistoryLine(stock) {
+  const latest = Array.isArray(stock.dividendHistory) ? stock.dividendHistory[0] : null;
+
+  if (!latest) {
+    return '';
+  }
+
+  const currency = latest.currency || stock.dividendCurrency || stock.currency || '';
+  const parts = [];
+
+  if (latest.previousAnnualDividendPerShare !== latest.annualDividendPerShare) {
+    parts.push(
+      `연 ${formatNumber(latest.previousAnnualDividendPerShare)} -> ${formatNumber(latest.annualDividendPerShare)}${currency ? ` ${currency}` : ''}`
+    );
+  }
+
+  if (latest.previousExDividendDate !== latest.exDividendDate) {
+    parts.push(`락 ${formatDateOnly(latest.previousExDividendDate)} -> ${formatDateOnly(latest.exDividendDate)}`);
+  }
+
+  if (latest.previousDividendDate !== latest.dividendDate) {
+    parts.push(`지급 ${formatDateOnly(latest.previousDividendDate)} -> ${formatDateOnly(latest.dividendDate)}`);
+  }
+
+  return parts.length ? `최근 배당 변경: ${parts.join(' · ')}` : '';
 }
 
 function formatAlertStateLine(stock) {

@@ -95,6 +95,7 @@ function normalizeStock(input, defaults) {
     dividendLastError: '',
     dividendLastErrorAt: null,
     dividendLastDiagnostic: null,
+    dividendHistory: [],
     purchaseDate: normalizeOptionalDate(input.purchaseDate),
     alertType,
     thresholdPercent,
@@ -196,6 +197,23 @@ function applyStockPatch(stock, patch) {
     next.dividendLastError = '';
     next.dividendLastErrorAt = null;
     next.dividendLastDiagnostic = null;
+
+    if (hasDividendHistoryChange(stock, next)) {
+      next.dividendHistory = appendDividendHistory(next.dividendHistory, {
+        checkedAt: next.updatedAt,
+        reason: 'manual',
+        provider: 'manual',
+        currency: next.dividendCurrency || next.currency || '',
+        previousAnnualDividendPerShare: stock.annualDividendPerShare,
+        annualDividendPerShare: next.annualDividendPerShare,
+        previousLastDividendValue: stock.lastDividendValue,
+        lastDividendValue: next.lastDividendValue,
+        previousExDividendDate: stock.exDividendDate || '',
+        exDividendDate: next.exDividendDate || '',
+        previousDividendDate: stock.dividendDate || '',
+        dividendDate: next.dividendDate || ''
+      });
+    }
   }
 
   if (patch.dividendFrequency !== undefined) {
@@ -312,6 +330,7 @@ function normalizeStoredStock(stock) {
     dividendLastError: stock.dividendLastError || '',
     dividendLastErrorAt: stock.dividendLastErrorAt || null,
     dividendLastDiagnostic: normalizeDividendDiagnostic(stock.dividendLastDiagnostic),
+    dividendHistory: normalizeDividendHistory(stock.dividendHistory),
     purchaseDate: stock.purchaseDate || '',
     alertType:
       alertType === ALERT_TYPES.TARGET_PRICE && normalizedTargetPrice === null
@@ -399,6 +418,12 @@ function normalizeDividendDiagnostic(value) {
     previousAnnualDividendPerShare: normalizeOptionalStoredNumber(
       value.previousAnnualDividendPerShare
     ),
+    lastDividendValue: normalizeOptionalStoredNumber(value.lastDividendValue),
+    previousLastDividendValue: normalizeOptionalStoredNumber(value.previousLastDividendValue),
+    exDividendDate: String(value.exDividendDate || ''),
+    previousExDividendDate: String(value.previousExDividendDate || ''),
+    dividendDate: String(value.dividendDate || ''),
+    previousDividendDate: String(value.previousDividendDate || ''),
     preservedAnnualDividendPerShare: normalizeOptionalStoredNumber(
       value.preservedAnnualDividendPerShare
     ),
@@ -418,9 +443,60 @@ function normalizeDividendAttempt(value) {
     annualDividendPerShare: normalizeOptionalStoredNumber(value?.annualDividendPerShare),
     dividendYieldPercent: normalizeOptionalStoredNumber(value?.dividendYieldPercent),
     lastDividendValue: normalizeOptionalStoredNumber(value?.lastDividendValue),
+    exDividendDate: String(value?.exDividendDate || ''),
+    dividendDate: String(value?.dividendDate || ''),
     currency: String(value?.currency || ''),
     error: String(value?.error || '')
   };
+}
+
+function normalizeDividendHistory(value) {
+  if (!Array.isArray(value)) {
+    return [];
+  }
+
+  return value.map(normalizeDividendHistoryEntry).filter(Boolean).slice(0, 20);
+}
+
+function normalizeDividendHistoryEntry(value) {
+  if (!value || typeof value !== 'object') {
+    return null;
+  }
+
+  return {
+    checkedAt: String(value.checkedAt || ''),
+    reason: String(value.reason || ''),
+    provider: String(value.provider || ''),
+    sourceSymbol: String(value.sourceSymbol || ''),
+    currency: String(value.currency || ''),
+    previousAnnualDividendPerShare: normalizeOptionalStoredNumber(
+      value.previousAnnualDividendPerShare
+    ),
+    annualDividendPerShare: normalizeOptionalStoredNumber(value.annualDividendPerShare),
+    previousLastDividendValue: normalizeOptionalStoredNumber(value.previousLastDividendValue),
+    lastDividendValue: normalizeOptionalStoredNumber(value.lastDividendValue),
+    previousExDividendDate: String(value.previousExDividendDate || ''),
+    exDividendDate: String(value.exDividendDate || ''),
+    previousDividendDate: String(value.previousDividendDate || ''),
+    dividendDate: String(value.dividendDate || '')
+  };
+}
+
+function appendDividendHistory(history, entry) {
+  return [normalizeDividendHistoryEntry(entry), ...normalizeDividendHistory(history)]
+    .filter(Boolean)
+    .slice(0, 20);
+}
+
+function hasDividendHistoryChange(previous, next) {
+  return (
+    normalizeOptionalStoredNumber(previous.annualDividendPerShare) !==
+      normalizeOptionalStoredNumber(next.annualDividendPerShare) ||
+    normalizeOptionalStoredNumber(previous.lastDividendValue) !==
+      normalizeOptionalStoredNumber(next.lastDividendValue) ||
+    String(previous.exDividendDate || '') !== String(next.exDividendDate || '') ||
+    String(previous.dividendDate || '') !== String(next.dividendDate || '')
+  );
 }
 
 function normalizeDeviceId(value) {

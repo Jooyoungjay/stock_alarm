@@ -20,6 +20,7 @@ const baseStock = {
   dividendLastCheckedAt: null,
   dividendLastError: '',
   dividendLastErrorAt: null,
+  dividendHistory: [],
   currency: 'USD',
   updatedAt: '2026-05-10T00:00:00.000Z'
 };
@@ -57,6 +58,9 @@ test('runDividendRefresh updates annual dividend per share from provider data', 
               provider: 'yahoo',
               status: 'success',
               annualDividendPerShare: 3,
+              lastDividendValue: 0.75,
+              exDividendDate: '2026-05-11T00:00:00.000Z',
+              dividendDate: '2026-05-25T00:00:00.000Z',
               currency: 'USD',
               sourceSymbol: 'AAPL'
             }
@@ -80,11 +84,61 @@ test('runDividendRefresh updates annual dividend per share from provider data', 
   assert.equal(store.stocks[0].dividendProvider, 'yahoo');
   assert.equal(store.stocks[0].dividendYieldPercent, 2.5);
   assert.equal(store.stocks[0].lastDividendValue, 0.75);
+  assert.equal(store.stocks[0].exDividendDate, '2026-05-11T00:00:00.000Z');
+  assert.equal(store.stocks[0].dividendDate, '2026-05-25T00:00:00.000Z');
   assert.equal(store.stocks[0].dividendLastCheckedAt, '2026-05-12T00:00:00.000Z');
   assert.equal(store.stocks[0].dividendLastError, '');
   assert.equal(store.stocks[0].dividendLastDiagnostic.status, 'updated');
   assert.equal(store.stocks[0].dividendLastDiagnostic.provider, 'yahoo');
+  assert.equal(store.stocks[0].dividendLastDiagnostic.lastDividendValue, 0.75);
+  assert.equal(store.stocks[0].dividendLastDiagnostic.exDividendDate, '2026-05-11T00:00:00.000Z');
   assert.equal(store.stocks[0].dividendLastDiagnostic.attempts[1].status, 'success');
+  assert.equal(store.stocks[0].dividendLastDiagnostic.attempts[1].exDividendDate, '2026-05-11T00:00:00.000Z');
+  assert.equal(store.stocks[0].dividendHistory.length, 1);
+  assert.equal(store.stocks[0].dividendHistory[0].previousAnnualDividendPerShare, 2);
+  assert.equal(store.stocks[0].dividendHistory[0].annualDividendPerShare, 3);
+});
+
+test('runDividendRefresh records event date changes even when annual dividend is unchanged', async () => {
+  const store = createMemoryStore({
+    ...baseStock,
+    annualDividendPerShare: 3,
+    dividendDataSource: 'yahoo',
+    dividendProvider: 'yahoo',
+    lastDividendValue: 0.75,
+    exDividendDate: '2026-05-11T00:00:00.000Z',
+    dividendDate: '2026-05-25T00:00:00.000Z'
+  });
+  const result = await runDividendRefresh(
+    store,
+    {
+      quoteTimeoutMs: 1000,
+      dividendProviders: 'yahoo'
+    },
+    {
+      now: new Date('2026-06-12T00:00:00.000Z'),
+      fetchDividendInfo: async () => ({
+        annualDividendPerShare: 3,
+        dividendYieldPercent: 2.5,
+        lastDividendValue: 0.75,
+        exDividendDate: '2026-06-11T00:00:00.000Z',
+        dividendDate: '2026-06-25T00:00:00.000Z',
+        currency: 'USD',
+        provider: 'yahoo',
+        sourceSymbol: 'AAPL',
+        attempts: []
+      })
+    }
+  );
+
+  assert.equal(result.results[0].status, 'updated');
+  assert.equal(store.stocks[0].annualDividendPerShare, 3);
+  assert.equal(store.stocks[0].exDividendDate, '2026-06-11T00:00:00.000Z');
+  assert.equal(store.stocks[0].dividendDate, '2026-06-25T00:00:00.000Z');
+  assert.equal(store.stocks[0].dividendHistory.length, 1);
+  assert.equal(store.stocks[0].dividendHistory[0].reason, 'exDate,payDate');
+  assert.equal(store.stocks[0].dividendHistory[0].previousExDividendDate, '2026-05-11T00:00:00.000Z');
+  assert.equal(store.stocks[0].dividendHistory[0].exDividendDate, '2026-06-11T00:00:00.000Z');
 });
 
 test('runDividendRefresh preserves existing dividend value when provider fails', async () => {
