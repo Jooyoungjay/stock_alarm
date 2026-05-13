@@ -339,6 +339,41 @@ test('parsePublicDataDividendResponse matches alphanumeric Korean preferred stoc
   assert.equal(info.sourceSymbol, '두산퓨얼셀우선주');
 });
 
+test('parsePublicDataDividendResponse does not apply common stock rows to preferred stocks', () => {
+  assert.throws(
+    () =>
+      parsePublicDataDividendResponse(
+        {
+          response: {
+            header: {
+              resultCode: '00',
+              resultMsg: 'NORMAL SERVICE.'
+            },
+            body: {
+              items: {
+                item: [
+                  {
+                    isinCd: 'KR7336260005',
+                    stckIssuCmpyNm: '두산퓨얼셀',
+                    isinCdNm: '두산퓨얼셀보통주',
+                    dvdnBasDt: '20260331',
+                    stckGenrDvdnAmt: '150'
+                  }
+                ]
+              }
+            }
+          }
+        },
+        '33626L',
+        '두산퓨얼셀',
+        {
+          companyNameCandidates: ['두산퓨얼셀우선주', '두산퓨얼셀']
+        }
+      ),
+    /배당 정보를 찾을 수 없습니다: 33626L/
+  );
+});
+
 test('parsePublicDataDividendResponse matches company name variants', () => {
   const info = parsePublicDataDividendResponse(
     {

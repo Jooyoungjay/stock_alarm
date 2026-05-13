@@ -155,7 +155,7 @@ export function parsePublicDataDividendResponse(
     ? items.filter((item) => recordContainsStockCode(item, stockCode))
     : [];
   const nameMatchingItems = sourceNames.length
-    ? items.filter((item) => isPublicDataDividendItemNameMatch(item, sourceNames))
+    ? items.filter((item) => isPublicDataDividendItemNameMatch(item, sourceNames, stockCode))
     : [];
   const matchingItems =
     codeMatchingItems.length > 0
@@ -163,7 +163,10 @@ export function parsePublicDataDividendResponse(
       : sourceNames.length || stockCode
         ? nameMatchingItems
         : items;
-  const selectedItems = matchingItems.length === 0 && items.length === 1 ? items : matchingItems;
+  const selectedItems =
+    matchingItems.length === 0 && items.length === 1 && !isPreferredKoreanStockCode(stockCode)
+      ? items
+      : matchingItems;
   const events = selectedItems
     .map((item) => ({
       amount: pickFirstPositiveNumber(
@@ -852,7 +855,19 @@ function expandCompanyNameCandidate(value) {
   return [text, withoutStockClass, withoutCorpPrefix, withoutCorpSuffix];
 }
 
-function isPublicDataDividendItemNameMatch(item, sourceNames) {
+function isPublicDataDividendItemNameMatch(item, sourceNames, stockCode) {
+  if (isPreferredKoreanStockCode(stockCode) && isCommonStockRecord(item)) {
+    return false;
+  }
+
+  if (
+    isPreferredKoreanStockCode(stockCode) &&
+    sourceNames.some((sourceName) => isPreferredStockText(sourceName)) &&
+    !isPreferredStockRecord(item)
+  ) {
+    return false;
+  }
+
   const companyName = findCompanyNameInRecord(item);
 
   if (!companyName) {
@@ -893,6 +908,39 @@ function recordContainsStockCode(record, stockCode) {
 
 function normalizeStockCodeText(value) {
   return String(value || '').trim().toUpperCase().replace(/[^0-9A-Z]/g, '');
+}
+
+function isPreferredKoreanStockCode(stockCode) {
+  return /^[0-9]{5}[A-Z]$/i.test(String(stockCode || '').trim());
+}
+
+function isCommonStockRecord(record) {
+  return /보통주|common/i.test(getStockClassText(record));
+}
+
+function isPreferredStockRecord(record) {
+  return isPreferredStockText(getStockClassText(record));
+}
+
+function isPreferredStockText(value) {
+  return /우선주|우선|[0-9]*우B?|preferred/i.test(String(value || ''));
+}
+
+function getStockClassText(record) {
+  return Object.entries(record || {})
+    .filter(([key]) => {
+      const normalizedKey = String(key || '').toLowerCase();
+      return (
+        normalizedKey.includes('isin') ||
+        normalizedKey.includes('stock') ||
+        normalizedKey.includes('stck') ||
+        normalizedKey.includes('name') ||
+        normalizedKey.includes('nm') ||
+        normalizedKey.includes('knd')
+      );
+    })
+    .map(([, value]) => String(value || ''))
+    .join(' ');
 }
 
 function findCompanyNameInRecord(record) {
