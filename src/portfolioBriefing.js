@@ -1,0 +1,518 @@
+import { buildAlertRule } from './alertEngine.js';
+import { isTelegramConfigured, sendTelegramMessage } from './telegram.js';
+
+export const dailyBriefingMetaKey = 'lastDailyBriefingDate';
+
+const defaultWarningDistancePercent = 5;
+const defaultTopLimit = 5;
+const defaultBriefingTime = '16:10';
+
+const riskRanks = {
+  alert: 0,
+  warning: 1,
+  error: 2,
+  ok: 3,
+  unknown: 4,
+  inactive: 5
+};
+
+const riskLabels = {
+  alert: '알림',
+  warning: '주의',
+  error: '조회 실패',
+  ok: '정상',
+  unknown: '확인 전',
+  inactive: '비활성'
+};
+
+export function buildRiskRanking(stocks, options = {}) {
+  const warningDistancePercent = normalizePositiveNumber(
+    options.warningDistancePercent,
+    defaultWarningDistancePercent
+  );
+
+  return (Array.isArray(stocks) ? stocks : [])
+    .map((stock) => buildRiskItem(stock, { warningDistancePercent }))
+    .sort(compareRiskItems)
+    .map((item, index) => ({
+      ...item,
+      rank: index + 1
+    }));
+}
+
+export function buildDailyBriefing(stocks, options = {}) {
+  const now = options.now || new Date();
+  const ranking = buildRiskRanking(stocks, options);
+  const activeRanking = ranking.filter((item) => item.level !== 'inactive');
+  const topLimit = normalizePositiveInteger(options.topLimit, defaultTopLimit);
+  const counts = ranking.reduce(
+    (summary, item) => {
+      summary[item.level] = (summary[item.level] || 0) + 1;
+      if (item.level !== 'inactive') {
+        summary.active += 1;
+      }
+      summary.total += 1;
+      return summary;
+    },
+    {
+      total: 0,
+      active: 0,
+      alert: 0,
+      warning: 0,
+      error: 0,
+      ok: 0,
+      unknown: 0,
+      inactive: 0
+    }
+  );
+
+  return {
+    generatedAt: now.toISOString(),
+    dateKey: getLocalDateKey(now),
+    counts,
+    ranking,
+    topRisks: activeRanking.slice(0, topLimit),
+    portfolio: buildPortfolioSummary(stocks)
+  };
+}
+
+export function formatDailyBriefingMessage(briefing, options = {}) {
+  const generatedAt = briefing?.generatedAt ? new Date(briefing.generatedAt) : options.now || new Date();
+  const counts = briefing?.counts || {};
+  const topRisks = Array.isArray(briefing?.topRisks) ? briefing.topRisks : [];
+  const portfolio = Array.isArray(briefing?.portfolio) ? briefing.portfolio : [];
+  const lines = [
+    '[Stock Alarm] 일일 브리핑',
+    `기준 시각: ${formatDateTime(generatedAt)}`,
+    `감시중 ${counts.active || 0}개 · 알림 ${counts.alert || 0}개 · 주의 ${counts.warning || 0}개 · 오류 ${counts.error || 0}개`,
+    ''
+  ];
+
+  if (topRisks.length) {
+    lines.push('위험도 순위');
+    lines.push(...topRisks.map(formatRiskLine));
+  } else {
+    lines.push('위험도 순위');
+    lines.push('감시중인 종목이 없습니다.');
+  }
+
+  if (portfolio.length) {
+    lines.push('');
+    lines.push('포트폴리오 요약');
+    lines.push(...portfolio.map(formatPortfolioLine));
+  }
+
+  if (counts.unknown) {
+    lines.push('');
+    lines.push(`확인 전 종목 ${counts.unknown}개는 시세 확인 후 순위가 정확해집니다.`);
+  }
+
+  if (counts.inactive) {
+    lines.push(`비활성 종목 ${counts.inactive}개는 브리핑 순위에서 뒤로 보냅니다.`);
+  }
+
+  return lines.filter((line) => line !== null && line !== undefined).join('\n');
+}
+
+export async function runDailyBriefing(store, config, options = {}) {
+  const now = options.now || new Date();
+  const force = Boolean(options.force);
+  const enabled = config.dailyBriefingEnabled !== false;
+  const time = normalizeBriefingTime(config.dailyBriefingTime);
+
+  if (!enabled && !force) {
+    return {
+      checkedAt: now.toISOString(),
+      skipped: true,
+      reason: 'daily_briefing_disabled'
+    };
+  }
+
+  if (!force && !isDailyBriefingDue(now, time)) {
+    return {
+      checkedAt: now.toISOString(),
+      skipped: true,
+      reason: 'daily_briefing_not_due',
+      scheduledTime: time
+    };
+  }
+
+  const dateKey = getLocalDateKey(now);
+  const lastDate = typeof store.getMetaValue === 'function'
+    ? await store.getMetaValue(dailyBriefingMetaKey, '')
+    : '';
+
+  if (!force && lastDate === dateKey) {
+    return {
+      checkedAt: now.toISOString(),
+      skipped: true,
+      reason: 'daily_briefing_already_sent',
+      dateKey,
+      scheduledTime: time
+    };
+  }
+
+  const stocks = await store.listStocks();
+  const briefing = buildDailyBriefing(stocks, {
+    now,
+    warningDistancePercent: config.dailyBriefingWarningDistancePercent,
+    topLimit: config.dailyBriefingTopLimit
+  });
+  const message = formatDailyBriefingMessage(briefing, { now });
+  const sender = options.sendTelegramMessage || sendTelegramMessage;
+  let deliveryStatus = 'not_configured';
+  let deliveryError = '';
+
+  if (isTelegramConfigured(config)) {
+    try {
+      await sender(config, message);
+      deliveryStatus = 'sent';
+    } catch (error) {
+      deliveryStatus = 'failed';
+      deliveryError = error.message;
+    }
+  }
+
+  const result = {
+    checkedAt: now.toISOString(),
+    dateKey,
+    scheduledTime: time,
+    forced: force,
+    deliveryStatus,
+    deliveryError,
+    briefing
+  };
+
+  if (deliveryStatus === 'sent' && typeof store.setMetaValue === 'function') {
+    await store.setMetaValue(dailyBriefingMetaKey, dateKey);
+  }
+
+  return result;
+}
+
+export function isDailyBriefingDue(now = new Date(), time = defaultBriefingTime) {
+  const parsed = parseBriefingTime(time);
+  const currentMinutes = now.getHours() * 60 + now.getMinutes();
+  return currentMinutes >= parsed.minutesOfDay;
+}
+
+export function normalizeBriefingTime(value) {
+  try {
+    const parsed = parseBriefingTime(value);
+    return `${pad2(parsed.hour)}:${pad2(parsed.minute)}`;
+  } catch {
+    return defaultBriefingTime;
+  }
+}
+
+function buildRiskItem(stock, options) {
+  const base = {
+    stockId: stock?.id || '',
+    symbol: stock?.symbol || '',
+    displayName: stock?.displayName || stock?.symbol || '',
+    active: stock?.active !== false,
+    level: 'unknown',
+    label: riskLabels.unknown,
+    detail: '아직 시세 확인 전입니다.',
+    currentPrice: normalizeFiniteNumber(stock?.lastPrice),
+    thresholdPrice: null,
+    referencePrice: null,
+    metricPercent: null,
+    distanceToThreshold: null,
+    distanceToThresholdPercent: null,
+    currency: stock?.currency || '',
+    lastCheckedAt: stock?.lastCheckedAt || null,
+    lastError: stock?.lastError || ''
+  };
+
+  if (!base.active) {
+    return {
+      ...base,
+      level: 'inactive',
+      label: riskLabels.inactive,
+      detail: '감시가 중지된 종목입니다.'
+    };
+  }
+
+  if (stock?.lastCheckStatus === 'error') {
+    return {
+      ...base,
+      level: 'error',
+      label: riskLabels.error,
+      detail: stock.lastError || '최근 시세 조회에 실패했습니다.'
+    };
+  }
+
+  if (base.currentPrice === null || base.currentPrice <= 0) {
+    return base;
+  }
+
+  try {
+    const rule = buildAlertRule(stock, base.currentPrice);
+    const thresholdPrice = normalizeFiniteNumber(rule.thresholdPrice);
+    const distanceToThreshold =
+      thresholdPrice !== null ? base.currentPrice - thresholdPrice : null;
+    const distanceToThresholdPercent =
+      distanceToThreshold !== null && thresholdPrice > 0
+        ? (distanceToThreshold / thresholdPrice) * 100
+        : null;
+    const isAlert = stock?.alertState === 'triggered' || rule.isBelowThreshold;
+    const isWarning =
+      distanceToThresholdPercent !== null &&
+      distanceToThresholdPercent <= options.warningDistancePercent;
+    const level = isAlert ? 'alert' : isWarning ? 'warning' : 'ok';
+
+    return {
+      ...base,
+      level,
+      label: riskLabels[level],
+      detail: formatDistanceDetail(distanceToThreshold, distanceToThresholdPercent, base.currency),
+      thresholdPrice,
+      referencePrice: normalizeFiniteNumber(rule.referencePrice),
+      metricPercent: normalizeFiniteNumber(rule.metricPercent),
+      distanceToThreshold,
+      distanceToThresholdPercent,
+      alertType: rule.alertType,
+      alertTypeLabel: rule.alertTypeLabel,
+      thresholdLabel: rule.thresholdLabel,
+      metricLabel: rule.metricLabel
+    };
+  } catch (error) {
+    return {
+      ...base,
+      level: 'unknown',
+      label: riskLabels.unknown,
+      detail: error.message || '알림 기준을 계산하지 못했습니다.'
+    };
+  }
+}
+
+function compareRiskItems(left, right) {
+  return (
+    getRiskRank(left.level) - getRiskRank(right.level) ||
+    getDistanceSortValue(left) - getDistanceSortValue(right) ||
+    String(left.displayName || left.symbol).localeCompare(String(right.displayName || right.symbol), 'ko-KR')
+  );
+}
+
+function getRiskRank(level) {
+  return riskRanks[level] ?? 99;
+}
+
+function getDistanceSortValue(item) {
+  const value = Number(item.distanceToThresholdPercent);
+  return Number.isFinite(value) ? value : Number.POSITIVE_INFINITY;
+}
+
+function buildPortfolioSummary(stocks) {
+  const groups = new Map();
+
+  for (const stock of Array.isArray(stocks) ? stocks : []) {
+    const quantity = normalizeFiniteNumber(stock.quantity);
+    const purchasePrice = normalizeFiniteNumber(stock.purchasePrice);
+    const currentPrice = normalizeFiniteNumber(stock.lastPrice);
+    const annualDividendPerShare = normalizeFiniteNumber(stock.annualDividendPerShare);
+
+    if (quantity === null || quantity <= 0) {
+      continue;
+    }
+
+    const currency = stock.currency || '';
+    const key = currency || 'default';
+    const group = groups.get(key) || {
+      currency,
+      stockCount: 0,
+      investmentAmount: 0,
+      marketValue: 0,
+      valuedInvestmentAmount: 0,
+      profit: 0,
+      expectedAnnualDividend: 0,
+      dividendInvestmentAmount: 0
+    };
+
+    group.stockCount += 1;
+
+    if (purchasePrice !== null && purchasePrice > 0) {
+      const investmentAmount = quantity * purchasePrice;
+      group.investmentAmount += investmentAmount;
+
+      if (currentPrice !== null && currentPrice > 0) {
+        const marketValue = quantity * currentPrice;
+        group.marketValue += marketValue;
+        group.valuedInvestmentAmount += investmentAmount;
+        group.profit += marketValue - investmentAmount;
+      }
+
+      if (annualDividendPerShare !== null && annualDividendPerShare > 0) {
+        group.expectedAnnualDividend += quantity * annualDividendPerShare;
+        group.dividendInvestmentAmount += investmentAmount;
+      }
+    }
+
+    groups.set(key, group);
+  }
+
+  return [...groups.values()].map((group) => ({
+    ...group,
+    marketValue: group.valuedInvestmentAmount > 0 ? group.marketValue : null,
+    profit: group.valuedInvestmentAmount > 0 ? group.profit : null,
+    profitPercent:
+      group.valuedInvestmentAmount > 0 ? (group.profit / group.valuedInvestmentAmount) * 100 : null,
+    expectedAnnualDividend:
+      group.dividendInvestmentAmount > 0 ? group.expectedAnnualDividend : null,
+    dividendYieldPercent:
+      group.dividendInvestmentAmount > 0
+        ? (group.expectedAnnualDividend / group.dividendInvestmentAmount) * 100
+        : null
+  }));
+}
+
+function formatRiskLine(item, index) {
+  const prefix = `${index + 1}. ${item.displayName || item.symbol} (${item.symbol})`;
+  const price = formatMoney(item.currentPrice, item.currency);
+  const threshold = formatMoney(item.thresholdPrice, item.currency);
+  const metric =
+    item.metricPercent !== null && item.metricPercent !== undefined
+      ? ` · ${item.metricLabel || '하락률'} -${Math.max(0, item.metricPercent).toFixed(2)}%`
+      : '';
+  const checked = item.lastCheckedAt ? ` · ${formatDateTime(item.lastCheckedAt)}` : '';
+
+  return `${prefix}\n   ${item.label} · 현재가 ${price} · 기준가 ${threshold}${metric}${checked}\n   ${item.detail}`;
+}
+
+function formatPortfolioLine(group) {
+  const currency = group.currency || '';
+  const parts = [
+    `${currency || '통화 미지정'} ${group.stockCount}개`,
+    `평가손익 ${formatSignedMoney(group.profit, currency)} (${formatSignedPercent(group.profitPercent)})`
+  ];
+
+  if (group.expectedAnnualDividend !== null) {
+    parts.push(
+      `예상 연 배당 ${formatMoney(group.expectedAnnualDividend, currency)} (${formatPercent(group.dividendYieldPercent)})`
+    );
+  }
+
+  return parts.join(' · ');
+}
+
+function formatDistanceDetail(distance, distancePercent, currency) {
+  if (!Number.isFinite(distance) || !Number.isFinite(distancePercent)) {
+    return '알림 기준까지의 거리를 계산하지 못했습니다.';
+  }
+
+  if (distance <= 0) {
+    return `기준가보다 ${formatMoney(Math.abs(distance), currency)} 낮음`;
+  }
+
+  return `기준가까지 ${formatMoney(distance, currency)} · ${distancePercent.toFixed(2)}%`;
+}
+
+function parseBriefingTime(value) {
+  const match = String(value || defaultBriefingTime).trim().match(/^(\d{1,2}):(\d{2})$/);
+
+  if (!match) {
+    throw new Error('브리핑 시간은 HH:mm 형식이어야 합니다.');
+  }
+
+  const hour = Number(match[1]);
+  const minute = Number(match[2]);
+
+  if (!Number.isInteger(hour) || hour < 0 || hour > 23 || !Number.isInteger(minute) || minute > 59) {
+    throw new Error('브리핑 시간은 HH:mm 형식이어야 합니다.');
+  }
+
+  return {
+    hour,
+    minute,
+    minutesOfDay: hour * 60 + minute
+  };
+}
+
+function getLocalDateKey(value) {
+  const date = value instanceof Date ? value : new Date(value);
+  return `${date.getFullYear()}-${pad2(date.getMonth() + 1)}-${pad2(date.getDate())}`;
+}
+
+function formatDateTime(value) {
+  const date = value instanceof Date ? value : new Date(value);
+
+  if (!Number.isFinite(date.getTime())) {
+    return '-';
+  }
+
+  return date.toLocaleString('ko-KR', {
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit'
+  });
+}
+
+function formatMoney(value, currency) {
+  const number = normalizeFiniteNumber(value);
+
+  if (number === null) {
+    return '-';
+  }
+
+  const formatted = number.toLocaleString('ko-KR', {
+    maximumFractionDigits: Math.abs(number) >= 1000 ? 0 : 2
+  });
+
+  return currency ? `${formatted} ${currency}` : formatted;
+}
+
+function formatSignedMoney(value, currency) {
+  const number = normalizeFiniteNumber(value);
+
+  if (number === null) {
+    return '-';
+  }
+
+  return `${number > 0 ? '+' : ''}${formatMoney(number, currency)}`;
+}
+
+function formatSignedPercent(value) {
+  const number = normalizeFiniteNumber(value);
+
+  if (number === null) {
+    return '-';
+  }
+
+  return `${number > 0 ? '+' : ''}${number.toFixed(2)}%`;
+}
+
+function formatPercent(value) {
+  const number = normalizeFiniteNumber(value);
+
+  if (number === null) {
+    return '-';
+  }
+
+  return `${number.toFixed(2)}%`;
+}
+
+function normalizeFiniteNumber(value) {
+  if (value === undefined || value === null || value === '') {
+    return null;
+  }
+
+  const number = Number(value);
+  return Number.isFinite(number) ? number : null;
+}
+
+function normalizePositiveNumber(value, fallback) {
+  const number = Number(value);
+  return Number.isFinite(number) && number > 0 ? number : fallback;
+}
+
+function normalizePositiveInteger(value, fallback) {
+  const number = Number(value);
+  return Number.isInteger(number) && number > 0 ? number : fallback;
+}
+
+function pad2(value) {
+  return String(value).padStart(2, '0');
+}

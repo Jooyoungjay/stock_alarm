@@ -73,6 +73,24 @@ function toNumber(value, fallback, options = {}) {
   return parsed;
 }
 
+function toBoolean(value, fallback) {
+  if (value === undefined || value === null || value === '') {
+    return fallback;
+  }
+
+  const normalized = String(value).trim().toLowerCase();
+
+  if (['1', 'true', 'yes', 'y', 'on'].includes(normalized)) {
+    return true;
+  }
+
+  if (['0', 'false', 'no', 'n', 'off'].includes(normalized)) {
+    return false;
+  }
+
+  return fallback;
+}
+
 loadEnvironment();
 
 const isRailwayRuntime = Boolean(
@@ -96,6 +114,19 @@ export const config = {
   dividendRefreshIntervalSeconds: toNumber(process.env.DIVIDEND_REFRESH_INTERVAL_SECONDS, 86400, {
     min: 60
   }),
+  dailyBriefingEnabled: toBoolean(process.env.DAILY_BRIEFING_ENABLED, true),
+  dailyBriefingTime: process.env.DAILY_BRIEFING_TIME || '16:10',
+  dailyBriefingCheckIntervalSeconds: toNumber(
+    process.env.DAILY_BRIEFING_CHECK_INTERVAL_SECONDS,
+    60,
+    { min: 30 }
+  ),
+  dailyBriefingWarningDistancePercent: toNumber(
+    process.env.DAILY_BRIEFING_WARNING_DISTANCE_PERCENT,
+    5,
+    { min: 0.1, max: 100 }
+  ),
+  dailyBriefingTopLimit: toNumber(process.env.DAILY_BRIEFING_TOP_LIMIT, 5, { min: 1, max: 20 }),
   backupRetention: toNumber(process.env.BACKUP_RETENTION, 30, { min: 1 }),
   defaultAlertCooldownMinutes: toNumber(process.env.DEFAULT_ALERT_COOLDOWN_MINUTES, 30, {
     min: 1

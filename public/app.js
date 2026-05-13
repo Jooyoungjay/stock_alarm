@@ -41,6 +41,7 @@ const elements = {
   registerSteps: document.querySelectorAll('[data-register-step]'),
   checkNowButton: document.querySelector('#checkNowButton'),
   refreshDividendsButton: document.querySelector('#refreshDividendsButton'),
+  sendBriefingButton: document.querySelector('#sendBriefingButton'),
   testTelegramButton: document.querySelector('#testTelegramButton'),
   createBackupButton: document.querySelector('#createBackupButton'),
   refreshBackupsButton: document.querySelector('#refreshBackupsButton'),
@@ -185,6 +186,22 @@ elements.refreshDividendsButton.addEventListener('click', async () => {
     const result = await api('/api/dividends/refresh', { method: 'POST' });
     const counts = countDividendRefreshResults(result);
     showMessage(`배당 정보 ${counts.checked}개 확인, ${counts.updated}개 업데이트했습니다.`);
+    await Promise.all([loadData(), loadHealth()]);
+  });
+});
+
+elements.sendBriefingButton.addEventListener('click', async () => {
+  await withBusy(elements.sendBriefingButton, async () => {
+    const result = await api('/api/briefing/send', { method: 'POST' });
+
+    if (result.deliveryStatus === 'sent') {
+      showMessage('일일 브리핑을 텔레그램으로 전송했습니다.');
+    } else if (result.deliveryStatus === 'not_configured') {
+      showMessage('텔레그램 설정이 없어 브리핑을 전송하지 못했습니다.', true);
+    } else {
+      showMessage(result.deliveryError || '브리핑 전송에 실패했습니다.', true);
+    }
+
     await Promise.all([loadData(), loadHealth()]);
   });
 });
@@ -718,7 +735,7 @@ function renderStatus(data) {
   elements.telegramStatus.className = `status-chip ${data.telegramConfigured ? 'connected' : 'warn'}`;
   elements.quoteStatus.textContent = `시세 ${formatProviderList(data.quoteProviders)}`;
   elements.quoteStatus.className = 'status-chip pipeline';
-  elements.pollStatus.textContent = `시세 ${data.pollIntervalSeconds || 60}초 · 배당 ${formatInterval(data.dividendRefreshIntervalSeconds || 86400)}`;
+  elements.pollStatus.textContent = `시세 ${data.pollIntervalSeconds || 60}초 · 배당 ${formatInterval(data.dividendRefreshIntervalSeconds || 86400)} · 브리핑 ${formatDailyBriefingSetting(data)}`;
   elements.pollStatus.className = 'status-chip timer';
 }
 
@@ -737,6 +754,7 @@ function renderServerStatus(health) {
       ${renderServerMetric('Telegram', health.telegramConfigured ? '연결됨' : '미설정', health.telegramConfigured ? '알림 전송 가능' : '.env 설정 필요')}
       ${renderServerMetric('시세', formatProviderList(health.quoteProviders), `${health.pollIntervalSeconds || 60}초 주기`)}
       ${renderServerMetric('배당', formatProviderList(health.dividendProviders), `${formatInterval(health.dividendRefreshIntervalSeconds || 86400)} 주기`)}
+      ${renderServerMetric('브리핑', formatDailyBriefingSetting(health), getLastDailyBriefingDetail(health.lastDailyBriefing))}
       ${renderServerMetric('명령', formatDate(health.lastTelegramCommandPoll?.checkedAt), `${health.telegramCommandPollSeconds || 5}초 주기`)}
       ${renderServerMetric('마지막 확인', formatDate(health.lastCheck?.checkedAt), getLastCheckDetail(health.lastCheck))}
       ${renderServerMetric('배당 갱신', formatDate(health.lastDividendRefresh?.checkedAt), getLastDividendRefreshDetail(health.lastDividendRefresh))}
@@ -848,6 +866,43 @@ function getLastDividendRefreshDetail(lastRefresh) {
 
   const counts = countDividendRefreshResults(lastRefresh);
   return `확인 ${counts.checked}개 · 업데이트 ${counts.updated}개 · 실패 ${counts.error}개`;
+}
+
+function formatDailyBriefingSetting(data) {
+  if (!data?.dailyBriefingEnabled) {
+    return '꺼짐';
+  }
+
+  return data.dailyBriefingTime || '16:10';
+}
+
+function getLastDailyBriefingDetail(lastBriefing) {
+  if (!lastBriefing) {
+    return '아직 전송 전';
+  }
+
+  if (lastBriefing.skipped) {
+    return lastBriefing.reason || '건너뜀';
+  }
+
+  if (lastBriefing.error) {
+    return lastBriefing.error;
+  }
+
+  if (lastBriefing.deliveryStatus === 'sent') {
+    const dateText = lastBriefing.dateKey ? `${lastBriefing.dateKey} 전송` : '전송 완료';
+    return lastBriefing.checkedAt ? `${dateText} · ${formatDate(lastBriefing.checkedAt)}` : dateText;
+  }
+
+  if (lastBriefing.deliveryStatus === 'not_configured') {
+    return '텔레그램 미설정';
+  }
+
+  if (lastBriefing.deliveryStatus === 'failed') {
+    return lastBriefing.deliveryError || '전송 실패';
+  }
+
+  return lastBriefing.checkedAt ? formatDate(lastBriefing.checkedAt) : '-';
 }
 
 function countDividendRefreshResults(result) {

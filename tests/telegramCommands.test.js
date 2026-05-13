@@ -201,6 +201,42 @@ test('handleTelegramMessage can edit stock alert settings', async () => {
   assert.match(sent.at(-1), /종목 정보를 수정했습니다/);
 });
 
+test('handleTelegramMessage can send a risk briefing', async () => {
+  const store = await createStore();
+  const sent = [];
+  const options = {
+    sendTelegramMessage: async (_config, text) => {
+      sent.push(text);
+    },
+    initializeHighFromPurchaseDate: async (_store, _config, stock) => stock
+  };
+
+  let stock = await store.addStock({
+    symbol: '336260',
+    displayName: '두산퓨얼셀',
+    purchasePrice: 90000,
+    purchaseDate: '2026-05-11',
+    alertType: 'high_drawdown',
+    thresholdPercent: 5
+  });
+  stock = await store.replaceStock({
+    ...stock,
+    highPrice: 100000,
+    highPriceAt: '2026-05-12T00:00:00.000Z',
+    lastPrice: 94000,
+    lastCheckedAt: '2026-05-13T06:00:00.000Z',
+    alertState: 'triggered',
+    currency: 'KRW'
+  });
+
+  await handleTelegramMessage(store, config, message('/brief'), options);
+
+  assert.match(sent[0], /일일 브리핑/);
+  assert.match(sent[0], /위험도 순위/);
+  assert.match(sent[0], /두산퓨얼셀/);
+  assert.match(sent[0], /알림/);
+});
+
 test('pollTelegramCommands stores the next Telegram update offset', async () => {
   const store = await createStore();
   const sent = [];

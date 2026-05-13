@@ -1,5 +1,6 @@
 import { buildAlertRule, initializeHighFromPurchaseDate, runAlertCheck } from './alertEngine.js';
 import { createBackup, listBackups, restoreBackup } from './backups.js';
+import { buildDailyBriefing, formatDailyBriefingMessage } from './portfolioBriefing.js';
 import { ALERT_TYPES } from './storage.js';
 import {
   fetchTelegramUpdates,
@@ -13,6 +14,7 @@ const updateOffsetKey = 'telegramUpdateOffset';
 const helpMessage = [
   '[Stock Alarm] 명령어',
   '/list - 감시 종목 목록',
+  '/brief - 위험도 순위와 일일 브리핑',
   '/check - 지금 바로 전체 확인',
   '/pause <종목코드> - 감시 중지',
   '/resume <종목코드> - 감시 재개',
@@ -154,6 +156,10 @@ async function executeCommand(store, config, command, options) {
     case 'list':
     case 'status':
       return formatStockList(await store.listStocks());
+    case 'brief':
+    case 'briefing':
+    case 'risk':
+      return formatBriefingFromCommand(await store.listStocks(), config);
     case 'add':
       return addStockFromCommand(store, config, command, options);
     case 'pause':
@@ -178,6 +184,15 @@ async function executeCommand(store, config, command, options) {
     default:
       return `지원하지 않는 명령어입니다: /${command.name}\n\n${helpMessage}`;
   }
+}
+
+function formatBriefingFromCommand(stocks, config) {
+  const briefing = buildDailyBriefing(stocks, {
+    warningDistancePercent: config.dailyBriefingWarningDistancePercent,
+    topLimit: config.dailyBriefingTopLimit
+  });
+
+  return formatDailyBriefingMessage(briefing);
 }
 
 async function createBackupFromCommand(store, config, options) {
