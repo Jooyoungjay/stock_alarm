@@ -151,10 +151,18 @@ export function parsePublicDataDividendResponse(
     options.companyName,
     options.displayName
   ]);
+  const codeMatchingItems = stockCode
+    ? items.filter((item) => recordContainsStockCode(item, stockCode))
+    : [];
+  const nameMatchingItems = sourceNames.length
+    ? items.filter((item) => isPublicDataDividendItemNameMatch(item, sourceNames))
+    : [];
   const matchingItems =
-    sourceNames.length || stockCode
-      ? items.filter((item) => isPublicDataDividendItemMatch(item, stockCode, sourceNames))
-      : items;
+    codeMatchingItems.length > 0
+      ? codeMatchingItems
+      : sourceNames.length || stockCode
+        ? nameMatchingItems
+        : items;
   const selectedItems = matchingItems.length === 0 && items.length === 1 ? items : matchingItems;
   const events = selectedItems
     .map((item) => ({
@@ -291,7 +299,7 @@ export function toYahooDividendSymbol(symbol) {
     throw new Error('종목 코드가 비어 있습니다.');
   }
 
-  if (/^\d{6}$/.test(normalized)) {
+  if (/^\d{5}[0-9A-Z]$/.test(normalized)) {
     return `${normalized}.KS`;
   }
 
@@ -563,7 +571,7 @@ function findZipEndOfCentralDirectory(buffer) {
 function getYahooDividendSymbols(symbol) {
   const normalized = String(symbol || '').trim().toUpperCase();
 
-  if (/^\d{6}$/.test(normalized)) {
+  if (/^\d{5}[0-9A-Z]$/.test(normalized)) {
     return [`${normalized}.KS`, `${normalized}.KQ`];
   }
 
@@ -797,7 +805,7 @@ function parseUnixDate(value) {
 }
 
 function getKoreanStockCode(symbol) {
-  const match = String(symbol || '').trim().match(/^(\d{6})(?:\.(KS|KQ))?$/i);
+  const match = String(symbol || '').trim().match(/^(\d{5}[0-9A-Z])(?:\.(KS|KQ))?$/i);
   return match ? match[1] : '';
 }
 
@@ -844,11 +852,7 @@ function expandCompanyNameCandidate(value) {
   return [text, withoutStockClass, withoutCorpPrefix, withoutCorpSuffix];
 }
 
-function isPublicDataDividendItemMatch(item, stockCode, sourceNames) {
-  if (stockCode && recordContainsStockCode(item, stockCode)) {
-    return true;
-  }
-
+function isPublicDataDividendItemNameMatch(item, sourceNames) {
   const companyName = findCompanyNameInRecord(item);
 
   if (!companyName) {
@@ -859,7 +863,7 @@ function isPublicDataDividendItemMatch(item, stockCode, sourceNames) {
 }
 
 function recordContainsStockCode(record, stockCode) {
-  const code = String(stockCode || '').trim();
+  const code = normalizeStockCodeText(stockCode);
 
   if (!code) {
     return false;
@@ -867,7 +871,7 @@ function recordContainsStockCode(record, stockCode) {
 
   return Object.entries(record || {}).some(([key, value]) => {
     const normalizedKey = String(key || '').toLowerCase();
-    const text = String(value || '').replace(/\D/g, '');
+    const text = normalizeStockCodeText(value);
 
     if (!text) {
       return false;
@@ -885,6 +889,10 @@ function recordContainsStockCode(record, stockCode) {
       text.endsWith(code)
     );
   });
+}
+
+function normalizeStockCodeText(value) {
+  return String(value || '').trim().toUpperCase().replace(/[^0-9A-Z]/g, '');
 }
 
 function findCompanyNameInRecord(record) {

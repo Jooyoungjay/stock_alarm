@@ -156,6 +156,7 @@ test('parseYahooDividendSummary rejects payloads without dividend data', () => {
 
 test('toYahooDividendSymbol maps plain Korean codes to Yahoo KOSPI symbols', () => {
   assert.equal(toYahooDividendSymbol('336260'), '336260.KS');
+  assert.equal(toYahooDividendSymbol('33626L'), '33626L.KS');
   assert.equal(toYahooDividendSymbol('058470.KQ'), '058470.KQ');
   assert.equal(toYahooDividendSymbol('AAPL'), 'AAPL');
 });
@@ -296,6 +297,46 @@ test('parsePublicDataDividendResponse matches by stock code when company names d
   assert.equal(info.provider, 'publicdata');
   assert.equal(info.annualDividendPerShare, 150);
   assert.equal(info.sourceSymbol, '두산퓨얼셀보통주');
+});
+
+test('parsePublicDataDividendResponse matches alphanumeric Korean preferred stock codes', () => {
+  const info = parsePublicDataDividendResponse(
+    {
+      response: {
+        header: {
+          resultCode: '00',
+          resultMsg: 'NORMAL SERVICE.'
+        },
+        body: {
+          items: {
+            item: [
+              {
+                srtnCd: '33626L',
+                stckIssuCmpyNm: '두산퓨얼셀우선주',
+                dvdnBasDt: '20260331',
+                stckGenrDvdnAmt: '200'
+              },
+              {
+                srtnCd: '336260',
+                stckIssuCmpyNm: '두산퓨얼셀보통주',
+                dvdnBasDt: '20260331',
+                stckGenrDvdnAmt: '150'
+              }
+            ]
+          }
+        }
+      }
+    },
+    '33626L',
+    '두산퓨얼셀',
+    {
+      now: new Date('2026-05-12T00:00:00.000Z')
+    }
+  );
+
+  assert.equal(info.provider, 'publicdata');
+  assert.equal(info.annualDividendPerShare, 200);
+  assert.equal(info.sourceSymbol, '두산퓨얼셀우선주');
 });
 
 test('parsePublicDataDividendResponse matches company name variants', () => {

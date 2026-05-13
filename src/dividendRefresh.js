@@ -341,7 +341,7 @@ function getDividendCompanyNameCandidates(stock) {
 }
 
 function getPlainKoreanSymbol(symbol) {
-  const match = String(symbol || '').trim().match(/^(\d{6})(?:\.(KS|KQ))?$/i);
+  const match = String(symbol || '').trim().match(/^(\d{5}[0-9A-Z])(?:\.(KS|KQ))?$/i);
   return match ? match[1] : '';
 }
 

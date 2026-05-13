@@ -4,6 +4,7 @@ const naverRealtimeUrl = 'https://polling.finance.naver.com/api/realtime';
 const alphaVantageUrl = 'https://www.alphavantage.co/query';
 
 const defaultProviders = ['naver', 'stooq', 'alphavantage', 'yahoo'];
+const koreanStockSymbolPattern = /^(\d{5}[0-9A-Z])(?:\.(KS|KQ))?$/i;
 
 export async function fetchHistoricalHighSince(symbol, startDate, options = {}) {
   const providers = normalizeProviders(options.providers);
@@ -131,17 +132,18 @@ export function normalizeProviders(value) {
 }
 
 export function isKoreanStockSymbol(symbol) {
-  return /^\d{6}(\.(KS|KQ))?$/i.test(String(symbol || '').trim());
+  return koreanStockSymbolPattern.test(String(symbol || '').trim());
 }
 
 export function toNaverSymbol(symbol) {
   const normalized = String(symbol || '').trim().toUpperCase();
+  const match = normalized.match(koreanStockSymbolPattern);
 
-  if (!isKoreanStockSymbol(normalized)) {
+  if (!match) {
     throw new Error('한국 주식 코드가 아닙니다.');
   }
 
-  return normalized.slice(0, 6);
+  return match[1];
 }
 
 export function toStooqSymbol(symbol) {

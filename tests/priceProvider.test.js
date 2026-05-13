@@ -29,8 +29,11 @@ test('Korean symbols are detected and converted for Naver', () => {
   assert.equal(isKoreanStockSymbol('005930'), true);
   assert.equal(isKoreanStockSymbol('005930.KS'), true);
   assert.equal(isKoreanStockSymbol('035720.KQ'), true);
+  assert.equal(isKoreanStockSymbol('33626L'), true);
+  assert.equal(isKoreanStockSymbol('33626L.KS'), true);
   assert.equal(isKoreanStockSymbol('AAPL'), false);
   assert.equal(toNaverSymbol('005930.KS'), '005930');
+  assert.equal(toNaverSymbol('33626L.KS'), '33626L');
 });
 
 test('US symbols are converted for Stooq', () => {

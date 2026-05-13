@@ -24,6 +24,18 @@ export const symbolCatalog = Object.freeze([
     aliases: ['두산 퓨얼셀', '두산퓨어셀', '두산 퓨어셀', 'Doosan Fuelcell', 'Doosan Fuel Cell']
   },
   {
+    symbol: '33626L',
+    name: '두산퓨얼셀우선주',
+    market: 'KOSPI',
+    aliases: [
+      '두산퓨얼셀 우선주',
+      '두산퓨얼셀우',
+      '두산퓨얼셀2우B',
+      '두산 퓨얼셀 우선주',
+      'Doosan Fuel Cell Preferred'
+    ]
+  },
+  {
     symbol: 'AAPL',
     name: 'Apple',
     market: 'NASDAQ',
@@ -78,7 +90,7 @@ export function normalizeSymbolInput(value) {
   }
 
   const compact = raw.replace(/\s+/g, '');
-  const koreanCodeMatch = compact.match(/(\d{6})(?:\.(KS|KQ))?/i);
+  const koreanCodeMatch = compact.match(/(\d{5}[0-9A-Z])(?:\.(KS|KQ))?/i);
 
   if (koreanCodeMatch) {
     return koreanCodeMatch[2]
