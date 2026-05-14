@@ -16,6 +16,7 @@ export function formatAlertMessage(stock, quote, drawdownPercent, thresholdPrice
   const alertTypeLabel = alertRule.alertTypeLabel || '최고가 대비 하락률';
   const thresholdLabel = alertRule.thresholdLabel || '알림 기준';
   const metricLabel = alertRule.metricLabel || '하락률';
+  const metricPrefix = alertRule.alertType === 'profit_retracement' ? '' : '-';
   const repeatCount = Number(alertRule.alertRepeatCount || 0);
   const highLabel = stock.purchaseDate
     ? `구매일 이후 최고가: ${high}${currency} (${formatDateOnly(stock.highPriceAt)} 기준)`
@@ -28,7 +29,7 @@ export function formatAlertMessage(stock, quote, drawdownPercent, thresholdPrice
     `알림 방식: ${alertTypeLabel}`,
     highLabel,
     `${thresholdLabel}: ${threshold}${currency} 이하`,
-    `${metricLabel}: -${drawdown}%`,
+    `${metricLabel}: ${metricPrefix}${drawdown}%`,
     repeatCount > 0 ? `알림 회차: ${repeatCount}회` : '',
     `반복 간격: ${stock.alertCooldownMinutes}분`
   ]

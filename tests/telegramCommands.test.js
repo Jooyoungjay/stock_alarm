@@ -38,6 +38,13 @@ test('parseAddArgs supports direct target price commands', () => {
   assert.equal(input.thresholdPercent, 5);
 });
 
+test('parseAddArgs supports profit retracement commands', () => {
+  const input = parseAddArgs(['336260', '두산퓨얼셀', '88779', '2026-05-11', 'profit', '10']);
+
+  assert.equal(input.alertType, 'profit_retracement');
+  assert.equal(input.thresholdPercent, '10');
+});
+
 test('parseAddArgs supports keyed quantity commands', () => {
   const input = parseAddArgs([
     'symbol=336260',
@@ -76,6 +83,16 @@ test('parseEditArgs supports alert rule and metadata edits', () => {
     patch: {
       alertType: 'target_price',
       targetPrice: '93000'
+    }
+  });
+
+  assert.deepEqual(parseEditArgs(['336260', 'profit', '15']), {
+    query: '336260',
+    label: '이익금 반납률',
+    patch: {
+      alertType: 'profit_retracement',
+      thresholdPercent: '15',
+      targetPrice: null
     }
   });
 

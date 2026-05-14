@@ -359,7 +359,12 @@ function syncAlertTypeControls(form) {
   }
 
   if (thresholdLabel) {
-    thresholdLabel.textContent = alertType === 'purchase_loss' ? '손절률 %' : '하락률 %';
+    thresholdLabel.textContent =
+      alertType === 'purchase_loss'
+        ? '손절률 %'
+        : alertType === 'profit_retracement'
+          ? '이익금 반납률 %'
+          : '하락률 %';
   }
 
   renderAlertRuleSummary(alertType);
@@ -428,6 +433,10 @@ function renderAlertRuleSummary(alertType = elements.form.elements.alertType.val
     high_drawdown: {
       value: '최고가 대비 하락률',
       detail: '구매일 이후 최고가에서 설정한 비율만큼 내려오면 알림을 보냅니다.'
+    },
+    profit_retracement: {
+      value: '이익금 반납률',
+      detail: '구매일 이후 최고 이익금 중 설정한 비율을 반납하면 알림을 보냅니다.'
     },
     purchase_loss: {
       value: '매수가 대비 손절률',
@@ -604,7 +613,9 @@ function renderQuotePreview(preview) {
   const statusText = position
     ? position.alertNow
       ? '현재 알림 기준 이하'
-      : `기준가까지 ${formatMoney(position.distanceToThreshold, position.currency)}`
+      : position.thresholdPrice === null
+        ? '기준가 계산 대기'
+        : `기준가까지 ${formatMoney(position.distanceToThreshold, position.currency)}`
     : getProviderLabel(quote.provider);
 
   elements.quotePreview.className = 'quote-preview show';
@@ -685,7 +696,13 @@ function renderRegistrationSummary() {
   const alertDetail =
     alertType === 'target_price'
       ? `기준가 ${formatMoney(targetPrice)}`
-      : `${alertType === 'purchase_loss' ? '손절률' : '하락률'} ${thresholdPercent ?? '-'}%`;
+      : `${
+          alertType === 'purchase_loss'
+            ? '손절률'
+            : alertType === 'profit_retracement'
+              ? '이익금 반납률'
+              : '하락률'
+        } ${thresholdPercent ?? '-'}%`;
   const purchaseAmount =
     purchasePrice !== null && quantity !== null ? purchasePrice * quantity : null;
   const expectedAnnualDividend =
@@ -1154,7 +1171,7 @@ function renderStocks() {
           </div>
           <div class="metric change-block">
             <span class="metric-label price-label">${escapeHtml(getAlertMetricLabel(stock))}</span>
-            <span class="metric-value change-pct ${isTriggered ? 'down' : 'up'}">${formatAlertMetricPercent(alertMetric)}</span>
+            <span class="metric-value change-pct ${isTriggered ? 'down' : 'up'}">${formatAlertMetricPercent(alertMetric, getAlertType(stock) !== 'profit_retracement')}</span>
           </div>
         </div>
         ${renderHoldingSummary(stock)}
@@ -1510,6 +1527,7 @@ function editStockForm(stock) {
       <span>알림 기준</span>
       <select name="alertType">
         <option value="high_drawdown" ${getAlertType(stock) === 'high_drawdown' ? 'selected' : ''}>최고가 대비 하락률</option>
+        <option value="profit_retracement" ${getAlertType(stock) === 'profit_retracement' ? 'selected' : ''}>이익금 반납률</option>
         <option value="purchase_loss" ${getAlertType(stock) === 'purchase_loss' ? 'selected' : ''}>매수가 대비 손절률</option>
         <option value="target_price" ${getAlertType(stock) === 'target_price' ? 'selected' : ''}>직접 기준가</option>
       </select>
@@ -1631,7 +1649,7 @@ function renderAlerts() {
         </div>
         <div class="metric">
           <span class="metric-label">${escapeHtml(alert.metricLabel || '하락률')}</span>
-          <span class="metric-value down">${formatAlertMetricPercent(alert.drawdownPercent)}</span>
+          <span class="metric-value down">${formatAlertMetricPercent(alert.drawdownPercent, alert.alertType !== 'profit_retracement')}</span>
           ${alert.alertRepeatCount ? `<span class="metric-detail">${Number(alert.alertRepeatCount)}회차</span>` : ''}
         </div>
         <div class="metric">
@@ -2091,7 +2109,7 @@ function formatHighPriceAt(stock) {
 
 function getAlertType(stock) {
   const type = String(stock?.alertType || 'high_drawdown');
-  const validTypes = ['high_drawdown', 'purchase_loss', 'target_price'];
+  const validTypes = ['high_drawdown', 'profit_retracement', 'purchase_loss', 'target_price'];
 
   return validTypes.includes(type) ? type : 'high_drawdown';
 }
@@ -2099,6 +2117,7 @@ function getAlertType(stock) {
 function getAlertTypeLabel(stock) {
   const labels = {
     high_drawdown: '최고가 대비 하락률',
+    profit_retracement: '이익금 반납률',
     purchase_loss: '매수가 대비 손절률',
     target_price: '직접 기준가'
   };
@@ -2109,6 +2128,7 @@ function getAlertTypeLabel(stock) {
 function getAlertThresholdLabel(stock) {
   const labels = {
     high_drawdown: '알림 기준가',
+    profit_retracement: '이익 반납 기준가',
     purchase_loss: '손절 기준가',
     target_price: '직접 기준가'
   };
@@ -2119,6 +2139,7 @@ function getAlertThresholdLabel(stock) {
 function getAlertMetricLabel(stock) {
   const labels = {
     high_drawdown: '하락률',
+    profit_retracement: '반납률',
     purchase_loss: '손실률',
     target_price: '기준 대비'
   };
@@ -2361,6 +2382,35 @@ function calculateThreshold(highPrice, thresholdPercent) {
   return high * (1 - threshold / 100);
 }
 
+function calculateProfitRetracementThreshold(stock) {
+  const high = parseFiniteNumber(stock.highPrice);
+  const purchase = parseFiniteNumber(stock.purchasePrice);
+  const threshold = Number(stock.thresholdPercent);
+
+  if (
+    high === null ||
+    purchase === null ||
+    high <= purchase ||
+    !Number.isFinite(threshold)
+  ) {
+    return null;
+  }
+
+  return high - (high - purchase) * (threshold / 100);
+}
+
+function calculateProfitRetracement(stock, lastPrice) {
+  const high = parseFiniteNumber(stock.highPrice);
+  const purchase = parseFiniteNumber(stock.purchasePrice);
+  const last = parseFiniteNumber(lastPrice);
+
+  if (high === null || purchase === null || last === null || high <= purchase) {
+    return 0;
+  }
+
+  return Math.max(0, ((high - last) / (high - purchase)) * 100);
+}
+
 function calculateDrawdown(highPrice, lastPrice) {
   const high = parseFiniteNumber(highPrice);
   const last = parseFiniteNumber(lastPrice);
@@ -2381,6 +2431,10 @@ function calculateAlertThreshold(stock) {
     return calculateThreshold(stock.purchasePrice, stock.thresholdPercent);
   }
 
+  if (getAlertType(stock) === 'profit_retracement') {
+    return calculateProfitRetracementThreshold(stock);
+  }
+
   return calculateThreshold(stock.highPrice, stock.thresholdPercent);
 }
 
@@ -2393,21 +2447,32 @@ function calculateAlertMetric(stock, lastPrice) {
     return calculateDrawdown(stock.purchasePrice, lastPrice);
   }
 
+  if (getAlertType(stock) === 'profit_retracement') {
+    return calculateProfitRetracement(stock, lastPrice);
+  }
+
   return calculateDrawdown(stock.highPrice, lastPrice);
 }
 
-function formatAlertMetricPercent(value) {
+function formatAlertMetricPercent(value, useNegativePrefix = true) {
   const number = Number(value);
 
   if (!Number.isFinite(number)) {
     return '-';
   }
 
-  return number > 0 ? `-${number.toFixed(2)}%` : '0.00%';
+  if (number <= 0) {
+    return '0.00%';
+  }
+
+  return `${useNegativePrefix ? '-' : ''}${number.toFixed(2)}%`;
 }
 
 function formatMetricPercent(position) {
-  return formatAlertMetricPercent(position.metricPercent ?? position.drawdownPercent);
+  return formatAlertMetricPercent(
+    position.metricPercent ?? position.drawdownPercent,
+    position.alertType !== 'profit_retracement'
+  );
 }
 
 function formatMoney(value, currency) {

@@ -4,6 +4,7 @@ import { formatAlertMessage, isTelegramConfigured, sendTelegramMessage } from '.
 
 const alertTypeLabels = {
   [ALERT_TYPES.HIGH_DRAWDOWN]: '최고가 대비 하락률',
+  [ALERT_TYPES.PROFIT_RETRACEMENT]: '이익금 반납률',
   [ALERT_TYPES.PURCHASE_LOSS]: '매수가 대비 손절률',
   [ALERT_TYPES.TARGET_PRICE]: '직접 기준가'
 };
@@ -28,6 +29,44 @@ export function calculateThresholdPrice(highPrice, thresholdPercent) {
   }
 
   return high * (1 - threshold / 100);
+}
+
+export function calculateProfitRetracementThreshold(highPrice, purchasePrice, retracementPercent) {
+  const high = Number(highPrice);
+  const purchase = Number(purchasePrice);
+  const retracement = Number(retracementPercent);
+
+  if (
+    !Number.isFinite(high) ||
+    high <= 0 ||
+    !Number.isFinite(purchase) ||
+    purchase <= 0 ||
+    !Number.isFinite(retracement) ||
+    high <= purchase
+  ) {
+    return null;
+  }
+
+  return high - (high - purchase) * (retracement / 100);
+}
+
+export function calculateProfitRetracementPercent(highPrice, purchasePrice, currentPrice) {
+  const high = Number(highPrice);
+  const purchase = Number(purchasePrice);
+  const current = Number(currentPrice);
+
+  if (
+    !Number.isFinite(high) ||
+    high <= 0 ||
+    !Number.isFinite(purchase) ||
+    purchase <= 0 ||
+    !Number.isFinite(current) ||
+    high <= purchase
+  ) {
+    return 0;
+  }
+
+  return Math.max(0, ((high - current) / (high - purchase)) * 100);
 }
 
 export function getAlertTypeLabel(alertType) {
@@ -67,6 +106,41 @@ export function buildAlertRule(stock, currentPrice) {
   }
 
   const thresholdPercent = normalizeRuleThresholdPercent(stock.thresholdPercent);
+
+  if (alertType === ALERT_TYPES.PROFIT_RETRACEMENT) {
+    const highPrice = Number(stock.highPrice);
+    const purchasePrice = Number(stock.purchasePrice);
+
+    if (!Number.isFinite(purchasePrice) || purchasePrice <= 0) {
+      throw new Error('이익금 반납률 기준은 매수가가 필요합니다.');
+    }
+
+    if (!Number.isFinite(highPrice) || highPrice <= 0) {
+      throw new Error('최고가 기준이 아직 계산되지 않았습니다.');
+    }
+
+    const thresholdPrice = calculateProfitRetracementThreshold(
+      highPrice,
+      purchasePrice,
+      thresholdPercent
+    );
+    const metricPercent = calculateProfitRetracementPercent(highPrice, purchasePrice, current);
+
+    return {
+      alertType,
+      alertTypeLabel: getAlertTypeLabel(alertType),
+      referencePrice: highPrice,
+      referenceLabel: '구매일 이후 최고가',
+      thresholdLabel: `최고 이익금 ${thresholdPercent}% 반납`,
+      metricLabel: '이익금 반납률',
+      metricPercent,
+      drawdownPercent: metricPercent,
+      thresholdPrice,
+      thresholdPercent,
+      isBelowThreshold: thresholdPrice !== null && current <= thresholdPrice
+    };
+  }
+
   const referencePrice =
     alertType === ALERT_TYPES.PURCHASE_LOSS ? Number(stock.purchasePrice) : Number(stock.highPrice);
 
@@ -146,7 +220,8 @@ export function buildRegistrationPreview(input, quote, historicalHigh = null) {
   }
 
   const alertType = getNormalizedAlertType(input.alertType);
-  const needsHistoricalHigh = alertType === ALERT_TYPES.HIGH_DRAWDOWN;
+  const needsHistoricalHigh =
+    alertType === ALERT_TYPES.HIGH_DRAWDOWN || alertType === ALERT_TYPES.PROFIT_RETRACEMENT;
 
   if (!historicalHigh && needsHistoricalHigh) {
     return {
@@ -160,7 +235,9 @@ export function buildRegistrationPreview(input, quote, historicalHigh = null) {
   const annualDividendPerShare = Number(input.annualDividendPerShare);
 
   if (
-    (alertType === ALERT_TYPES.HIGH_DRAWDOWN || alertType === ALERT_TYPES.PURCHASE_LOSS) &&
+    (alertType === ALERT_TYPES.HIGH_DRAWDOWN ||
+      alertType === ALERT_TYPES.PROFIT_RETRACEMENT ||
+      alertType === ALERT_TYPES.PURCHASE_LOSS) &&
     (!Number.isFinite(purchasePrice) || purchasePrice <= 0)
   ) {
     throw new Error('매수가는 0보다 큰 숫자여야 합니다.');

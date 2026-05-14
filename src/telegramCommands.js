@@ -26,11 +26,13 @@ const helpMessage = [
   '',
   '등록 예시',
   '/add 336260 두산퓨얼셀 88779 2026-05-11 high 10',
+  '/add 336260 두산퓨얼셀 88779 2026-05-11 profit 10',
   '/add 336260 두산퓨얼셀 88779 2026-05-11 loss 5',
   '/add 336260 두산퓨얼셀 88779 2026-05-11 target 93000',
   '',
   '수정 예시',
   '/edit 336260 high 8',
+  '/edit 336260 profit 10',
   '/edit 336260 loss 5',
   '/edit 336260 target 93000',
   '/edit 336260 cooldown 60',
@@ -40,7 +42,7 @@ const helpMessage = [
   '/edit 336260 dividendmonths 3,6,9,12',
   '/edit 336260 name 두산퓨얼셀',
   '',
-  '기준값: high=최고가 대비 하락률, loss=매수가 대비 손절률, target=직접 기준가'
+  '기준값: high=최고가 대비 하락률, profit=이익금 반납률, loss=매수가 대비 손절률, target=직접 기준가'
 ].join('\n');
 
 export async function pollTelegramCommands(store, config, options = {}) {
@@ -409,6 +411,17 @@ export function parseEditArgs(args) {
           targetPrice: null
         }
       };
+    case 'profit':
+      requireValue(value, '이익금 반납률을 입력하세요.');
+      return {
+        query,
+        label: '이익금 반납률',
+        patch: {
+          alertType: ALERT_TYPES.PROFIT_RETRACEMENT,
+          thresholdPercent: firstValue,
+          targetPrice: null
+        }
+      };
     case 'target':
       requireValue(value, '직접 기준가를 입력하세요.');
       return {
@@ -504,7 +517,7 @@ export function parseEditArgs(args) {
         }
       };
     default:
-      throw new Error('수정 항목은 high, loss, target, cooldown, name, price, qty, dividend, dividendfreq, dividendmonths, date, notes 중 하나로 입력하세요.');
+      throw new Error('수정 항목은 high, profit, loss, target, cooldown, name, price, qty, dividend, dividendfreq, dividendmonths, date, notes 중 하나로 입력하세요.');
   }
 }
 
@@ -568,6 +581,26 @@ function normalizeTypeToken(value) {
     return ALERT_TYPES.HIGH_DRAWDOWN;
   }
 
+  if (
+    [
+      'profit_retracement',
+      'profit',
+      'gain',
+      'retracement',
+      'retracing',
+      'giveback',
+      'takeprofit',
+      'take_profit',
+      '이익',
+      '수익',
+      '반납',
+      '이익금',
+      '수익금'
+    ].includes(token)
+  ) {
+    return ALERT_TYPES.PROFIT_RETRACEMENT;
+  }
+
   if (['purchase_loss', 'loss', 'stop', 'stoploss', 'buy', '손절', '매수가'].includes(token)) {
     return ALERT_TYPES.PURCHASE_LOSS;
   }
@@ -580,7 +613,7 @@ function normalizeTypeToken(value) {
     return ALERT_TYPES.HIGH_DRAWDOWN;
   }
 
-  throw new Error('알림 기준은 high, loss, target 중 하나로 입력하세요.');
+  throw new Error('알림 기준은 high, profit, loss, target 중 하나로 입력하세요.');
 }
 
 function normalizeEditField(value) {
@@ -588,6 +621,25 @@ function normalizeEditField(value) {
 
   if (['high', 'high_drawdown', 'drawdown', 'trailing', 'rate', 'threshold', '최고가'].includes(token)) {
     return 'high';
+  }
+
+  if (
+    [
+      'profit',
+      'profit_retracement',
+      'gain',
+      'retracement',
+      'giveback',
+      'takeprofit',
+      'take_profit',
+      '이익',
+      '수익',
+      '반납',
+      '이익금',
+      '수익금'
+    ].includes(token)
+  ) {
+    return 'profit';
   }
 
   if (['loss', 'purchase_loss', 'stop', 'stoploss', 'buy', '손절'].includes(token)) {
@@ -890,6 +942,10 @@ function formatThresholdLine(stock) {
       stock.alertType === ALERT_TYPES.TARGET_PRICE ? stock.targetPrice : stock.lastPrice || stock.highPrice;
     const rule = buildAlertRule(stock, referencePrice || 1);
 
+    if (rule.thresholdPrice === null) {
+      return '';
+    }
+
     return `알림가: ${formatNumber(rule.thresholdPrice)}${stock.currency ? ` ${stock.currency}` : ''}`;
   } catch {
     return '';
@@ -899,6 +955,7 @@ function formatThresholdLine(stock) {
 function formatAlertType(alertType) {
   const labels = {
     [ALERT_TYPES.HIGH_DRAWDOWN]: '최고가 대비 하락률',
+    [ALERT_TYPES.PROFIT_RETRACEMENT]: '이익금 반납률',
     [ALERT_TYPES.PURCHASE_LOSS]: '매수가 대비 손절률',
     [ALERT_TYPES.TARGET_PRICE]: '직접 기준가'
   };
@@ -1077,6 +1134,7 @@ function getShortUsage(commandName) {
     return [
       '예시:',
       '/add 336260 두산퓨얼셀 88779 2026-05-11 high 10',
+      '/add 336260 두산퓨얼셀 88779 2026-05-11 profit 10',
       '/add 336260 두산퓨얼셀 88779 2026-05-11 loss 5',
       '/add 336260 두산퓨얼셀 88779 2026-05-11 target 93000'
     ].join('\n');
@@ -1095,6 +1153,7 @@ function getShortUsage(commandName) {
     return [
       '예시:',
       '/edit 336260 high 8',
+      '/edit 336260 profit 10',
       '/edit 336260 loss 5',
       '/edit 336260 target 93000',
       '/edit 336260 cooldown 60',

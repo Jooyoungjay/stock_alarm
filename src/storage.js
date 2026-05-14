@@ -13,6 +13,7 @@ const emptyStore = {
 
 export const ALERT_TYPES = Object.freeze({
   HIGH_DRAWDOWN: 'high_drawdown',
+  PROFIT_RETRACEMENT: 'profit_retracement',
   PURCHASE_LOSS: 'purchase_loss',
   TARGET_PRICE: 'target_price'
 });
@@ -559,6 +560,10 @@ function normalizeThresholdPercent(value) {
 }
 
 function validateAlertTypeFields(stock) {
+  if (stock.alertType === ALERT_TYPES.PROFIT_RETRACEMENT && !stock.purchasePrice) {
+    throw new Error('이익금 반납률 기준은 매수가가 필요합니다.');
+  }
+
   if (stock.alertType === ALERT_TYPES.PURCHASE_LOSS && !stock.purchasePrice) {
     throw new Error('매수가 대비 손절률 기준은 매수가가 필요합니다.');
   }

@@ -3,6 +3,8 @@ import assert from 'node:assert/strict';
 import {
   buildRegistrationPreview,
   calculateDrawdownPercent,
+  calculateProfitRetracementPercent,
+  calculateProfitRetracementThreshold,
   calculateThresholdPrice,
   evaluateStock,
   initializeHighFromPurchaseDate,
@@ -76,6 +78,41 @@ test('purchase-loss alert uses purchase price as the alert basis', () => {
   assert.equal(result.thresholdPrice, 95);
   assert.equal(result.drawdownPercent, 6);
   assert.equal(result.metricLabel, '매수가 대비 손실률');
+});
+
+test('profit-retracement alert uses peak profit as the alert basis', () => {
+  const stock = {
+    ...baseStock,
+    alertType: 'profit_retracement',
+    purchasePrice: 100,
+    thresholdPercent: 10,
+    highPrice: 150,
+    highPriceAt: '2026-05-11T00:01:00.000Z'
+  };
+  const result = evaluateStock(stock, { price: 144, currency: 'USD' }, date('2026-05-11T00:10:00Z'));
+
+  assert.equal(result.alertDue, true);
+  assert.equal(result.alertType, 'profit_retracement');
+  assert.equal(result.thresholdPrice, 145);
+  assert.equal(result.drawdownPercent, 12);
+  assert.equal(result.metricLabel, '이익금 반납률');
+});
+
+test('profit-retracement alert waits until a peak profit exists', () => {
+  const stock = {
+    ...baseStock,
+    alertType: 'profit_retracement',
+    purchasePrice: 100,
+    thresholdPercent: 10,
+    highPrice: 100,
+    highPriceAt: '2026-05-11T00:01:00.000Z'
+  };
+  const result = evaluateStock(stock, { price: 99, currency: 'USD' }, date('2026-05-11T00:10:00Z'));
+
+  assert.equal(result.alertDue, false);
+  assert.equal(result.thresholdPrice, null);
+  assert.equal(result.drawdownPercent, 0);
+  assert.equal(result.nextStock.alertState, 'clear');
 });
 
 test('target-price alert uses the direct target price as the threshold', () => {
@@ -160,6 +197,8 @@ test('new high updates the high price and suppresses alert', () => {
 test('drawdown and threshold helpers handle basic math', () => {
   assert.equal(calculateDrawdownPercent(200, 180), 10);
   assert.equal(calculateThresholdPrice(200, 7.5), 185);
+  assert.equal(calculateProfitRetracementThreshold(150, 100, 10), 145);
+  assert.equal(calculateProfitRetracementPercent(150, 100, 144), 12);
 });
 
 test('purchase date initializes high price from historical daily data', async () => {
@@ -326,6 +365,38 @@ test('registration preview supports purchase-loss basis', () => {
   assert.equal(preview.position.referencePrice, 100);
   assert.equal(preview.position.thresholdPrice, 95);
   assert.equal(preview.position.drawdownPercent, 6);
+  assert.equal(preview.position.alertNow, true);
+});
+
+test('registration preview supports profit-retracement basis', () => {
+  const preview = buildRegistrationPreview(
+    {
+      alertType: 'profit_retracement',
+      purchasePrice: 100,
+      purchaseDate: '2026-05-01',
+      thresholdPercent: 10
+    },
+    {
+      symbol: 'AAPL',
+      price: 145,
+      currency: 'USD',
+      provider: 'yahoo'
+    },
+    {
+      symbol: 'AAPL',
+      highPrice: 150,
+      highPriceAt: '2026-05-08T00:00:00.000Z',
+      currency: 'USD',
+      exchange: 'NasdaqGS',
+      provider: 'yahoo',
+      points: 6
+    }
+  );
+
+  assert.equal(preview.position.alertType, 'profit_retracement');
+  assert.equal(preview.position.referencePrice, 150);
+  assert.equal(preview.position.thresholdPrice, 145);
+  assert.equal(preview.position.drawdownPercent, 10);
   assert.equal(preview.position.alertNow, true);
 });
 
