@@ -138,7 +138,10 @@ stock_alarm/
 │  ├─ stop-server.js        # 안전 종료 스크립트
 │  └─ check-railway-config.js
 ├─ docs/
-│  └─ railway-deploy.md     # Railway 배포 가이드
+│  ├─ development-roadmap.md       # 개발 WBS와 다음 작업 순서
+│  ├─ market-data-api-candidates.md # 공식/유료 시세 API 후보 검토
+│  ├─ nxt-market-data-review.md    # NXT 시세 API 검토
+│  └─ railway-deploy.md            # Railway 배포 가이드
 ├─ tests/                   # Node.js 테스트
 ├─ data/                    # 로컬 실행 데이터, Git 제외
 │  ├─ store.json            # 실제 앱 데이터
@@ -522,6 +525,14 @@ provider 역할:
 NXT 공식 웹사이트에는 시장 개요와 거래현황 화면이 있지만, 화면 scraping 방식은 안정성과 약관 리스크가 있어 구현하지 않습니다. NXT 분리 시세는 공식 또는 계약 기반 API가 확인된 뒤 provider를 추가하는 방향으로 보류합니다.
 
 상세 검토 내용은 [NXT 시세 API 검토](docs/nxt-market-data-review.md)에 정리했습니다.
+
+### 공식/유료 시세 API 검토 현황
+
+2026-05-14 기준으로 KRX Open API, 공공데이터포털 주식시세정보, 한국투자증권 Open API, 키움 REST API, 코스콤 오픈API플랫폼, ICE NexTrade ATS를 비교했습니다.
+
+결론은 당장 provider를 교체하지 않고, 먼저 현재 무료 provider의 실패율과 실패 사유를 기록하는 것입니다. 공공데이터포털과 KRX Open API는 공식 일봉/기준일 데이터 보강에는 유용하지만, 장중 60초 매도 알림용 실시간 시세 provider로는 부족합니다. 실시간 안정성이 필요해지면 한국투자증권/키움 같은 증권사 API를 개인 로컬용 후보로 검토하고, NXT 분리 시세는 코스콤/ICE 같은 계약형 데이터 확인 뒤 진행합니다.
+
+상세 비교는 [공식/유료 시세 API 후보 검토](docs/market-data-api-candidates.md)에 정리했습니다.
 
 ## 알림 상태 로직
 
@@ -954,12 +965,13 @@ Invoke-RestMethod http://127.0.0.1:3001/api/health
 - 배당락일, 지급일, 배당 변경 내역 표시
 - NXT 시세 API 가능성 검토 문서화
 - 이익금 반납률 기준 매도 알림
+- 공식/유료 시세 API 후보 검토
 
 우선순위가 높은 순서:
 
-1. 공식 또는 유료 시세 API 후보 검토
-2. 현재 provider 실패율 기록
-3. 시세 출처 구분 표시
+1. 현재 provider 실패율 기록
+2. 시세 출처 구분 표시
+3. 공식 일봉 provider 실험 또는 설계
 4. 개발 WBS/일정의 웹 대시보드 표시
 5. 배당 캘린더 고도화
 6. Postgres 저장소 설계와 JSON 데이터 이전 준비
