@@ -787,7 +787,8 @@ select:focus {
   color: var(--text);
 }
 
-.dividend-diagnostics-panel {
+.dividend-diagnostics-panel,
+.quote-diagnostics-panel {
   display: grid;
   gap: 10px;
   margin-bottom: 12px;
@@ -1506,6 +1507,8 @@ select:focus {
 .backup-actions {
   display: flex;
   justify-content: flex-end;
+  gap: 6px;
+  flex-wrap: wrap;
 }
 
 .mobile-nav {

@@ -341,6 +341,30 @@ test('handleTelegramMessage supports restore command', async () => {
   assert.match(sent[0], /복구 전 안전 백업/);
 });
 
+test('handleTelegramMessage supports backup delete command', async () => {
+  const store = await createStore();
+  const sent = [];
+  const options = {
+    sendTelegramMessage: async (_config, text) => {
+      sent.push(text);
+    },
+    deleteBackup: async (_dataDir, target) => {
+      assert.equal(target, '1');
+      return {
+        deleted: true,
+        backup: {
+          name: 'store-20260511-120000-000-manual-12345678.json'
+        }
+      };
+    }
+  };
+
+  await handleTelegramMessage(store, config, message('/delete-backup 1'), options);
+
+  assert.match(sent[0], /백업을 삭제했습니다/);
+  assert.match(sent[0], /현재 데이터에는 영향이 없습니다/);
+});
+
 async function createStore() {
   const dataDir = await fs.mkdtemp(path.join(os.tmpdir(), 'stock-alarm-test-'));
   return new JsonStore(dataDir, {

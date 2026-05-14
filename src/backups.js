@@ -123,6 +123,21 @@ export async function restoreBackup(dataDir, target, options = {}) {
   };
 }
 
+export async function deleteBackup(dataDir, target) {
+  const backup = await resolveBackup(dataDir, target);
+
+  await fs.unlink(backup.path).catch((error) => {
+    if (error.code !== 'ENOENT') {
+      throw error;
+    }
+  });
+
+  return {
+    deleted: true,
+    backup
+  };
+}
+
 export async function resolveBackup(dataDir, target) {
   const rawTarget = String(target || '').trim();
 

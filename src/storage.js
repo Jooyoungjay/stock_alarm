@@ -500,6 +500,178 @@ function hasDividendHistoryChange(previous, next) {
   );
 }
 
+function normalizeQuoteProviderAttempt(value) {
+  if (!value || typeof value !== 'object') {
+    return null;
+  }
+
+  const provider = String(value.provider || '').trim().toLowerCase();
+
+  if (!provider) {
+    return null;
+  }
+
+  const status = ['success', 'error', 'skipped'].includes(value.status)
+    ? value.status
+    : 'error';
+  const type = ['quote', 'historical'].includes(value.type) ? value.type : 'quote';
+  const finishedAt = normalizeIsoDateTime(value.finishedAt) || new Date().toISOString();
+  const startedAt = normalizeIsoDateTime(value.startedAt) || finishedAt;
+  const durationMs = normalizeNonNegativeInteger(Math.round(Number(value.durationMs || 0)));
+
+  return {
+    provider,
+    type,
+    symbol: normalizeSymbolInput(value.symbol) || String(value.symbol || '').trim().toUpperCase(),
+    status,
+    reason: String(value.reason || ''),
+    error: String(value.error || ''),
+    startedAt,
+    finishedAt,
+    durationMs,
+    source: String(value.source || ''),
+    stockId: String(value.stockId || '')
+  };
+}
+
+function normalizeIsoDateTime(value) {
+  if (!value) {
+    return '';
+  }
+
+  const date = new Date(value);
+  return Number.isFinite(date.getTime()) ? date.toISOString() : '';
+}
+
+function normalizeQuoteProviderStats(value) {
+  const rawProviders =
+    value && typeof value === 'object' && value.providers && typeof value.providers === 'object'
+      ? value.providers
+      : {};
+  const providers = {};
+
+  for (const [provider, stat] of Object.entries(rawProviders)) {
+    const normalized = normalizeQuoteProviderStat(provider, stat);
+
+    if (normalized.provider) {
+      providers[normalized.provider] = normalized;
+    }
+  }
+
+  const recentAttempts = Array.isArray(value?.recentAttempts)
+    ? value.recentAttempts.map(normalizeQuoteProviderAttempt).filter(Boolean).slice(0, 100)
+    : [];
+
+  return {
+    updatedAt: normalizeIsoDateTime(value?.updatedAt) || null,
+    providers,
+    recentAttempts
+  };
+}
+
+function normalizeQuoteProviderStat(provider, value = {}) {
+  const name = String(value.provider || provider || '').trim().toLowerCase();
+
+  if (!name) {
+    return {
+      provider: ''
+    };
+  }
+
+  const success = normalizeNonNegativeInteger(value.success);
+  const error = normalizeNonNegativeInteger(value.error);
+  const skipped = normalizeNonNegativeInteger(value.skipped);
+  const attempts = normalizeNonNegativeInteger(value.attempts || success + error + skipped);
+  const measuredAttempts = success + error;
+  const totalDurationMs = normalizeNonNegativeInteger(value.totalDurationMs);
+  const averageDurationMs =
+    measuredAttempts > 0 ? Math.round(totalDurationMs / measuredAttempts) : 0;
+  const failureRatePercent = measuredAttempts > 0 ? (error / measuredAttempts) * 100 : 0;
+
+  return {
+    provider: name,
+    attempts,
+    success,
+    error,
+    skipped,
+    totalDurationMs,
+    averageDurationMs,
+    failureRatePercent,
+    lastStatus: ['success', 'error', 'skipped'].includes(value.lastStatus)
+      ? value.lastStatus
+      : '',
+    lastType: ['quote', 'historical'].includes(value.lastType) ? value.lastType : '',
+    lastSymbol: String(value.lastSymbol || ''),
+    lastReason: String(value.lastReason || ''),
+    lastError: String(value.lastError || ''),
+    lastCheckedAt: normalizeIsoDateTime(value.lastCheckedAt) || null,
+    lastSuccessAt: normalizeIsoDateTime(value.lastSuccessAt) || null,
+    lastErrorAt: normalizeIsoDateTime(value.lastErrorAt) || null
+  };
+}
+
+function updateQuoteProviderStats(value, rawAttempt) {
+  const stats = normalizeQuoteProviderStats(value);
+  const attempt = normalizeQuoteProviderAttempt(rawAttempt);
+
+  if (!attempt) {
+    return stats;
+  }
+
+  const current = normalizeQuoteProviderStat(
+    attempt.provider,
+    stats.providers[attempt.provider]
+  );
+  const next = {
+    ...current,
+    attempts: current.attempts + 1,
+    lastStatus: attempt.status,
+    lastType: attempt.type,
+    lastSymbol: attempt.symbol,
+    lastReason: attempt.reason,
+    lastError: attempt.error,
+    lastCheckedAt: attempt.finishedAt
+  };
+
+  if (attempt.status === 'success') {
+    next.success += 1;
+    next.lastSuccessAt = attempt.finishedAt;
+    next.totalDurationMs += attempt.durationMs;
+  } else if (attempt.status === 'error') {
+    next.error += 1;
+    next.lastErrorAt = attempt.finishedAt;
+    next.totalDurationMs += attempt.durationMs;
+  } else {
+    next.skipped += 1;
+  }
+
+  const measuredAttempts = next.success + next.error;
+  next.averageDurationMs =
+    measuredAttempts > 0 ? Math.round(next.totalDurationMs / measuredAttempts) : 0;
+  next.failureRatePercent =
+    measuredAttempts > 0 ? (next.error / measuredAttempts) * 100 : 0;
+
+  stats.providers[attempt.provider] = next;
+  stats.recentAttempts = [attempt, ...stats.recentAttempts].slice(0, 100);
+  stats.updatedAt = attempt.finishedAt;
+
+  return stats;
+}
+
+function buildQuoteProviderStatsSnapshot(value) {
+  const stats = normalizeQuoteProviderStats(value);
+
+  return {
+    updatedAt: stats.updatedAt,
+    providers: Object.values(stats.providers).sort((left, right) => {
+      const leftTime = new Date(left.lastCheckedAt || 0).getTime();
+      const rightTime = new Date(right.lastCheckedAt || 0).getTime();
+      return rightTime - leftTime || left.provider.localeCompare(right.provider);
+    }),
+    recentAttempts: stats.recentAttempts
+  };
+}
+
 function normalizeDeviceId(value) {
   const id = String(value || '').trim();
   return id || null;
@@ -876,6 +1048,21 @@ export class JsonStore {
     };
     await this.write(data);
     return value;
+  }
+
+  async getQuoteProviderStats() {
+    const data = await this.read();
+    return buildQuoteProviderStatsSnapshot(data.meta.quoteProviderStats);
+  }
+
+  async recordQuoteProviderAttempt(attempt) {
+    const data = await this.read();
+    data.meta = {
+      ...data.meta,
+      quoteProviderStats: updateQuoteProviderStats(data.meta.quoteProviderStats, attempt)
+    };
+    await this.write(data);
+    return buildQuoteProviderStatsSnapshot(data.meta.quoteProviderStats);
   }
 
   async appendAlert(alert) {

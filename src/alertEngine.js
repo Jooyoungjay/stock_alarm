@@ -413,7 +413,13 @@ export async function initializeHighFromPurchaseDate(store, config, stock, optio
     timeoutMs: config.quoteTimeoutMs,
     providers: config.quoteProviders,
     alphaVantageApiKey: config.alphaVantageApiKey,
-    endDate: now
+    endDate: now,
+    onProviderAttempt: (attempt) =>
+      recordQuoteProviderAttempt(store, {
+        ...attempt,
+        stockId: stock.id,
+        source: 'historical_high'
+      })
   });
   const baselineHigh = buildPurchaseHighBaseline(stock, historicalHigh);
   const currentHigh = Number(stock.highPrice);
@@ -598,7 +604,13 @@ export async function runAlertCheck(store, config, options = {}) {
       const quote = await quoteFetcher(stock.symbol, {
         timeoutMs: config.quoteTimeoutMs,
         providers: config.quoteProviders,
-        alphaVantageApiKey: config.alphaVantageApiKey
+        alphaVantageApiKey: config.alphaVantageApiKey,
+        onProviderAttempt: (attempt) =>
+          recordQuoteProviderAttempt(store, {
+            ...attempt,
+            stockId: stock.id,
+            source: 'alert_check'
+          })
       });
       const result = await processStockQuote(store, config, stock, quote, {
         now,
@@ -638,6 +650,7 @@ export async function runManualQuoteCheck(store, config, stockId, manualQuote, o
     currency: manualQuote.currency || stock.currency || '',
     exchange: manualQuote.exchange || stock.exchange || 'Manual test',
     marketState: 'MANUAL_TEST',
+    provider: 'manual',
     regularMarketTime: now.toISOString()
   };
 
@@ -651,4 +664,12 @@ export async function runManualQuoteCheck(store, config, stockId, manualQuote, o
     manual: true,
     results: [result]
   };
+}
+
+async function recordQuoteProviderAttempt(store, attempt) {
+  if (typeof store.recordQuoteProviderAttempt !== 'function') {
+    return;
+  }
+
+  await store.recordQuoteProviderAttempt(attempt);
 }

@@ -132,6 +132,51 @@ test('JsonStore stores and updates optional stock quantity', async () => {
   );
 });
 
+test('JsonStore records quote provider success and failure stats', async () => {
+  const store = await createStore();
+
+  await store.recordQuoteProviderAttempt({
+    provider: 'naver',
+    type: 'quote',
+    symbol: '005930',
+    status: 'success',
+    startedAt: '2026-05-14T00:00:00.000Z',
+    finishedAt: '2026-05-14T00:00:00.120Z',
+    durationMs: 120
+  });
+  await store.recordQuoteProviderAttempt({
+    provider: 'naver',
+    type: 'quote',
+    symbol: '005930',
+    status: 'error',
+    error: 'HTTP 500',
+    startedAt: '2026-05-14T00:01:00.000Z',
+    finishedAt: '2026-05-14T00:01:00.080Z',
+    durationMs: 80
+  });
+  await store.recordQuoteProviderAttempt({
+    provider: 'alphavantage',
+    type: 'quote',
+    symbol: '005930',
+    status: 'skipped',
+    reason: 'missing_alpha_vantage_key',
+    finishedAt: '2026-05-14T00:01:00.081Z'
+  });
+
+  const stats = await store.getQuoteProviderStats();
+  const naver = stats.providers.find((item) => item.provider === 'naver');
+  const alphaVantage = stats.providers.find((item) => item.provider === 'alphavantage');
+
+  assert.equal(naver.attempts, 2);
+  assert.equal(naver.success, 1);
+  assert.equal(naver.error, 1);
+  assert.equal(naver.averageDurationMs, 100);
+  assert.equal(naver.failureRatePercent, 50);
+  assert.equal(naver.lastError, 'HTTP 500');
+  assert.equal(alphaVantage.skipped, 1);
+  assert.equal(stats.recentAttempts[0].provider, 'alphavantage');
+});
+
 async function createStore() {
   const dataDir = await fs.mkdtemp(path.join(os.tmpdir(), 'stock-alarm-storage-test-'));
   return new JsonStore(dataDir, {

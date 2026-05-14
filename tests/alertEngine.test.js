@@ -524,6 +524,54 @@ test('quote fetch errors are persisted on the stock', async () => {
   assert.equal(store.stocks[0].lastErrorAt, '2026-05-11T00:46:00.000Z');
 });
 
+test('runAlertCheck records quote provider attempts when the fetcher reports them', async () => {
+  const store = createMemoryStore({
+    ...baseStock,
+    highPrice: 100,
+    highPriceAt: '2026-05-11T00:01:00.000Z'
+  });
+  const attempts = [];
+  store.recordQuoteProviderAttempt = async (attempt) => {
+    attempts.push(attempt);
+  };
+
+  await runAlertCheck(
+    store,
+    {
+      telegramBotToken: 'token',
+      telegramChatId: 'chat',
+      quoteTimeoutMs: 10000,
+      quoteProviders: 'stooq'
+    },
+    {
+      now: date('2026-05-11T00:47:00Z'),
+      fetchQuote: async (_symbol, options) => {
+        await options.onProviderAttempt({
+          type: 'quote',
+          provider: 'stooq',
+          symbol: 'AAPL',
+          status: 'success',
+          startedAt: '2026-05-11T00:47:00.000Z',
+          finishedAt: '2026-05-11T00:47:00.050Z',
+          durationMs: 50
+        });
+
+        return {
+          symbol: 'AAPL',
+          price: 99,
+          currency: 'USD',
+          provider: 'stooq'
+        };
+      }
+    }
+  );
+
+  assert.equal(attempts.length, 1);
+  assert.equal(attempts[0].provider, 'stooq');
+  assert.equal(attempts[0].stockId, 'stock-1');
+  assert.equal(attempts[0].source, 'alert_check');
+});
+
 function date(value) {
   return new Date(value);
 }

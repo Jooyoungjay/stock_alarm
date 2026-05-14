@@ -2,7 +2,7 @@ import http from 'node:http';
 import fs from 'node:fs/promises';
 import path from 'node:path';
 import { buildAccessUrls } from './accessUrls.js';
-import { createBackup, listBackups, restoreBackup } from './backups.js';
+import { createBackup, deleteBackup, listBackups, restoreBackup } from './backups.js';
 import { config } from './config.js';
 import { runDividendRefresh } from './dividendRefresh.js';
 import {
@@ -238,6 +238,14 @@ async function getLastDailyBriefingSnapshot() {
     : null;
 }
 
+function recordQuoteProviderAttempt(attempt) {
+  if (typeof store.recordQuoteProviderAttempt !== 'function') {
+    return null;
+  }
+
+  return store.recordQuoteProviderAttempt(attempt);
+}
+
 async function initializePurchaseHigh(stock) {
   if (!stock?.purchaseDate) {
     return stock;
@@ -263,9 +271,10 @@ async function handleApi(request, response, url) {
   const segments = url.pathname.split('/').filter(Boolean);
 
   if (request.method === 'GET' && url.pathname === '/api/health') {
-    const [dividendRefreshSnapshot, dailyBriefingSnapshot] = await Promise.all([
+    const [dividendRefreshSnapshot, dailyBriefingSnapshot, quoteProviderStats] = await Promise.all([
       getLastDividendRefreshSnapshot(),
-      getLastDailyBriefingSnapshot()
+      getLastDailyBriefingSnapshot(),
+      store.getQuoteProviderStats()
     ]);
 
     sendJson(response, 200, {
@@ -296,17 +305,25 @@ async function handleApi(request, response, url) {
       lastTelegramCommandPoll,
       lastDividendRefresh: dividendRefreshSnapshot,
       lastDailyBriefing: dailyBriefingSnapshot,
+      quoteProviderStats,
       lastCheck
     });
     return;
   }
 
   if (request.method === 'GET' && url.pathname === '/api/stocks') {
-    const [stocks, alerts, dividendRefreshSnapshot, dailyBriefingSnapshot] = await Promise.all([
+    const [
+      stocks,
+      alerts,
+      dividendRefreshSnapshot,
+      dailyBriefingSnapshot,
+      quoteProviderStats
+    ] = await Promise.all([
       store.listStocks(),
       store.listAlerts(30),
       getLastDividendRefreshSnapshot(),
-      getLastDailyBriefingSnapshot()
+      getLastDailyBriefingSnapshot(),
+      store.getQuoteProviderStats()
     ]);
 
     sendJson(response, 200, {
@@ -327,6 +344,7 @@ async function handleApi(request, response, url) {
       telegramCommandPollSeconds: config.telegramCommandPollSeconds,
       lastTelegramCommandPoll,
       lastDividendRefresh: dividendRefreshSnapshot,
+      quoteProviderStats,
       lastCheck
     });
     return;
@@ -434,7 +452,12 @@ async function handleApi(request, response, url) {
     const quoteOptions = {
       timeoutMs: config.quoteTimeoutMs,
       providers: config.quoteProviders,
-      alphaVantageApiKey: config.alphaVantageApiKey
+      alphaVantageApiKey: config.alphaVantageApiKey,
+      onProviderAttempt: (attempt) =>
+        recordQuoteProviderAttempt({
+          ...attempt,
+          source: 'quote_preview'
+        })
     };
     const quote = await fetchQuote(symbol, quoteOptions);
     const purchaseDate = String(url.searchParams.get('purchaseDate') || '').trim();
@@ -527,6 +550,13 @@ async function handleApi(request, response, url) {
     return;
   }
 
+  if (request.method === 'GET' && url.pathname === '/api/quote-provider-stats') {
+    sendJson(response, 200, {
+      quoteProviderStats: await store.getQuoteProviderStats()
+    });
+    return;
+  }
+
   if (request.method === 'POST' && url.pathname === '/api/backups') {
     const backup = await createBackup(config.dataDir, {
       reason: 'manual-web',
@@ -553,6 +583,19 @@ async function handleApi(request, response, url) {
       backup: serializeBackup(result.backup),
       safetyBackup: serializeBackup(result.safetyBackup),
       backups: backups.map(serializeBackup)
+    });
+    return;
+  }
+
+  if (request.method === 'DELETE' && segments[0] === 'api' && segments[1] === 'backups' && segments[2]) {
+    const result = await deleteBackup(config.dataDir, decodeURIComponent(segments[2]));
+    const backups = await listBackups(config.dataDir, { limit: config.backupRetention });
+
+    sendJson(response, 200, {
+      deleted: true,
+      backup: serializeBackup(result.backup),
+      backups: backups.map(serializeBackup),
+      retention: config.backupRetention
     });
     return;
   }

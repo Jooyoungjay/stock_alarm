@@ -3,6 +3,7 @@ const state = {
   alerts: [],
   backups: [],
   health: null,
+  quoteProviderStats: null,
   backupRetention: 0,
   loading: false,
   registrationStep: 1,
@@ -18,6 +19,7 @@ const elements = {
   message: document.querySelector('#message'),
   watchSummaryBar: document.querySelector('#watchSummaryBar'),
   portfolioSummaryBar: document.querySelector('#portfolioSummaryBar'),
+  quoteDiagnosticsPanel: document.querySelector('#quoteDiagnosticsPanel'),
   dividendDiagnosticsPanel: document.querySelector('#dividendDiagnosticsPanel'),
   watchFilterButtons: document.querySelectorAll('[data-watch-filter]'),
   watchSortSelect: document.querySelector('#watchSortSelect'),
@@ -273,8 +275,10 @@ async function loadData() {
     const data = await api('/api/stocks');
     state.stocks = data.stocks || [];
     state.alerts = data.alerts || [];
+    state.quoteProviderStats = data.quoteProviderStats || null;
     renderStatus(data);
     renderStocks();
+    renderQuoteDiagnostics(data.quoteProviderStats);
     renderDividendDiagnostics(data.lastDividendRefresh);
     renderAlerts();
   } catch (error) {
@@ -991,6 +995,136 @@ function renderDividendDiagnostics(lastRefresh) {
   `;
 }
 
+function renderQuoteDiagnostics(stats) {
+  if (!elements.quoteDiagnosticsPanel) {
+    return;
+  }
+
+  const providers = Array.isArray(stats?.providers) ? stats.providers : [];
+
+  if (!state.stocks.length && !providers.length) {
+    elements.quoteDiagnosticsPanel.innerHTML = '';
+    return;
+  }
+
+  const totals = providers.reduce(
+    (acc, provider) => {
+      acc.attempts += Number(provider.attempts || 0);
+      acc.success += Number(provider.success || 0);
+      acc.error += Number(provider.error || 0);
+      acc.skipped += Number(provider.skipped || 0);
+      return acc;
+    },
+    {
+      attempts: 0,
+      success: 0,
+      error: 0,
+      skipped: 0
+    }
+  );
+  const measured = totals.success + totals.error;
+  const failureRate = measured ? (totals.error / measured) * 100 : 0;
+  const summaryDetail = providers.length
+    ? `성공 ${totals.success}회 · 실패 ${totals.error}회 · 실패율 ${formatPercent(failureRate)} · 스킵 ${totals.skipped}회`
+    : '아직 시세 provider 진단 이력이 없습니다.';
+
+  elements.quoteDiagnosticsPanel.innerHTML = `
+    <div class="dividend-diagnostics-head">
+      <div>
+        <div class="dividend-diagnostics-title">시세 provider 진단</div>
+        <div class="dividend-diagnostics-subtitle">${escapeHtml(summaryDetail)}</div>
+      </div>
+      <div class="dividend-diagnostics-time">${escapeHtml(formatDate(stats?.updatedAt))}</div>
+    </div>
+    ${
+      providers.length
+        ? `<div class="dividend-diagnostics-list">${providers.map(renderQuoteProviderDiagnosticRow).join('')}</div>`
+        : '<div class="dividend-diagnostics-empty">즉시 확인 또는 자동 확인이 실행되면 provider별 성공/실패율이 표시됩니다.</div>'
+    }
+  `;
+}
+
+function renderQuoteProviderDiagnosticRow(provider) {
+  const statusClass = getQuoteProviderStatusClass(provider.lastStatus);
+  const measured = Number(provider.success || 0) + Number(provider.error || 0);
+  const failureRate = measured ? Number(provider.failureRatePercent || 0) : 0;
+  const lastDetail = formatQuoteProviderLastDetail(provider);
+
+  return `
+    <div class="dividend-diagnostic-row ${statusClass}">
+      <div class="dividend-diagnostic-main">
+        <span class="dividend-diagnostic-stock">${escapeHtml(getProviderLabel(provider.provider))}</span>
+        <span class="status-badge ${statusClass}">${escapeHtml(getQuoteProviderStatusLabel(provider.lastStatus))}</span>
+      </div>
+      <div class="dividend-diagnostic-meta">
+        <span>성공 ${escapeHtml(provider.success || 0)}회</span>
+        <span>실패 ${escapeHtml(provider.error || 0)}회</span>
+        <span>실패율 ${escapeHtml(formatPercent(failureRate))}</span>
+        <span>스킵 ${escapeHtml(provider.skipped || 0)}회</span>
+        <span>평균 ${escapeHtml(formatDurationMs(provider.averageDurationMs))}</span>
+        <span>${escapeHtml(lastDetail)}</span>
+      </div>
+      ${
+        provider.lastError || provider.lastReason
+          ? `<div class="dividend-diagnostic-error">${escapeHtml(provider.lastError || getQuoteProviderReasonLabel(provider.lastReason))}</div>`
+          : ''
+      }
+    </div>
+  `;
+}
+
+function getQuoteProviderStatusClass(status) {
+  if (status === 'success') {
+    return 'ok';
+  }
+
+  if (status === 'skipped') {
+    return 'muted';
+  }
+
+  return 'error';
+}
+
+function getQuoteProviderStatusLabel(status) {
+  const labels = {
+    success: '성공',
+    error: '실패',
+    skipped: '스킵'
+  };
+
+  return labels[status] || '대기';
+}
+
+function formatQuoteProviderLastDetail(provider) {
+  const parts = [];
+
+  if (provider.lastSymbol) {
+    parts.push(provider.lastSymbol);
+  }
+
+  if (provider.lastType) {
+    parts.push(provider.lastType === 'historical' ? '일봉' : '현재가');
+  }
+
+  if (provider.lastCheckedAt) {
+    parts.push(formatDate(provider.lastCheckedAt));
+  }
+
+  return parts.filter(Boolean).join(' · ') || '-';
+}
+
+function getQuoteProviderReasonLabel(reason) {
+  const labels = {
+    not_korean_symbol: '한국 종목이 아니어서 건너뜀',
+    korean_symbol_not_supported: '한국 종목 미지원',
+    missing_alpha_vantage_key: 'Alpha Vantage 키 없음',
+    historical_not_supported: '일봉 조회 미지원',
+    unsupported_provider: '지원하지 않는 provider'
+  };
+
+  return labels[reason] || reason || '';
+}
+
 function renderDividendDiagnosticRow({ stock, diagnostic }) {
   const statusClass = getDividendDiagnosticStatusClass(diagnostic.status);
   const statusLabel = getDividendDiagnosticStatusLabel(diagnostic.status);
@@ -1705,12 +1839,40 @@ function renderBackups() {
       `;
 
       row.querySelector('.backup-actions').append(
-        actionButton('복구', 'btn btn-danger btn-sm danger-button', () => restoreBackupItem(backup))
+        actionButton('복구', 'btn btn-danger btn-sm danger-button', () => restoreBackupItem(backup)),
+        actionButton('삭제', 'btn btn-outline btn-sm secondary-button', () => deleteBackupItem(backup))
       );
 
       return row;
     })
   );
+}
+
+async function deleteBackupItem(backup) {
+  const confirmed = window.confirm(
+    [
+      '선택한 백업 파일을 삭제합니다.',
+      '',
+      `백업: ${backup.name}`,
+      `생성 시각: ${formatDate(backup.createdAt)}`,
+      '',
+      '삭제한 백업은 되돌릴 수 없습니다.',
+      '계속할까요?'
+    ].join('\n')
+  );
+
+  if (!confirmed) {
+    return;
+  }
+
+  const result = await api(`/api/backups/${encodeURIComponent(backup.name)}`, {
+    method: 'DELETE'
+  });
+
+  state.backups = result.backups || [];
+  state.backupRetention = result.retention || state.backupRetention;
+  renderBackups();
+  showMessage('선택한 백업을 삭제했습니다.');
 }
 
 async function restoreBackupItem(backup) {
@@ -2581,6 +2743,20 @@ function formatFileSize(value) {
   }
 
   return `${(size / 1024 / 1024).toFixed(1)} MB`;
+}
+
+function formatDurationMs(value) {
+  const number = Number(value);
+
+  if (!Number.isFinite(number) || number <= 0) {
+    return '-';
+  }
+
+  if (number >= 1000) {
+    return `${(number / 1000).toFixed(2)}초`;
+  }
+
+  return `${Math.round(number)}ms`;
 }
 
 function getBackupReasonLabel(reason) {

@@ -3,7 +3,14 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
-import { createBackup, getBackupDir, listBackups, resolveBackup, restoreBackup } from '../src/backups.js';
+import {
+  createBackup,
+  deleteBackup,
+  getBackupDir,
+  listBackups,
+  resolveBackup,
+  restoreBackup
+} from '../src/backups.js';
 import { JsonStore } from '../src/storage.js';
 
 test('createBackup copies store.json into the backups directory', async () => {
@@ -155,6 +162,20 @@ test('restoreBackup can resolve a backup by recent-list number', async () => {
   const resolved = await resolveBackup(dataDir, '1');
 
   assert.equal(resolved.reason, 'second');
+});
+
+test('deleteBackup removes a validated backup file', async () => {
+  const dataDir = await createDataDir();
+  await fs.writeFile(path.join(dataDir, 'store.json'), '{"stocks":[],"alerts":[],"meta":{}}\n', 'utf8');
+  const backup = await createBackup(dataDir, { reason: 'delete-me', maxBackups: 10 });
+
+  const result = await deleteBackup(dataDir, backup.name);
+  const backups = await listBackups(dataDir, { limit: 10 });
+
+  assert.equal(result.deleted, true);
+  assert.equal(result.backup.name, backup.name);
+  assert.equal(backups.some((item) => item.name === backup.name), false);
+  await assert.rejects(() => resolveBackup(dataDir, backup.name), /찾을 수 없습니다/);
 });
 
 test('restoreBackup rejects unsafe paths and invalid store payloads', async () => {

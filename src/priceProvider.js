@@ -17,24 +17,56 @@ export async function fetchHistoricalHighSince(symbol, startDate, options = {}) 
   }
 
   for (const provider of providers) {
-    if (shouldSkipHistoricalProvider(provider, symbol)) {
+    const skipReason = getHistoricalProviderSkipReason(provider, symbol);
+
+    if (skipReason) {
+      await recordProviderAttempt(options, {
+        type: 'historical',
+        provider,
+        symbol,
+        status: 'skipped',
+        reason: skipReason
+      });
       continue;
     }
 
+    const startedAt = new Date();
+
     try {
+      let result = null;
+
       if (provider === 'naver') {
-        return await fetchNaverHistoricalHigh(symbol, start, end, options);
+        result = await fetchNaverHistoricalHigh(symbol, start, end, options);
       }
 
       if (provider === 'stooq') {
-        return await fetchStooqHistoricalHigh(symbol, start, end, options);
+        result = await fetchStooqHistoricalHigh(symbol, start, end, options);
       }
 
       if (provider === 'yahoo') {
-        return await fetchYahooHistoricalHigh(symbol, start, end, options);
+        result = await fetchYahooHistoricalHigh(symbol, start, end, options);
+      }
+
+      if (result) {
+        await recordProviderAttempt(options, {
+          type: 'historical',
+          provider,
+          symbol,
+          status: 'success',
+          startedAt
+        });
+        return result;
       }
     } catch (error) {
       errors.push(`${provider}: ${error.message}`);
+      await recordProviderAttempt(options, {
+        type: 'historical',
+        provider,
+        symbol,
+        status: 'error',
+        error: error.message,
+        startedAt
+      });
     }
   }
 
@@ -50,28 +82,60 @@ export async function fetchQuote(symbol, options = {}) {
   const errors = [];
 
   for (const provider of providers) {
-    if (shouldSkipProvider(provider, symbol, options, providers)) {
+    const skipReason = getProviderSkipReason(provider, symbol, options, providers);
+
+    if (skipReason) {
+      await recordProviderAttempt(options, {
+        type: 'quote',
+        provider,
+        symbol,
+        status: 'skipped',
+        reason: skipReason
+      });
       continue;
     }
 
+    const startedAt = new Date();
+
     try {
+      let result = null;
+
       if (provider === 'naver') {
-        return await fetchNaverQuote(symbol, options);
+        result = await fetchNaverQuote(symbol, options);
       }
 
       if (provider === 'stooq') {
-        return await fetchStooqQuote(symbol, options);
+        result = await fetchStooqQuote(symbol, options);
       }
 
       if (provider === 'alphavantage') {
-        return await fetchAlphaVantageQuote(symbol, options);
+        result = await fetchAlphaVantageQuote(symbol, options);
       }
 
       if (provider === 'yahoo') {
-        return await fetchYahooQuote(symbol, options);
+        result = await fetchYahooQuote(symbol, options);
+      }
+
+      if (result) {
+        await recordProviderAttempt(options, {
+          type: 'quote',
+          provider,
+          symbol,
+          status: 'success',
+          startedAt
+        });
+        return result;
       }
     } catch (error) {
       errors.push(`${provider}: ${error.message}`);
+      await recordProviderAttempt(options, {
+        type: 'quote',
+        provider,
+        symbol,
+        status: 'error',
+        error: error.message,
+        startedAt
+      });
     }
   }
 
@@ -82,40 +146,44 @@ export async function fetchQuote(symbol, options = {}) {
   throw new Error(`가격 조회 실패: ${errors.join(' | ')}`);
 }
 
-function shouldSkipProvider(provider, symbol, options, providers) {
+function getProviderSkipReason(provider, symbol, options, providers) {
+  if (!defaultProviders.includes(provider)) {
+    return 'unsupported_provider';
+  }
+
   if (providers.length <= 1) {
-    return false;
+    return '';
   }
 
   if (provider === 'naver' && !isKoreanStockSymbol(symbol)) {
-    return true;
+    return 'not_korean_symbol';
   }
 
   if (provider === 'stooq' && isKoreanStockSymbol(symbol)) {
-    return true;
+    return 'korean_symbol_not_supported';
   }
 
   if (provider === 'alphavantage' && !options.alphaVantageApiKey) {
-    return true;
+    return 'missing_alpha_vantage_key';
   }
 
-  return false;
+  return '';
 }
 
-function shouldSkipHistoricalProvider(provider, symbol) {
+function getHistoricalProviderSkipReason(provider, symbol) {
   if (provider === 'naver') {
-    return !isKoreanStockSymbol(symbol);
+    return isKoreanStockSymbol(symbol) ? '' : 'not_korean_symbol';
   }
 
   if (provider === 'stooq') {
-    return isKoreanStockSymbol(symbol);
+    return isKoreanStockSymbol(symbol) ? 'korean_symbol_not_supported' : '';
   }
 
   if (provider === 'yahoo') {
-    return isKoreanStockSymbol(symbol);
+    return isKoreanStockSymbol(symbol) ? 'korean_symbol_not_supported' : '';
   }
 
-  return true;
+  return 'historical_not_supported';
 }
 
 export function normalizeProviders(value) {
@@ -525,6 +593,33 @@ async function fetchWithTimeout(url, options = {}) {
     });
   } finally {
     clearTimeout(timeout);
+  }
+}
+
+async function recordProviderAttempt(options, input) {
+  if (typeof options.onProviderAttempt !== 'function') {
+    return;
+  }
+
+  const finishedAt = new Date();
+  const startedAt = input.startedAt instanceof Date ? input.startedAt : finishedAt;
+  const durationMs = Math.max(0, finishedAt.getTime() - startedAt.getTime());
+  const attempt = {
+    type: input.type || 'quote',
+    provider: input.provider,
+    symbol: input.symbol,
+    status: input.status,
+    reason: input.reason || '',
+    error: input.error || '',
+    startedAt: startedAt.toISOString(),
+    finishedAt: finishedAt.toISOString(),
+    durationMs
+  };
+
+  try {
+    await options.onProviderAttempt(attempt);
+  } catch {
+    // Diagnostics must never break the price lookup path.
   }
 }
 

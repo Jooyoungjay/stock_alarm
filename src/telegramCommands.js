@@ -1,5 +1,5 @@
 import { buildAlertRule, initializeHighFromPurchaseDate, runAlertCheck } from './alertEngine.js';
-import { createBackup, listBackups, restoreBackup } from './backups.js';
+import { createBackup, deleteBackup, listBackups, restoreBackup } from './backups.js';
 import { buildDailyBriefing, formatDailyBriefingMessage } from './portfolioBriefing.js';
 import { ALERT_TYPES } from './storage.js';
 import {
@@ -23,6 +23,7 @@ const helpMessage = [
   '/backup - 현재 데이터 백업 생성',
   '/backups - 최근 백업 목록',
   '/restore <백업파일명|번호> - 백업 복구',
+  '/delete-backup <백업파일명|번호> - 백업 삭제',
   '',
   '등록 예시',
   '/add 336260 두산퓨얼셀 88779 2026-05-11 high 10',
@@ -181,6 +182,10 @@ async function executeCommand(store, config, command, options) {
       return listBackupsFromCommand(store, config, command, options);
     case 'restore':
       return restoreBackupFromCommand(store, config, command, options);
+    case 'delete-backup':
+    case 'delbackup':
+    case 'deletebackup':
+      return deleteBackupFromCommand(store, config, command, options);
     case 'check':
       return runManualCheck(store, config, options);
     default:
@@ -255,6 +260,18 @@ async function restoreBackupFromCommand(_store, config, command, options) {
   ]
     .filter(Boolean)
     .join('\n');
+}
+
+async function deleteBackupFromCommand(_store, config, command, options) {
+  const target = command.args[0];
+  const backupDeleter = options.deleteBackup || deleteBackup;
+  const result = await backupDeleter(config.dataDir, target);
+
+  return [
+    '백업을 삭제했습니다.',
+    `삭제 파일: ${result.backup.name}`,
+    '현재 데이터에는 영향이 없습니다.'
+  ].join('\n');
 }
 
 async function addStockFromCommand(store, config, command, options) {

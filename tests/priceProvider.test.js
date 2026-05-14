@@ -19,9 +19,23 @@ test('provider list is normalized from a comma separated env value', () => {
 });
 
 test('fetchQuote reports when every configured provider is skipped', async () => {
+  const attempts = [];
+
   await assert.rejects(
-    () => fetchQuote('AAPL', { providers: 'naver,alphavantage' }),
+    () =>
+      fetchQuote('AAPL', {
+        providers: 'naver,alphavantage',
+        onProviderAttempt: (attempt) => attempts.push(attempt)
+      }),
     /사용할 수 있는 시세 provider가 없습니다/
+  );
+
+  assert.deepEqual(
+    attempts.map((attempt) => [attempt.provider, attempt.status, attempt.reason]),
+    [
+      ['naver', 'skipped', 'not_korean_symbol'],
+      ['alphavantage', 'skipped', 'missing_alpha_vantage_key']
+    ]
   );
 });
 
