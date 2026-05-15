@@ -23,6 +23,7 @@ const state = {
   adminAuthenticated: false,
   backupRetention: 0,
   loading: false,
+  registrationModalOpen: false,
   registrationStep: 1,
   watchFilter: 'all',
   watchSort: 'risk',
@@ -35,6 +36,9 @@ const elements = {
   headerTitle: document.querySelector('.header-title'),
   userModeLink: document.querySelector('#userModeLink'),
   adminModeLink: document.querySelector('#adminModeLink'),
+  registerModal: document.querySelector('#tab-register'),
+  openRegisterButton: document.querySelector('#openRegisterButton'),
+  closeRegisterButton: document.querySelector('#closeRegisterButton'),
   form: document.querySelector('#stockForm'),
   stockList: document.querySelector('#stockList'),
   alertList: document.querySelector('#alertList'),
@@ -125,6 +129,14 @@ elements.registerStepButtons.forEach((button) => {
   });
 });
 
+elements.openRegisterButton?.addEventListener('click', () => openRegistrationModal());
+elements.closeRegisterButton?.addEventListener('click', () => closeRegistrationModal());
+elements.registerModal?.addEventListener('click', (event) => {
+  if (event.target === elements.registerModal) {
+    closeRegistrationModal();
+  }
+});
+
 document.querySelectorAll('.symbol-helper button').forEach((button) => {
   button.addEventListener('click', () => {
     elements.form.elements.symbol.value = button.dataset.symbol || '';
@@ -142,10 +154,22 @@ document.querySelectorAll('.symbol-helper button').forEach((button) => {
 });
 
 elements.mobileNavButtons.forEach((button) => {
-  button.addEventListener('click', () => switchMobileTab(button.dataset.tab));
+  button.addEventListener('click', () => {
+    if (button.dataset.openRegister) {
+      openRegistrationModal();
+      return;
+    }
+
+    switchMobileTab(button.dataset.tab);
+  });
 });
 
 window.addEventListener('resize', syncResponsiveTabs);
+window.addEventListener('keydown', (event) => {
+  if (event.key === 'Escape' && state.registrationModalOpen) {
+    closeRegistrationModal();
+  }
+});
 
 elements.adminAuthForm?.addEventListener('submit', async (event) => {
   event.preventDefault();
@@ -199,6 +223,7 @@ elements.form.addEventListener('submit', async (event) => {
     renderQuotePreview(null);
     renderRegistrationSummary();
     updateRegistrationStep(1);
+    closeRegistrationModal();
     showMessage('종목을 등록했습니다.');
     await loadData();
   });
@@ -209,7 +234,7 @@ elements.previewQuoteButton.addEventListener('click', async () => {
 });
 
 elements.registerBackButton.addEventListener('click', () => {
-  updateRegistrationStep(state.registrationStep - 1);
+  closeRegistrationModal();
 });
 
 elements.registerNextButton.addEventListener('click', () => {
@@ -631,28 +656,39 @@ function syncAlertTypeControls(form) {
   renderAlertRuleSummary(alertType);
 }
 
+function openRegistrationModal() {
+  state.registrationModalOpen = true;
+  document.body.dataset.registerModal = 'open';
+  elements.registerModal?.setAttribute('aria-hidden', 'false');
+  updateRegistrationStep(4);
+  renderRegistrationSummary();
+  window.setTimeout(() => elements.form.elements.symbol?.focus(), 0);
+}
+
+function closeRegistrationModal() {
+  state.registrationModalOpen = false;
+  document.body.dataset.registerModal = 'closed';
+  elements.registerModal?.setAttribute('aria-hidden', 'true');
+  hideSymbolSuggestions();
+}
+
 function updateRegistrationStep(step) {
-  const nextStep = Math.max(1, Math.min(4, Number(step) || 1));
-  state.registrationStep = nextStep;
+  state.registrationStep = 4;
 
   elements.registerSteps.forEach((section) => {
-    section.classList.toggle('active', Number(section.dataset.registerStep) === nextStep);
+    section.classList.add('active');
   });
 
   elements.registerStepButtons.forEach((button) => {
-    const buttonStep = Number(button.dataset.registerStepButton);
-    button.classList.toggle('active', buttonStep === nextStep);
-    button.classList.toggle('completed', buttonStep < nextStep);
+    button.classList.add('active');
+    button.classList.remove('completed');
   });
 
-  elements.registerBackButton.hidden = nextStep === 1;
-  elements.registerNextButton.hidden = nextStep === 4;
-  elements.previewQuoteButton.hidden = nextStep !== 4;
-  elements.registerSubmitButton.hidden = nextStep !== 4;
-
-  if (nextStep === 4) {
-    renderRegistrationSummary();
-  }
+  elements.registerBackButton.hidden = false;
+  elements.registerNextButton.hidden = true;
+  elements.previewQuoteButton.hidden = false;
+  elements.registerSubmitButton.hidden = false;
+  renderRegistrationSummary();
 }
 
 function validateRegistrationStep(step) {

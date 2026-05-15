@@ -149,6 +149,10 @@ input[type="date"] {
   background: var(--accent);
 }
 
+body[data-app-mode="user"] .mode-nav {
+  display: none;
+}
+
 .header-right {
   display: flex;
   align-items: center;
@@ -366,6 +370,95 @@ body[data-app-mode="user"] .col-left {
 
 .form-step.active {
   display: grid;
+}
+
+.registration-modal {
+  position: fixed;
+  inset: 0;
+  z-index: 320;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  background: rgba(13, 17, 23, 0.82);
+  backdrop-filter: blur(8px);
+}
+
+body[data-register-modal="closed"] .registration-modal {
+  display: none !important;
+}
+
+body[data-register-modal="open"] {
+  overflow: hidden;
+}
+
+body[data-register-modal="open"] .registration-modal {
+  display: flex !important;
+}
+
+.registration-dialog {
+  width: min(1120px, 100%);
+  max-height: calc(100vh - 48px);
+  overflow: auto;
+}
+
+.registration-dialog .card-header {
+  position: sticky;
+  top: -20px;
+  z-index: 2;
+  align-items: center;
+  margin: -20px -20px 18px;
+  padding: 18px 20px;
+  border-bottom: 1px solid var(--border-soft);
+  background: var(--surface);
+}
+
+.icon-button {
+  display: inline-grid;
+  place-items: center;
+  width: 32px;
+  height: 32px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--tag-bg);
+  color: var(--muted);
+  font-size: 20px;
+  font-weight: 800;
+  line-height: 1;
+}
+
+.icon-button:hover {
+  border-color: var(--accent);
+  color: var(--text);
+}
+
+.registration-single-form {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  align-items: start;
+}
+
+.registration-single-form .register-progress {
+  display: none;
+}
+
+.registration-single-form .form-step {
+  display: grid;
+  padding: 14px;
+  border: 1px solid var(--border-soft);
+  border-radius: var(--radius-sm);
+  background: rgba(13, 17, 23, 0.34);
+}
+
+.registration-single-form .form-step[data-register-step="4"],
+.registration-single-form .form-actions {
+  grid-column: 1 / -1;
+}
+
+.registration-single-form .form-actions {
+  position: sticky;
+  bottom: -20px;
+  z-index: 2;
+  padding-top: 12px;
+  background: var(--surface);
 }
 
 .form-group {
@@ -724,6 +817,8 @@ select:focus {
   display: flex;
   flex-shrink: 0;
   gap: 6px;
+  flex-wrap: wrap;
+  justify-content: flex-end;
 }
 
 .watch-summary-bar {
@@ -2134,6 +2229,10 @@ select:focus {
     padding: 20px;
   }
 
+  .registration-single-form {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
   .stock-top {
     grid-template-columns: 1fr 1fr;
   }
@@ -2217,6 +2316,34 @@ select:focus {
 
   .mobile-nav {
     display: block;
+  }
+
+  .registration-modal {
+    align-items: stretch;
+    padding: 10px;
+  }
+
+  .registration-dialog {
+    width: 100%;
+    max-height: calc(100vh - 20px);
+  }
+
+  .registration-single-form {
+    grid-template-columns: 1fr;
+  }
+
+  .registration-single-form .form-step[data-register-step="4"],
+  .registration-single-form .form-actions {
+    grid-column: 1;
+  }
+
+  .registration-single-form .form-actions {
+    position: sticky;
+    right: 0;
+    bottom: -20px;
+    left: 0;
+    padding-top: 12px;
+    background: var(--surface);
   }
 
   .watch-header {
