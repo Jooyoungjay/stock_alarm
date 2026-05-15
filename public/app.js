@@ -105,7 +105,22 @@ elements.form.elements.alertType.addEventListener('change', () => {
   renderRegistrationSummary();
 });
 
-elements.form.addEventListener('input', () => {
+elements.alertRuleSummary?.addEventListener('click', (event) => {
+  const target = event.target?.closest ? event.target : event.target?.parentElement;
+  const button = target?.closest('[data-alert-preset]');
+
+  if (!button) {
+    return;
+  }
+
+  applyAlertPreset(button.dataset.alertPreset, button.dataset.thresholdPreset);
+});
+
+elements.form.addEventListener('input', (event) => {
+  if (event.target === elements.form.elements.thresholdPercent) {
+    renderAlertRuleSummary();
+  }
+
   renderRegistrationSummary();
 });
 
@@ -656,6 +671,22 @@ function syncAlertTypeControls(form) {
   renderAlertRuleSummary(alertType);
 }
 
+function applyAlertPreset(alertType, thresholdPercent) {
+  if (!alertType || !elements.form.elements.alertType) {
+    return;
+  }
+
+  elements.form.elements.alertType.value = alertType;
+
+  if (thresholdPercent && elements.form.elements.thresholdPercent) {
+    elements.form.elements.thresholdPercent.value = thresholdPercent;
+  }
+
+  syncAlertTypeControls(elements.form);
+  renderQuotePreview(null);
+  renderRegistrationSummary();
+}
+
 function openRegistrationModal() {
   state.registrationModalOpen = true;
   document.body.dataset.registerModal = 'open';
@@ -729,22 +760,34 @@ function renderAlertRuleSummary(alertType = elements.form.elements.alertType.val
   const summaries = {
     high_drawdown: {
       value: '최고가 대비 하락률',
-      detail: '매수일을 입력하면 매수일 이후 최고가, 비우면 등록 이후 감시 최고가에서 설정 비율만큼 내려올 때 알림을 보냅니다.'
+      detail: '매수일을 입력하면 매수일 이후 최고가, 비우면 등록 이후 감시 최고가에서 설정 비율만큼 내려올 때 알림을 보냅니다.',
+      fit: '추세를 따라가며 고점 이탈을 보고 싶을 때 적합합니다.',
+      caution: '새 고점을 만들면 기준가도 같이 올라갑니다.'
     },
     profit_retracement: {
       value: '이익금 반납률',
-      detail: '평단가 대비 최고 이익금 중 설정한 비율을 반납하면 알림을 보냅니다. 매수일을 비우면 등록 이후 감시 최고가를 씁니다.'
+      detail: '평단가 대비 최고 이익금 중 설정한 비율을 반납하면 알림을 보냅니다. 매수일을 비우면 등록 이후 감시 최고가를 씁니다.',
+      fit: '수익을 최대한 보존하고 싶을 때 가장 이해하기 쉽습니다.',
+      caution: '고점이 평단가보다 높아야 기준가가 계산됩니다.'
     },
     purchase_loss: {
       value: '매수가 대비 손절률',
-      detail: '매수가에서 설정한 비율만큼 손실이 나면 알림을 보냅니다.'
+      detail: '매수가에서 설정한 비율만큼 손실이 나면 알림을 보냅니다.',
+      fit: '매수 직후 손실 제한선을 먼저 정해둘 때 적합합니다.',
+      caution: '수익이 난 뒤의 고점 반납은 반영하지 않습니다.'
     },
     target_price: {
       value: '직접 기준가',
-      detail: '직접 입력한 기준가 이하가 되면 알림을 보냅니다.'
+      detail: '직접 입력한 기준가 이하가 되면 알림을 보냅니다.',
+      fit: '이미 정해둔 매도 가격이 있을 때 적합합니다.',
+      caution: '현재가와 고점 변화에 따라 자동 조정되지 않습니다.'
     }
   };
   const summary = summaries[alertType] || summaries.high_drawdown;
+  const beginnerPick =
+    alertType === 'profit_retracement'
+      ? '현재 선택이 초보 추천 기준입니다.'
+      : '초보자는 이익금 반납률 10% 또는 15%부터 비교해보는 것을 권장합니다.';
 
   elements.alertRuleSummary.innerHTML = `
     <div class="alert-rule-item">
@@ -752,6 +795,40 @@ function renderAlertRuleSummary(alertType = elements.form.elements.alertType.val
       <span class="alert-rule-value">${escapeHtml(summary.value)}</span>
       <span class="alert-rule-detail">${escapeHtml(summary.detail)}</span>
     </div>
+    <div class="alert-rule-item">
+      <span class="alert-rule-label">추천 상황</span>
+      <span class="alert-rule-value">${escapeHtml(summary.fit)}</span>
+      <span class="alert-rule-detail">${escapeHtml(summary.caution)}</span>
+    </div>
+    <div class="alert-preset-panel">
+      <div>
+        <span class="alert-rule-label">빠른 추천값</span>
+        <span class="alert-rule-detail">${escapeHtml(beginnerPick)}</span>
+      </div>
+      <div class="alert-preset-list">
+        ${renderAlertPresetButton('profit_retracement', 10, '이익 10%', alertType)}
+        ${renderAlertPresetButton('profit_retracement', 15, '이익 15%', alertType)}
+        ${renderAlertPresetButton('high_drawdown', 5, '고점 -5%', alertType)}
+        ${renderAlertPresetButton('purchase_loss', 5, '손절 -5%', alertType)}
+      </div>
+    </div>
+  `;
+}
+
+function renderAlertPresetButton(alertType, thresholdPercent, label, selectedAlertType) {
+  const selected =
+    selectedAlertType === alertType &&
+    Number(elements.form.elements.thresholdPercent.value) === Number(thresholdPercent);
+
+  return `
+    <button
+      class="alert-preset-button ${selected ? 'active' : ''}"
+      type="button"
+      data-alert-preset="${escapeHtml(alertType)}"
+      data-threshold-preset="${escapeHtml(thresholdPercent)}"
+    >
+      ${escapeHtml(label)}
+    </button>
   `;
 }
 
@@ -830,22 +907,32 @@ async function loadSymbolSuggestions(query, requestId) {
 
 function renderSymbolSuggestions(results) {
   if (!results.length) {
-    hideSymbolSuggestions();
+    const empty = document.createElement('div');
+    empty.className = 'symbol-suggestion-empty';
+    empty.textContent = '검색 결과 없음 · 종목 코드를 직접 입력할 수 있습니다.';
+    elements.symbolSuggestions.replaceChildren(empty);
+    elements.symbolSuggestions.className = 'symbol-suggestions show';
     return;
   }
 
   const buttons = results.map((item) => {
     const button = document.createElement('button');
+    const main = document.createElement('span');
     const name = document.createElement('span');
     const meta = document.createElement('span');
+    const badges = document.createElement('span');
 
     button.type = 'button';
     button.className = 'symbol-suggestion';
+    main.className = 'symbol-suggestion-main';
     name.className = 'symbol-suggestion-name';
     meta.className = 'symbol-suggestion-meta';
+    badges.className = 'symbol-suggestion-badges';
     name.textContent = item.name;
     meta.textContent = `${item.symbol} · ${item.market}`;
-    button.append(name, meta);
+    main.append(name, meta);
+    badges.append(...buildSymbolSuggestionBadges(item));
+    button.append(main, badges);
     button.addEventListener('click', () => selectSymbolSuggestion(item));
 
     return button;
@@ -866,6 +953,45 @@ function selectSymbolSuggestion(item) {
   renderQuotePreview(null);
   renderRegistrationSummary();
   elements.form.elements.symbol.focus();
+}
+
+function buildSymbolSuggestionBadges(item) {
+  const badges = [];
+
+  if (isPreferredStockSymbol(item)) {
+    badges.push(createSuggestionBadge('우선주', 'preferred'));
+  }
+
+  if (isRegisteredSymbol(item.symbol)) {
+    badges.push(createSuggestionBadge('등록됨', 'registered'));
+  }
+
+  if (!badges.length) {
+    badges.push(createSuggestionBadge(item.market || '종목', 'market'));
+  }
+
+  return badges;
+}
+
+function createSuggestionBadge(label, type) {
+  const badge = document.createElement('span');
+  badge.className = `symbol-suggestion-badge ${type}`;
+  badge.textContent = label;
+  return badge;
+}
+
+function isPreferredStockSymbol(item) {
+  return /우|preferred/i.test(`${item.name || ''} ${(item.aliases || []).join(' ')}`) ||
+    /^\d{5}[A-Z]/i.test(String(item.symbol || ''));
+}
+
+function isRegisteredSymbol(symbol) {
+  const normalized = normalizeSymbolForCompare(symbol);
+  return state.stocks.some((stock) => normalizeSymbolForCompare(stock.symbol) === normalized);
+}
+
+function normalizeSymbolForCompare(symbol) {
+  return String(symbol || '').trim().toUpperCase().replace(/\.(KS|KQ)$/i, '');
 }
 
 function hideSymbolSuggestions() {
@@ -1026,6 +1152,7 @@ function renderQuotePreview(preview) {
       ${position ? renderPreviewItem(position.metricLabel || '현재 하락률', formatMetricPercent(position), '', statusClass) : ''}
       ${renderPreviewItem('상태', statusText, position ? formatDistancePercent(position) : '', statusClass)}
     </div>
+    ${position ? renderAlertRuleComparison(position, quote) : ''}
   `;
 }
 
@@ -1037,6 +1164,144 @@ function renderPreviewItem(label, value, detail = '', valueClass = '') {
       ${detail ? `<span class="quote-preview-detail">${escapeHtml(detail)}</span>` : ''}
     </div>
   `;
+}
+
+function renderAlertRuleComparison(position, quote) {
+  const rows = buildAlertRuleComparisonRows(position, quote);
+
+  if (!rows.length) {
+    return '';
+  }
+
+  return `
+    <div class="alert-comparison" aria-label="알림 기준별 예상 결과">
+      <div class="alert-comparison-header">
+        <span>기준별 예상 결과</span>
+        <span>${escapeHtml(formatMoney(quote.price, position.currency || quote.currency))} 기준</span>
+      </div>
+      <div class="alert-comparison-grid">
+        ${rows.map(renderAlertRuleComparisonRow).join('')}
+      </div>
+    </div>
+  `;
+}
+
+function renderAlertRuleComparisonRow(row) {
+  return `
+    <div class="alert-comparison-row ${row.selected ? 'selected' : ''}">
+      <span class="alert-comparison-type">${escapeHtml(row.label)}</span>
+      <span class="alert-comparison-price">${escapeHtml(row.thresholdText)}</span>
+      <span class="alert-comparison-detail">${escapeHtml(row.detail)}</span>
+      <span class="alert-comparison-status ${escapeHtml(row.statusClass)}">${escapeHtml(row.status)}</span>
+    </div>
+  `;
+}
+
+function buildAlertRuleComparisonRows(position, quote) {
+  const currentPrice = parseFiniteNumber(quote.price);
+  const currency = position.currency || quote.currency;
+  const highPrice = parseFiniteNumber(position.highPrice);
+  const purchasePrice = parseFiniteNumber(position.purchasePrice);
+  const thresholdPercent =
+    parseFiniteNumber(elements.form.elements.thresholdPercent.value) ??
+    parseFiniteNumber(position.thresholdPercent) ??
+    5;
+  const targetPrice =
+    parseFiniteNumber(elements.form.elements.targetPrice.value) ??
+    parseFiniteNumber(position.targetPrice);
+  const rows = [];
+
+  if (currentPrice === null) {
+    return rows;
+  }
+
+  if (highPrice !== null) {
+    const thresholdPrice = calculateThreshold(highPrice, thresholdPercent);
+    const metric = calculateDrawdown(highPrice, currentPrice);
+    rows.push(
+      buildAlertRuleComparisonRow({
+        type: 'high_drawdown',
+        label: '최고가 대비',
+        thresholdPrice,
+        currentPrice,
+        currency,
+        detail: `${formatAlertMetricPercent(metric)} · ${formatPercent(thresholdPercent)} 기준`,
+        selectedType: position.alertType
+      })
+    );
+  }
+
+  if (highPrice !== null && purchasePrice !== null && highPrice > purchasePrice) {
+    const thresholdPrice = highPrice - (highPrice - purchasePrice) * (thresholdPercent / 100);
+    const retracement = Math.max(0, ((highPrice - currentPrice) / (highPrice - purchasePrice)) * 100);
+    rows.push(
+      buildAlertRuleComparisonRow({
+        type: 'profit_retracement',
+        label: '이익금 반납',
+        thresholdPrice,
+        currentPrice,
+        currency,
+        detail: `${formatPercent(retracement)} 반납 · ${formatPercent(thresholdPercent)} 기준`,
+        selectedType: position.alertType
+      })
+    );
+  }
+
+  if (purchasePrice !== null) {
+    const thresholdPrice = calculateThreshold(purchasePrice, thresholdPercent);
+    const metric = calculateDrawdown(purchasePrice, currentPrice);
+    rows.push(
+      buildAlertRuleComparisonRow({
+        type: 'purchase_loss',
+        label: '매수가 손절',
+        thresholdPrice,
+        currentPrice,
+        currency,
+        detail: `${formatAlertMetricPercent(metric)} · ${formatPercent(thresholdPercent)} 기준`,
+        selectedType: position.alertType
+      })
+    );
+  }
+
+  if (targetPrice !== null) {
+    const metric = calculateDrawdown(targetPrice, currentPrice);
+    rows.push(
+      buildAlertRuleComparisonRow({
+        type: 'target_price',
+        label: '직접 기준가',
+        thresholdPrice: targetPrice,
+        currentPrice,
+        currency,
+        detail: `${formatAlertMetricPercent(metric)} · 직접 입력`,
+        selectedType: position.alertType
+      })
+    );
+  }
+
+  return rows;
+}
+
+function buildAlertRuleComparisonRow({
+  type,
+  label,
+  thresholdPrice,
+  currentPrice,
+  currency,
+  detail,
+  selectedType
+}) {
+  const distance = thresholdPrice === null ? null : currentPrice - thresholdPrice;
+  const triggered = distance !== null && distance <= 0;
+
+  return {
+    type,
+    label,
+    thresholdText: formatMoney(thresholdPrice, currency),
+    detail,
+    status: distance === null ? '대기' : triggered ? '알림' : `여유 ${formatMoney(distance, currency)}`,
+    statusClass: distance === null ? 'flat' : triggered ? 'down' : 'ok',
+    selected: selectedType === type
+  };
 }
 
 function renderRegistrationSummary() {

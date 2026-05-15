@@ -586,6 +586,41 @@ select:focus {
   text-align: left;
 }
 
+.symbol-suggestion-main,
+.symbol-suggestion-badges {
+  display: grid;
+  gap: 3px;
+  min-width: 0;
+}
+
+.symbol-suggestion-badges {
+  justify-items: end;
+}
+
+.symbol-suggestion-badge {
+  display: inline-flex;
+  align-items: center;
+  min-height: 22px;
+  padding: 0 8px;
+  border: 1px solid var(--border-soft);
+  border-radius: 999px;
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 800;
+}
+
+.symbol-suggestion-badge.preferred {
+  border-color: rgba(26, 158, 110, 0.28);
+  background: rgba(26, 158, 110, 0.1);
+  color: var(--accent);
+}
+
+.symbol-suggestion-badge.registered {
+  border-color: rgba(224, 92, 92, 0.28);
+  background: rgba(224, 92, 92, 0.12);
+  color: var(--danger);
+}
+
 .symbol-suggestion:last-child {
   border-bottom: 0;
 }
@@ -606,6 +641,13 @@ select:focus {
 }
 
 .symbol-suggestion-meta {
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.symbol-suggestion-empty {
+  padding: 10px 12px;
   color: var(--muted);
   font-size: 12px;
   font-weight: 700;
@@ -758,6 +800,36 @@ select:focus {
   line-height: 1.35;
 }
 
+.alert-preset-panel {
+  display: grid;
+  gap: 8px;
+  min-width: 0;
+}
+
+.alert-preset-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.alert-preset-button {
+  min-height: 30px;
+  padding: 0 10px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: var(--bg);
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.alert-preset-button:hover,
+.alert-preset-button.active {
+  border-color: var(--accent);
+  background: var(--accent-glow);
+  color: var(--accent);
+}
+
 .quote-preview.show {
   display: grid;
 }
@@ -811,6 +883,76 @@ select:focus {
 
 .quote-preview-value.up {
   color: var(--ok);
+}
+
+.alert-comparison {
+  display: grid;
+  gap: 8px;
+  padding-top: 10px;
+  border-top: 1px solid rgba(26, 158, 110, 0.2);
+}
+
+.alert-comparison-header {
+  display: flex;
+  justify-content: space-between;
+  gap: 10px;
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.alert-comparison-grid {
+  display: grid;
+  gap: 6px;
+}
+
+.alert-comparison-row {
+  display: grid;
+  grid-template-columns: minmax(96px, 1fr) minmax(96px, 1fr) minmax(120px, 1.3fr) auto;
+  gap: 8px;
+  align-items: center;
+  padding: 8px 10px;
+  border: 1px solid var(--border-soft);
+  border-radius: var(--radius-sm);
+  background: rgba(13, 17, 23, 0.34);
+}
+
+.alert-comparison-row.selected {
+  border-color: rgba(26, 158, 110, 0.42);
+  background: rgba(26, 158, 110, 0.08);
+}
+
+.alert-comparison-type,
+.alert-comparison-price {
+  color: var(--text);
+  font-weight: 800;
+}
+
+.alert-comparison-detail {
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.alert-comparison-status {
+  justify-self: end;
+  min-width: 54px;
+  padding: 3px 8px;
+  border-radius: 999px;
+  background: var(--tag-bg);
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 900;
+  text-align: center;
+}
+
+.alert-comparison-status.ok {
+  background: var(--ok-soft);
+  color: var(--ok);
+}
+
+.alert-comparison-status.down {
+  background: var(--danger-soft);
+  color: var(--danger);
 }
 
 .watch-actions {
@@ -2499,6 +2641,14 @@ select:focus {
   .stock-dividend-grid,
   .stock-edit-form {
     grid-template-columns: 1fr;
+  }
+
+  .alert-comparison-row {
+    grid-template-columns: 1fr;
+  }
+
+  .alert-comparison-status {
+    justify-self: start;
   }
 
   .form-actions {
