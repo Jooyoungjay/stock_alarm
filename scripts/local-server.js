@@ -192,6 +192,7 @@ function printRunningStatus(status, title = 'Stock Alarm 서버가 실행 중입
 
   console.log(`텔레그램 설정: ${health.telegramConfigured ? '완료' : '미설정'}`);
   console.log(`시세 provider: ${health.quoteProviders}`);
+  console.log(`일봉 provider: ${health.historicalQuoteProviders || health.quoteProviders}`);
   console.log(`시세 확인 주기: ${health.pollIntervalSeconds}초`);
   console.log(`마지막 시세 확인: ${formatOptionalDate(health.lastCheck?.checkedAt)}`);
   console.log(`마지막 명령 확인: ${formatOptionalDate(health.lastTelegramCommandPoll?.checkedAt)}`);

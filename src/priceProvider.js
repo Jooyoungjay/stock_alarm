@@ -1,6 +1,8 @@
 const yahooQuoteUrl = 'https://query1.finance.yahoo.com/v7/finance/quote';
 const stooqQuoteUrl = 'https://stooq.com/q/l/';
 const naverRealtimeUrl = 'https://polling.finance.naver.com/api/realtime';
+const publicDataStockPriceUrl =
+  'http://apis.data.go.kr/1160100/service/GetStockSecuritiesInfoService/getStockPriceInfo';
 const alphaVantageUrl = 'https://www.alphavantage.co/query';
 
 const defaultProviders = ['naver', 'stooq', 'alphavantage', 'yahoo'];
@@ -17,7 +19,7 @@ export async function fetchHistoricalHighSince(symbol, startDate, options = {}) 
   }
 
   for (const provider of providers) {
-    const skipReason = getHistoricalProviderSkipReason(provider, symbol);
+    const skipReason = getHistoricalProviderSkipReason(provider, symbol, options);
 
     if (skipReason) {
       await recordProviderAttempt(options, {
@@ -37,6 +39,10 @@ export async function fetchHistoricalHighSince(symbol, startDate, options = {}) 
 
       if (provider === 'naver') {
         result = await fetchNaverHistoricalHigh(symbol, start, end, options);
+      }
+
+      if (provider === 'publicdata') {
+        result = await fetchPublicDataHistoricalHigh(symbol, start, end, options);
       }
 
       if (provider === 'stooq') {
@@ -147,6 +153,10 @@ export async function fetchQuote(symbol, options = {}) {
 }
 
 function getProviderSkipReason(provider, symbol, options, providers) {
+  if (provider === 'publicdata') {
+    return 'historical_only_provider';
+  }
+
   if (!defaultProviders.includes(provider)) {
     return 'unsupported_provider';
   }
@@ -170,7 +180,19 @@ function getProviderSkipReason(provider, symbol, options, providers) {
   return '';
 }
 
-function getHistoricalProviderSkipReason(provider, symbol) {
+function getHistoricalProviderSkipReason(provider, symbol, options = {}) {
+  if (provider === 'publicdata') {
+    if (!isKoreanStockSymbol(symbol)) {
+      return 'not_korean_symbol';
+    }
+
+    if (!options.dataGoKrServiceKey) {
+      return 'missing_data_go_kr_service_key';
+    }
+
+    return '';
+  }
+
   if (provider === 'naver') {
     return isKoreanStockSymbol(symbol) ? '' : 'not_korean_symbol';
   }
@@ -194,6 +216,17 @@ export function normalizeProviders(value) {
   const providers = Array.isArray(value) ? value : String(value).split(',');
   const normalized = providers
     .map((provider) => provider.trim().toLowerCase())
+    .map((provider) => {
+      if (['data', 'datagokr', 'data.go.kr', 'public'].includes(provider)) {
+        return 'publicdata';
+      }
+
+      if (['alpha', 'alpha-vantage', 'alpha_vantage'].includes(provider)) {
+        return 'alphavantage';
+      }
+
+      return provider;
+    })
     .filter(Boolean);
 
   return normalized.length ? normalized : defaultProviders;
@@ -224,6 +257,13 @@ const quoteSourceDefaults = {
     venue: 'us',
     licenseType: 'keyed',
     sourceNote: 'API 키 기반 지연 시세'
+  },
+  publicdata: {
+    providerLabel: '공공데이터포털 주식시세',
+    dataDelay: 'eod',
+    venue: 'krx_estimated',
+    licenseType: 'public',
+    sourceNote: '금융위원회 주식시세정보'
   },
   yahoo: {
     providerLabel: 'Yahoo Finance',
@@ -407,6 +447,33 @@ export function parseNaverDailyChart(content, requestedSymbol) {
   });
 }
 
+export function parsePublicDataStockPriceResponse(payload, requestedSymbol) {
+  const header = payload?.response?.header || {};
+
+  if (header.resultCode && !['00', '0000'].includes(String(header.resultCode))) {
+    throw new Error(header.resultMsg || '공공데이터 주식시세 조회 오류');
+  }
+
+  const stockCode = toNaverSymbol(requestedSymbol);
+  const items = normalizeItems(payload?.response?.body?.items?.item);
+  const matchingItems = items.filter((item) => recordStockCodeMatches(item, stockCode));
+  const rows = matchingItems.map((item) => ({
+    date: item.basDt || item.basdt,
+    high: parseLooseNumber(item.hipr || item.highPrice || item.high)
+  }));
+  const high = pickHighestDailyPrice(rows, {
+    symbol: requestedSymbol,
+    currency: 'KRW',
+    exchange: '공공데이터포털/금융위원회',
+    provider: 'publicdata'
+  });
+
+  return {
+    ...high,
+    sourceSymbol: matchingItems[0]?.itmsNm || matchingItems[0]?.itmsnm || stockCode
+  };
+}
+
 export function parseYahooHistoricalChart(payload, requestedSymbol) {
   if (payload?.chart?.error) {
     throw new Error(payload.chart.error.description || 'Yahoo 일봉 조회 오류');
@@ -470,6 +537,23 @@ async function fetchNaverHistoricalHigh(symbol, start, end, options = {}) {
   const content = await fetchText(url, options);
 
   return parseNaverDailyChart(content, symbol);
+}
+
+async function fetchPublicDataHistoricalHigh(symbol, start, end, options = {}) {
+  if (!options.dataGoKrServiceKey) {
+    throw new Error('DATA_GO_KR_SERVICE_KEY가 설정되지 않았습니다.');
+  }
+
+  const url = createPublicDataStockPriceUrl(options.dataGoKrServiceKey);
+  url.searchParams.set('pageNo', '1');
+  url.searchParams.set('numOfRows', '5000');
+  url.searchParams.set('resultType', 'json');
+  url.searchParams.set('beginBasDt', compactDate(start));
+  url.searchParams.set('endBasDt', compactDate(addDays(end, 1)));
+  url.searchParams.set('likeSrtnCd', toNaverSymbol(symbol));
+  const payload = await fetchJson(url, options);
+
+  return parsePublicDataStockPriceResponse(payload, symbol);
 }
 
 async function fetchStooqHistoricalHigh(symbol, start, end, options = {}) {
@@ -557,7 +641,7 @@ async function fetchJson(url, options = {}, encoding = 'utf-8') {
   const response = await fetchWithTimeout(url, options);
 
   if (!response.ok) {
-    throw new Error(`HTTP ${response.status}`);
+    throw new Error(await formatHttpError(response));
   }
 
   const decoder = new TextDecoder(encoding);
@@ -569,10 +653,72 @@ async function fetchText(url, options = {}) {
   const response = await fetchWithTimeout(url, options);
 
   if (!response.ok) {
-    throw new Error(`HTTP ${response.status}`);
+    throw new Error(await formatHttpError(response));
   }
 
   return response.text();
+}
+
+async function formatHttpError(response) {
+  let detail = '';
+
+  try {
+    detail = (await response.text()).replace(/\s+/g, ' ').trim();
+  } catch {
+    detail = '';
+  }
+
+  if (detail.length > 180) {
+    detail = `${detail.slice(0, 177)}...`;
+  }
+
+  return detail ? `HTTP ${response.status}: ${detail}` : `HTTP ${response.status}`;
+}
+
+function createPublicDataStockPriceUrl(serviceKey) {
+  const key = String(serviceKey || '').trim();
+
+  if (!key) {
+    throw new Error('DATA_GO_KR_SERVICE_KEY가 설정되지 않았습니다.');
+  }
+
+  if (key.includes('%')) {
+    return new URL(`${publicDataStockPriceUrl}?serviceKey=${key}`);
+  }
+
+  const url = new URL(publicDataStockPriceUrl);
+  url.searchParams.set('serviceKey', key);
+  return url;
+}
+
+function normalizeItems(value) {
+  if (!value) {
+    return [];
+  }
+
+  return Array.isArray(value) ? value : [value];
+}
+
+function recordStockCodeMatches(item, stockCode) {
+  const normalizedCode = String(stockCode || '').trim().toUpperCase();
+
+  if (!normalizedCode) {
+    return false;
+  }
+
+  return [item?.srtnCd, item?.srtncd, item?.isinCd, item?.isincd]
+    .map((value) => String(value || '').trim().toUpperCase())
+    .some((value) => value === normalizedCode);
+}
+
+function parseLooseNumber(value) {
+  if (value === undefined || value === null || value === '') {
+    return NaN;
+  }
+
+  const normalized = String(value).replaceAll(',', '').trim();
+  const parsed = Number(normalized);
+  return Number.isFinite(parsed) ? parsed : NaN;
 }
 
 function pickHighestDailyPrice(rows, meta) {

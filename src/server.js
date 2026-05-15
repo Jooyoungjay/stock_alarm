@@ -293,6 +293,7 @@ async function handleApi(request, response, url) {
       port: activePort,
       accessUrls: buildAccessUrls({ host: config.host, port: activePort }),
       quoteProviders: config.quoteProviders,
+      historicalQuoteProviders: config.historicalQuoteProviders,
       dividendProviders: config.dividendProviders,
       pollIntervalSeconds: config.pollIntervalSeconds,
       dividendRefreshIntervalSeconds: config.dividendRefreshIntervalSeconds,
@@ -335,6 +336,7 @@ async function handleApi(request, response, url) {
       }),
       telegramConfigured: isTelegramConfigured(config),
       quoteProviders: config.quoteProviders,
+      historicalQuoteProviders: config.historicalQuoteProviders,
       dividendProviders: config.dividendProviders,
       pollIntervalSeconds: config.pollIntervalSeconds,
       dividendRefreshIntervalSeconds: config.dividendRefreshIntervalSeconds,
@@ -452,6 +454,7 @@ async function handleApi(request, response, url) {
     const quoteOptions = {
       timeoutMs: config.quoteTimeoutMs,
       providers: config.quoteProviders,
+      dataGoKrServiceKey: config.dataGoKrServiceKey,
       alphaVantageApiKey: config.alphaVantageApiKey,
       onProviderAttempt: (attempt) =>
         recordQuoteProviderAttempt({
@@ -466,6 +469,7 @@ async function handleApi(request, response, url) {
     if (purchaseDate) {
       historicalHigh = await fetchHistoricalHighSince(symbol, purchaseDate, {
         ...quoteOptions,
+        providers: config.historicalQuoteProviders || config.quoteProviders,
         endDate: new Date()
       });
     }

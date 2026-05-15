@@ -133,6 +133,10 @@ export const config = {
   }),
   quoteTimeoutMs: toNumber(process.env.QUOTE_TIMEOUT_MS, 10000, { min: 1000 }),
   quoteProviders: process.env.QUOTE_PROVIDERS || 'naver,stooq,alphavantage,yahoo',
+  historicalQuoteProviders:
+    process.env.HISTORICAL_QUOTE_PROVIDERS ||
+    process.env.QUOTE_PROVIDERS ||
+    'naver,stooq,alphavantage,yahoo',
   dividendProviders:
     process.env.DIVIDEND_PROVIDERS || 'publicdata,opendart,alphavantage,yahoo',
   dataGoKrServiceKey: process.env.DATA_GO_KR_SERVICE_KEY || '',

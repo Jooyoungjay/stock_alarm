@@ -778,6 +778,7 @@ function renderServerStatus(health) {
       ${renderServerMetric('서버', '정상 실행', `시작 ${formatDate(health.startedAt)}`)}
       ${renderServerMetric('Telegram', health.telegramConfigured ? '연결됨' : '미설정', health.telegramConfigured ? '알림 전송 가능' : '.env 설정 필요')}
       ${renderServerMetric('시세', formatProviderList(health.quoteProviders), `${health.pollIntervalSeconds || 60}초 주기`)}
+      ${renderServerMetric('일봉', formatProviderList(health.historicalQuoteProviders || health.quoteProviders), '최고가 계산용')}
       ${renderServerMetric('배당', formatProviderList(health.dividendProviders), `${formatInterval(health.dividendRefreshIntervalSeconds || 86400)} 주기`)}
       ${renderServerMetric('브리핑', formatDailyBriefingSetting(health), getLastDailyBriefingDetail(health.lastDailyBriefing))}
       ${renderServerMetric('명령', formatDate(health.lastTelegramCommandPoll?.checkedAt), `${health.telegramCommandPollSeconds || 5}초 주기`)}
@@ -1122,7 +1123,9 @@ function getQuoteProviderReasonLabel(reason) {
     not_korean_symbol: '한국 종목이 아니어서 건너뜀',
     korean_symbol_not_supported: '한국 종목 미지원',
     missing_alpha_vantage_key: 'Alpha Vantage 키 없음',
+    missing_data_go_kr_service_key: '공공데이터포털 키 없음',
     historical_not_supported: '일봉 조회 미지원',
+    historical_only_provider: '일봉 전용 provider',
     unsupported_provider: '지원하지 않는 provider'
   };
 

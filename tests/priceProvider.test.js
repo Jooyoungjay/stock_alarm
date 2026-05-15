@@ -1,12 +1,14 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
+  fetchHistoricalHighSince,
   fetchQuote,
   isKoreanStockSymbol,
   normalizeProviders,
   parseAlphaVantageQuote,
   parseNaverDailyChart,
   parseNaverQuote,
+  parsePublicDataStockPriceResponse,
   parseStooqCsv,
   parseStooqHistoricalCsv,
   parseYahooHistoricalChart,
@@ -16,6 +18,11 @@ import {
 
 test('provider list is normalized from a comma separated env value', () => {
   assert.deepEqual(normalizeProviders(' naver, stooq ,, yahoo '), ['naver', 'stooq', 'yahoo']);
+  assert.deepEqual(normalizeProviders('public,data.go.kr,alpha-vantage'), [
+    'publicdata',
+    'publicdata',
+    'alphavantage'
+  ]);
 });
 
 test('fetchQuote reports when every configured provider is skipped', async () => {
@@ -36,6 +43,42 @@ test('fetchQuote reports when every configured provider is skipped', async () =>
       ['naver', 'skipped', 'not_korean_symbol'],
       ['alphavantage', 'skipped', 'missing_alpha_vantage_key']
     ]
+  );
+});
+
+test('publicdata is skipped for quotes because it is historical only', async () => {
+  const attempts = [];
+
+  await assert.rejects(
+    () =>
+      fetchQuote('005930', {
+        providers: 'publicdata',
+        onProviderAttempt: (attempt) => attempts.push(attempt)
+      }),
+    /사용할 수 있는 시세 provider가 없습니다/
+  );
+
+  assert.deepEqual(
+    attempts.map((attempt) => [attempt.provider, attempt.status, attempt.reason]),
+    [['publicdata', 'skipped', 'historical_only_provider']]
+  );
+});
+
+test('publicdata historical high reports a missing key as a skipped attempt', async () => {
+  const attempts = [];
+
+  await assert.rejects(
+    () =>
+      fetchHistoricalHighSince('005930', '2026-05-01', {
+        providers: 'publicdata',
+        onProviderAttempt: (attempt) => attempts.push(attempt)
+      }),
+    /사용할 수 있는 일봉 provider가 없습니다/
+  );
+
+  assert.deepEqual(
+    attempts.map((attempt) => [attempt.provider, attempt.status, attempt.reason]),
+    [['publicdata', 'skipped', 'missing_data_go_kr_service_key']]
   );
 });
 
@@ -144,6 +187,53 @@ test('Naver daily chart is parsed into a highest daily price', () => {
   assert.equal(high.provider, 'naver');
   assert.equal(high.dataDelay, 'eod');
   assert.equal(high.venue, 'krx_estimated');
+});
+
+test('publicdata stock price response is parsed into a highest daily price', () => {
+  const high = parsePublicDataStockPriceResponse(
+    {
+      response: {
+        header: {
+          resultCode: '00',
+          resultMsg: 'NORMAL SERVICE.'
+        },
+        body: {
+          items: {
+            item: [
+              {
+                basDt: '20260507',
+                srtnCd: '005930',
+                itmsNm: '삼성전자',
+                hipr: '283000'
+              },
+              {
+                basDt: '20260508',
+                srtnCd: '005930',
+                itmsNm: '삼성전자',
+                hipr: '287,500'
+              },
+              {
+                basDt: '20260509',
+                srtnCd: '000660',
+                itmsNm: 'SK하이닉스',
+                hipr: '350000'
+              }
+            ]
+          }
+        }
+      }
+    },
+    '005930'
+  );
+
+  assert.equal(high.symbol, '005930');
+  assert.equal(high.highPrice, 287500);
+  assert.equal(high.highPriceAt, '2026-05-08T00:00:00.000Z');
+  assert.equal(high.provider, 'publicdata');
+  assert.equal(high.providerLabel, '공공데이터포털 주식시세');
+  assert.equal(high.dataDelay, 'eod');
+  assert.equal(high.venue, 'krx_estimated');
+  assert.equal(high.sourceSymbol, '삼성전자');
 });
 
 test('Yahoo historical chart is parsed into a highest daily price', () => {

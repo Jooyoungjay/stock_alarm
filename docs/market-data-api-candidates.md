@@ -1,6 +1,6 @@
 # 공식/유료 시세 API 후보 검토
 
-자료 확인일: 2026-05-14
+자료 확인일: 2026-05-15
 
 ## 목적
 
@@ -12,11 +12,14 @@ Stock Alarm은 현재 로컬 웹앱 MVP 단계이며, 무료/공개 provider 체
 
 현재 단계에서는 먼저 `현재 provider 실패율 기록`을 개발해서 실제 실패 빈도와 실패 사유를 저장해야 합니다. 그 다음 시세 출처, 지연 여부, KRX/NXT 구분 여부를 화면에 표시하고, 필요성이 분명해졌을 때 증권사 API 또는 계약형 데이터 API를 붙이는 순서가 안전합니다.
 
-추천 순서:
+진행 상태:
 
-1. 현재 provider 실패율 기록
-2. 시세 출처와 지연 여부 표시
-3. 공식 일봉 provider 실험
+1. 현재 provider 실패율 기록: 완료
+2. 시세 출처와 지연 여부 표시: 완료
+3. 공식 일봉 provider 실험: 완료
+
+남은 추천 순서:
+
 4. 증권사 API adapter 검토
 5. NXT 분리 시세는 계약형 API 확인 뒤 진행
 
@@ -58,6 +61,13 @@ naver,stooq,alphavantage,yahoo
 
 - 장중 실시간 매도 알림
 - KRX/NXT 가격 분리
+
+구현 상태:
+
+- `HISTORICAL_QUOTE_PROVIDERS=publicdata,naver,stooq,yahoo`로 구매일 이후 최고가 계산에 실험 적용 가능
+- `DATA_GO_KR_SERVICE_KEY`가 없으면 `missing_data_go_kr_service_key`로 스킵
+- `publicdata`는 현재가 provider가 아니라 일봉 전용 provider로 분리
+- 단일 종목 검증 스크립트: `npm run check:publicdata-price -- 005930 2026-05-01 2026-05-15`
 
 ### 3. KRX Open API
 
@@ -144,9 +154,9 @@ ICE Developer Portal에는 NexTrade ATS native data feed와 ICE Consolidated Fee
 
 ## 다음 개발로 넘길 항목
 
-가장 먼저 구현할 항목은 `현재 provider 실패율 기록`입니다.
+현재 provider 실패율 기록, 시세 출처 표시, 공식 일봉 provider 실험은 완료했습니다. 다음 구현 후보는 `증권사 API adapter 검토` 또는 `개발 WBS/일정의 웹 대시보드 표시`입니다.
 
-저장할 값:
+증권사 API adapter를 진행할 때 먼저 저장할 값:
 
 - provider 이름
 - 요청 종목코드
@@ -155,8 +165,6 @@ ICE Developer Portal에는 NexTrade ATS native data feed와 ICE Consolidated Fee
 - 응답 시간
 - 마지막 성공 시각
 - provider별 누적 성공/실패 횟수
-
-이 데이터가 쌓이면 실제로 어떤 provider를 교체해야 하는지 근거를 갖고 결정할 수 있습니다.
 
 ## 참고 링크
 

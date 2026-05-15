@@ -427,7 +427,8 @@ export async function initializeHighFromPurchaseDate(store, config, stock, optio
   const now = options.now || new Date();
   const historicalHigh = await highFetcher(stock.symbol, stock.purchaseDate, {
     timeoutMs: config.quoteTimeoutMs,
-    providers: config.quoteProviders,
+    providers: config.historicalQuoteProviders || config.quoteProviders,
+    dataGoKrServiceKey: config.dataGoKrServiceKey,
     alphaVantageApiKey: config.alphaVantageApiKey,
     endDate: now,
     onProviderAttempt: (attempt) =>

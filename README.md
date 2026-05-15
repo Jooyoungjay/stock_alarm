@@ -93,6 +93,7 @@ stop-local.bat
 - 배당 provider별 성공/실패 진단 화면과 마지막 갱신 로그
 - 시세 provider별 성공/실패율, 스킵 사유, 평균 응답 시간 진단 화면
 - 종목 카드와 기준 미리 확인에서 시세 출처, 데이터 성격, 시장 구분, 시세 시각 표시
+- 공공데이터포털 주식시세정보 기반 공식 일봉 provider 실험 옵션
 - 배당락일, 지급일, 최근 1주 배당금, 배당 변경 내역 표시
 - 웹 대시보드와 텔레그램 명령어 기반 백업/복구/삭제
 - 서버 시작과 종목 변경 시 자동 백업
@@ -138,6 +139,7 @@ stock_alarm/
 ├─ scripts/
 │  ├─ local-server.js       # 로컬 서버 시작/상태 확인 스크립트
 │  ├─ stop-server.js        # 안전 종료 스크립트
+│  ├─ check-publicdata-price.js # 공공데이터포털 일봉 provider 실험
 │  └─ check-railway-config.js
 ├─ docs/
 │  ├─ development-roadmap.md       # 개발 WBS와 다음 작업 순서
@@ -187,6 +189,7 @@ BACKUP_RETENTION=30
 DEFAULT_ALERT_COOLDOWN_MINUTES=30
 QUOTE_TIMEOUT_MS=10000
 QUOTE_PROVIDERS=naver,stooq,alphavantage,yahoo
+HISTORICAL_QUOTE_PROVIDERS=naver,stooq,alphavantage,yahoo
 DIVIDEND_PROVIDERS=publicdata,opendart,alphavantage,yahoo
 DATA_GO_KR_SERVICE_KEY=
 OPENDART_API_KEY=
@@ -214,8 +217,9 @@ TELEGRAM_CHAT_ID=
 | `DEFAULT_ALERT_COOLDOWN_MINUTES` | `30` | 반복 알림 기본 간격 |
 | `QUOTE_TIMEOUT_MS` | `10000` | provider 조회 타임아웃 |
 | `QUOTE_PROVIDERS` | `naver,stooq,alphavantage,yahoo` | 시세 provider 순서 |
+| `HISTORICAL_QUOTE_PROVIDERS` | `QUOTE_PROVIDERS` 값 | 구매일 이후 최고가 계산용 일봉 provider 순서 |
 | `DIVIDEND_PROVIDERS` | `publicdata,opendart,alphavantage,yahoo` | 배당 provider 순서 |
-| `DATA_GO_KR_SERVICE_KEY` | 빈 값 | 공공데이터포털 주식배당정보 API 키 |
+| `DATA_GO_KR_SERVICE_KEY` | 빈 값 | 공공데이터포털 주식시세정보/주식배당정보 API 키 |
 | `OPENDART_API_KEY` | 빈 값 | OpenDART API 키 |
 | `ALPHA_VANTAGE_API_KEY` | 빈 값 | Alpha Vantage API 키 |
 | `TELEGRAM_BOT_TOKEN` | 빈 값 | 텔레그램 봇 토큰 |
@@ -493,6 +497,7 @@ naver,stooq,alphavantage,yahoo
 provider 역할:
 
 - `naver`: 한국 6자리 종목코드, 영문 포함 우선주 코드, `.KS`, `.KQ` 조회
+- `publicdata`: 공공데이터포털 금융위원회 주식시세정보. 현재가는 지원하지 않고 일봉 최고가 계산 실험용
 - `stooq`: 미국 종목 조회
 - `alphavantage`: Alpha Vantage API 키가 있을 때 사용
 - `yahoo`: 마지막 fallback
@@ -502,6 +507,7 @@ provider 역할:
 | provider | 화면 표시 | 데이터 성격 | 시장 구분 | 비고 |
 |---|---|---|---|---|
 | `naver` | Naver Finance | 실시간 추정 | KRX 추정 | 무료/비공식 경로. NXT 분리 가격은 보장하지 않음 |
+| `publicdata` | 공공데이터포털 주식시세 | 일봉 | KRX 추정 | 공식 일봉 보강용. 현재가 알림용 아님 |
 | `stooq` | Stooq | 지연 또는 일봉 | 미국 | 무료 공개 데이터 |
 | `alphavantage` | Alpha Vantage | 지연 | 미국 | API 키가 있을 때 사용 |
 | `yahoo` | Yahoo Finance | 지연 또는 일봉 | 미국 | fallback |
@@ -525,7 +531,25 @@ provider 역할:
 현재 일봉 provider:
 
 - 한국 종목: Naver 일봉 차트
+- 한국 종목 실험 옵션: 공공데이터포털 금융위원회 주식시세정보
 - 미국 종목: Stooq 일봉 CSV, Yahoo chart fallback
+
+공공데이터포털 주식시세정보를 구매일 이후 최고가 계산에 실험 적용하려면 `.env`에 아래처럼 설정합니다.
+
+```text
+HISTORICAL_QUOTE_PROVIDERS=publicdata,naver,stooq,yahoo
+DATA_GO_KR_SERVICE_KEY=공공데이터포털_인증키
+```
+
+실제 키로 단일 종목 일봉 최고가만 먼저 확인하려면 아래 명령을 사용할 수 있습니다.
+
+```powershell
+npm run check:publicdata-price -- 005930 2026-05-01 2026-05-15
+```
+
+이 명령이 `HTTP 403: Forbidden`을 반환하면 코드 문제가 아니라 공공데이터포털에서 `금융위원회_주식시세정보` API 활용신청이 아직 승인되지 않았거나, 현재 `.env`의 키가 해당 API에 연결되지 않았을 가능성이 큽니다. 배당정보 API 키를 이미 받아도 주식시세정보 API는 별도 활용신청이 필요할 수 있습니다.
+
+`publicdata`는 현재가 provider가 아니므로 `QUOTE_PROVIDERS`에는 기본적으로 넣지 않습니다. `QUOTE_PROVIDERS`에 넣으면 현재가 조회에서는 `일봉 전용 provider`로 스킵됩니다.
 
 일봉 조회가 실패해도 종목은 등록됩니다. 이 경우 화면의 상태와 오류 메시지로 실패 이유를 확인하고 `최고가 재계산`을 눌러 다시 시도할 수 있습니다.
 
@@ -990,12 +1014,12 @@ Invoke-RestMethod http://127.0.0.1:3001/api/health
 - 시세 provider 실패율 기록과 진단 화면
 - 백업 삭제 기능
 - 시세 출처, 데이터 성격, 시장 구분, 시세 시각 표시
+- 공공데이터포털 주식시세정보 기반 공식 일봉 provider 실험 옵션
 
 우선순위가 높은 순서:
 
-1. 공식 일봉 provider 실험 또는 설계
-2. 개발 WBS/일정의 웹 대시보드 표시
-3. 배당 캘린더 고도화
-4. Postgres 저장소 설계와 JSON 데이터 이전 준비
-5. Expo 모바일 앱 초기 프로젝트 생성
-6. App Store / Play Store 출시 준비
+1. 개발 WBS/일정의 웹 대시보드 표시
+2. 배당 캘린더 고도화
+3. Postgres 저장소 설계와 JSON 데이터 이전 준비
+4. Expo 모바일 앱 초기 프로젝트 생성
+5. App Store / Play Store 출시 준비
