@@ -106,6 +106,11 @@ function normalizeStock(input, defaults) {
     highPrice: null,
     highPriceAt: null,
     highPriceSource: '',
+    highPriceProvider: '',
+    highPriceProviderLabel: '',
+    highPriceDataDelay: '',
+    highPriceVenue: '',
+    highPriceSourceNote: '',
     lastPrice: null,
     lastCheckedAt: null,
     lastCheckStatus: 'pending',
@@ -123,6 +128,12 @@ function normalizeStock(input, defaults) {
     exchange: '',
     marketState: '',
     quoteProvider: '',
+    quoteProviderLabel: '',
+    quoteDataDelay: '',
+    quoteVenue: '',
+    quoteLicenseType: '',
+    quoteSourceNote: '',
+    quoteRegularMarketTime: null,
     notes: String(input.notes || '').trim(),
     createdAt: now,
     updatedAt: now
@@ -266,6 +277,11 @@ function applyStockPatch(stock, patch) {
     next.highPrice = null;
     next.highPriceAt = null;
     next.highPriceSource = '';
+    next.highPriceProvider = '';
+    next.highPriceProviderLabel = '';
+    next.highPriceDataDelay = '';
+    next.highPriceVenue = '';
+    next.highPriceSourceNote = '';
     next.lastAlertAt = null;
     alertConditionChanged = true;
   }
@@ -343,10 +359,21 @@ function normalizeStoredStock(stock) {
         : 5,
     targetPrice: normalizedTargetPrice,
     highPriceSource: stock.highPriceSource || '',
+    highPriceProvider: stock.highPriceProvider || '',
+    highPriceProviderLabel: stock.highPriceProviderLabel || '',
+    highPriceDataDelay: stock.highPriceDataDelay || '',
+    highPriceVenue: stock.highPriceVenue || '',
+    highPriceSourceNote: stock.highPriceSourceNote || '',
     lastCheckStatus: stock.lastCheckStatus || (stock.lastCheckedAt ? 'checked' : 'pending'),
     lastError: stock.lastError || '',
     lastErrorAt: stock.lastErrorAt || null,
     quoteProvider: stock.quoteProvider || '',
+    quoteProviderLabel: stock.quoteProviderLabel || '',
+    quoteDataDelay: stock.quoteDataDelay || '',
+    quoteVenue: stock.quoteVenue || '',
+    quoteLicenseType: stock.quoteLicenseType || '',
+    quoteSourceNote: stock.quoteSourceNote || '',
+    quoteRegularMarketTime: normalizeIsoDateTime(stock.quoteRegularMarketTime) || null,
     alertState: normalizeAlertState(stock.alertState),
     alertStartedAt: stock.alertStartedAt || null,
     alertRecoveredAt: stock.alertRecoveredAt || null,

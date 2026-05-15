@@ -1,4 +1,4 @@
-import { fetchHistoricalHighSince, fetchQuote } from './priceProvider.js';
+import { fetchHistoricalHighSince, fetchQuote, getQuoteSourceMeta } from './priceProvider.js';
 import { ALERT_TYPES, DEFAULT_ALERT_TYPE, normalizeAlertType } from './storage.js';
 import { formatAlertMessage, isTelegramConfigured, sendTelegramMessage } from './telegram.js';
 
@@ -314,7 +314,12 @@ export function buildRegistrationPreview(input, quote, historicalHigh = null) {
       distanceToThresholdPercent,
       alertNow: alertRule.isBelowThreshold,
       currency: baseline?.currency || quote.currency || '',
-      provider: baseline?.provider || ''
+      provider: baseline?.provider || '',
+      providerLabel: baseline?.providerLabel || '',
+      dataDelay: baseline?.dataDelay || '',
+      venue: baseline?.venue || '',
+      licenseType: baseline?.licenseType || '',
+      sourceNote: baseline?.sourceNote || ''
     }
   };
 }
@@ -335,6 +340,12 @@ export function evaluateStock(stock, quote, now = new Date()) {
     exchange: quote.exchange || stock.exchange || '',
     marketState: quote.marketState || stock.marketState || '',
     quoteProvider: quote.provider || stock.quoteProvider || '',
+    quoteProviderLabel: quote.providerLabel || stock.quoteProviderLabel || '',
+    quoteDataDelay: quote.dataDelay || stock.quoteDataDelay || '',
+    quoteVenue: quote.venue || stock.quoteVenue || '',
+    quoteLicenseType: quote.licenseType || stock.quoteLicenseType || '',
+    quoteSourceNote: quote.sourceNote || stock.quoteSourceNote || '',
+    quoteRegularMarketTime: quote.regularMarketTime || stock.quoteRegularMarketTime || null,
     updatedAt: timestamp
   };
 
@@ -344,6 +355,11 @@ export function evaluateStock(stock, quote, now = new Date()) {
     nextStock.highPrice = currentPrice;
     nextStock.highPriceAt = timestamp;
     nextStock.highPriceSource = quote.marketState === 'MANUAL_TEST' ? 'manual' : 'realtime';
+    nextStock.highPriceProvider = quote.provider || stock.highPriceProvider || '';
+    nextStock.highPriceProviderLabel = quote.providerLabel || stock.highPriceProviderLabel || '';
+    nextStock.highPriceDataDelay = quote.dataDelay || stock.highPriceDataDelay || '';
+    nextStock.highPriceVenue = quote.venue || stock.highPriceVenue || '';
+    nextStock.highPriceSourceNote = quote.sourceNote || stock.highPriceSourceNote || '';
   }
 
   const alertRule = buildAlertRule(nextStock, currentPrice);
@@ -442,9 +458,14 @@ export async function initializeHighFromPurchaseDate(store, config, stock, optio
     highPrice: baselineHigh.highPrice,
     highPriceAt: baselineHigh.highPriceAt,
     highPriceSource: baselineHigh.source,
+    highPriceProvider: baselineHigh.provider || stock.highPriceProvider || '',
+    highPriceProviderLabel: baselineHigh.providerLabel || stock.highPriceProviderLabel || '',
+    highPriceDataDelay: baselineHigh.dataDelay || stock.highPriceDataDelay || '',
+    highPriceVenue: baselineHigh.venue || stock.highPriceVenue || '',
+    highPriceSourceNote: baselineHigh.sourceNote || stock.highPriceSourceNote || '',
     currency: baselineHigh.currency || stock.currency || '',
     exchange: baselineHigh.exchange || stock.exchange || '',
-    quoteProvider: baselineHigh.provider || stock.quoteProvider || '',
+    quoteProvider: stock.quoteProvider || '',
     lastCheckStatus: 'high_initialized',
     lastError: '',
     lastErrorAt: null,
@@ -651,7 +672,8 @@ export async function runManualQuoteCheck(store, config, stockId, manualQuote, o
     exchange: manualQuote.exchange || stock.exchange || 'Manual test',
     marketState: 'MANUAL_TEST',
     provider: 'manual',
-    regularMarketTime: now.toISOString()
+    regularMarketTime: now.toISOString(),
+    ...getQuoteSourceMeta('manual')
   };
 
   const result = await processStockQuote(store, config, stock, quote, {

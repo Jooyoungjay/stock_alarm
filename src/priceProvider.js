@@ -203,6 +203,76 @@ export function isKoreanStockSymbol(symbol) {
   return koreanStockSymbolPattern.test(String(symbol || '').trim());
 }
 
+const quoteSourceDefaults = {
+  naver: {
+    providerLabel: 'Naver Finance',
+    dataDelay: 'realtime_estimated',
+    venue: 'krx_estimated',
+    licenseType: 'unofficial',
+    sourceNote: '무료/비공식 시세'
+  },
+  stooq: {
+    providerLabel: 'Stooq',
+    dataDelay: 'delayed',
+    venue: 'us',
+    licenseType: 'public',
+    sourceNote: '무료 지연 시세'
+  },
+  alphavantage: {
+    providerLabel: 'Alpha Vantage',
+    dataDelay: 'delayed',
+    venue: 'us',
+    licenseType: 'keyed',
+    sourceNote: 'API 키 기반 지연 시세'
+  },
+  yahoo: {
+    providerLabel: 'Yahoo Finance',
+    dataDelay: 'delayed',
+    venue: 'us',
+    licenseType: 'unofficial',
+    sourceNote: '무료/비공식 시세'
+  },
+  manual: {
+    providerLabel: '수동 테스트',
+    dataDelay: 'manual',
+    venue: 'manual',
+    licenseType: 'manual',
+    sourceNote: '사용자 입력 테스트 가격'
+  }
+};
+
+export function getQuoteSourceMeta(provider, options = {}) {
+  const normalizedProvider = String(provider || '').trim().toLowerCase();
+  const defaults = quoteSourceDefaults[normalizedProvider] || {
+    providerLabel: provider || 'Unknown',
+    dataDelay: 'unknown',
+    venue: isKoreanStockSymbol(options.symbol) ? 'krx_estimated' : 'unknown',
+    licenseType: 'unknown',
+    sourceNote: ''
+  };
+  const isHistorical = options.type === 'historical';
+  const historicalNote = isHistorical
+    ? `${defaults.sourceNote ? `${defaults.sourceNote} · ` : ''}일봉 데이터`
+    : defaults.sourceNote;
+
+  return {
+    providerLabel: options.providerLabel || defaults.providerLabel,
+    dataDelay: options.dataDelay || (isHistorical ? 'eod' : defaults.dataDelay),
+    venue: options.venue || defaults.venue,
+    licenseType: options.licenseType || defaults.licenseType,
+    sourceNote: options.sourceNote || historicalNote
+  };
+}
+
+function withQuoteSourceMeta(value, options = {}) {
+  const provider = value?.provider || options.provider || '';
+
+  return {
+    ...value,
+    ...getQuoteSourceMeta(provider, { ...value, ...options })
+  };
+}
+
 export function toNaverSymbol(symbol) {
   const normalized = String(symbol || '').trim().toUpperCase();
   const match = normalized.match(koreanStockSymbolPattern);
@@ -254,7 +324,7 @@ export function parseStooqCsv(content, requestedSymbol) {
   const date = row.Date && row.Date !== 'N/D' ? row.Date : '';
   const time = row.Time && row.Time !== 'N/D' ? row.Time : '';
 
-  return {
+  return withQuoteSourceMeta({
     symbol: requestedSymbol,
     name: row.Symbol || requestedSymbol,
     price,
@@ -263,7 +333,7 @@ export function parseStooqCsv(content, requestedSymbol) {
     marketState: 'DELAYED',
     provider: 'stooq',
     regularMarketTime: date && time ? new Date(`${date}T${time}Z`).toISOString() : null
-  };
+  });
 }
 
 export function parseStooqHistoricalCsv(content, requestedSymbol) {
@@ -303,7 +373,7 @@ export function parseNaverQuote(payload, requestedSymbol) {
     throw new Error(`가격 정보를 찾을 수 없습니다: ${requestedSymbol}`);
   }
 
-  return {
+  return withQuoteSourceMeta({
     symbol: requestedSymbol,
     name: data.nm || requestedSymbol,
     price,
@@ -312,7 +382,7 @@ export function parseNaverQuote(payload, requestedSymbol) {
     marketState: data.ms || '',
     provider: 'naver',
     regularMarketTime: payload?.result?.time ? new Date(payload.result.time).toISOString() : null
-  };
+  });
 }
 
 export function parseNaverDailyChart(content, requestedSymbol) {
@@ -375,7 +445,7 @@ export function parseAlphaVantageQuote(payload, requestedSymbol) {
     throw new Error(`가격 정보를 찾을 수 없습니다: ${requestedSymbol}`);
   }
 
-  return {
+  return withQuoteSourceMeta({
     symbol: quote['01. symbol'] || requestedSymbol,
     name: quote['01. symbol'] || requestedSymbol,
     price,
@@ -386,7 +456,7 @@ export function parseAlphaVantageQuote(payload, requestedSymbol) {
     regularMarketTime: quote['07. latest trading day']
       ? new Date(`${quote['07. latest trading day']}T00:00:00Z`).toISOString()
       : null
-  };
+  });
 }
 
 async function fetchNaverHistoricalHigh(symbol, start, end, options = {}) {
@@ -469,7 +539,7 @@ async function fetchYahooQuote(symbol, options = {}) {
     throw new Error(`가격 정보를 찾을 수 없습니다: ${symbol}`);
   }
 
-  return {
+  return withQuoteSourceMeta({
     symbol: result.symbol || symbol,
     name: result.shortName || result.longName || '',
     price: Number(result.regularMarketPrice),
@@ -480,7 +550,7 @@ async function fetchYahooQuote(symbol, options = {}) {
     regularMarketTime: result.regularMarketTime
       ? new Date(result.regularMarketTime * 1000).toISOString()
       : null
-  };
+  });
 }
 
 async function fetchJson(url, options = {}, encoding = 'utf-8') {
@@ -523,7 +593,11 @@ function pickHighestDailyPrice(rows, meta) {
     currency: meta.currency || '',
     exchange: meta.exchange || '',
     provider: meta.provider || '',
-    points: validRows.length
+    points: validRows.length,
+    ...getQuoteSourceMeta(meta.provider || '', {
+      symbol: meta.symbol,
+      type: 'historical'
+    })
   };
 }
 

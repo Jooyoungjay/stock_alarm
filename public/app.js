@@ -620,16 +620,20 @@ function renderQuotePreview(preview) {
       : position.thresholdPrice === null
         ? '기준가 계산 대기'
         : `기준가까지 ${formatMoney(position.distanceToThreshold, position.currency)}`
-    : getProviderLabel(quote.provider);
+    : formatQuoteSourceSummary(quote) || getProviderLabel(quote.provider);
+  const quoteSourceSummary = formatQuoteSourceSummary(quote);
+  const quoteSourceDetail = formatQuoteSourceDetail(quote);
 
   elements.quotePreview.className = 'quote-preview show';
   elements.quotePreview.innerHTML = `
     <div class="quote-preview-header">
       <span class="quote-preview-name">${escapeHtml(quote.name || quote.symbol)}</span>
-      <span class="quote-preview-meta">${escapeHtml(quote.symbol)} · ${getProviderLabel(quote.provider)}</span>
+      <span class="quote-preview-meta">${escapeHtml(quote.symbol)} · ${escapeHtml(quoteSourceSummary || getProviderLabel(quote.provider))}</span>
     </div>
     <div class="quote-preview-grid">
       ${renderPreviewItem('현재가', formatMoney(quote.price, previewCurrency))}
+      ${quoteSourceSummary ? renderPreviewItem('시세 출처', quoteSourceSummary, quoteSourceDetail) : ''}
+      ${quote.regularMarketTime ? renderPreviewItem('시세 시각', formatDate(quote.regularMarketTime), quote.marketState || '') : ''}
       ${position ? renderPreviewItem('알림 기준', position.alertTypeLabel || getAlertTypeLabel(position)) : ''}
       ${position ? renderPreviewItem('매수가', formatMoney(position.purchasePrice, position.currency)) : ''}
       ${position?.quantity ? renderPreviewItem('보유 수량', formatQuantity(position.quantity)) : ''}
@@ -1278,6 +1282,9 @@ function renderStocks() {
       const thresholdPrice = calculateAlertThreshold(stock);
       const lastPrice = parseFiniteNumber(stock.lastPrice);
       const isTriggered = thresholdPrice !== null && lastPrice !== null && lastPrice <= thresholdPrice;
+      const quoteSourceSummary = formatQuoteSourceSummary(stock);
+      const quoteSourceDetail = formatQuoteSourceDetail(stock);
+      const highPriceDetail = formatHighPriceDetail(stock);
 
       row.innerHTML = `
         <div class="stock-risk-line">
@@ -1293,11 +1300,12 @@ function renderStocks() {
           <div class="metric price-block">
             <span class="metric-label price-label">현재가</span>
             <span class="metric-value price-value">${formatMoney(stock.lastPrice, stock.currency)}</span>
+            ${quoteSourceSummary ? `<span class="metric-detail price-unit">${escapeHtml(quoteSourceSummary)}</span>` : ''}
           </div>
           <div class="metric price-block">
             <span class="metric-label price-label">${getHighPriceLabel(stock)}</span>
             <span class="metric-value price-value">${formatMoney(stock.highPrice, stock.currency)}</span>
-            <span class="metric-detail price-unit">${formatHighPriceAt(stock)}</span>
+            <span class="metric-detail price-unit">${escapeHtml(highPriceDetail)}</span>
           </div>
           <div class="metric price-block">
             <span class="metric-label price-label">${escapeHtml(getAlertThresholdLabel(stock))}</span>
@@ -1314,7 +1322,9 @@ function renderStocks() {
           <div class="status-block">
             <span class="status-badge ${getStockStatusClass(stock)}"><span class="dot"></span>${getStockStatusLabel(stock)}</span>
             <span class="status-time">${formatStockStatusDetail(stock)}</span>
-            ${stock.quoteProvider ? `<span class="status-src">시세 ${getProviderLabel(stock.quoteProvider)}</span>` : ''}
+            ${quoteSourceSummary ? `<span class="status-src">시세 ${escapeHtml(quoteSourceSummary)}</span>` : ''}
+            ${quoteSourceDetail ? `<span class="status-src">${escapeHtml(quoteSourceDetail)}</span>` : ''}
+            ${stock.quoteRegularMarketTime ? `<span class="status-src">시세 시각 ${escapeHtml(formatDate(stock.quoteRegularMarketTime))}</span>` : ''}
             ${stock.lastError ? `<span class="metric-error">${escapeHtml(stock.lastError)}</span>` : ''}
           </div>
         </div>
@@ -2063,6 +2073,69 @@ function formatProviderList(value) {
     .join(' > ');
 }
 
+function formatQuoteSourceSummary(source) {
+  const provider =
+    source?.providerLabel ||
+    source?.quoteProviderLabel ||
+    getProviderLabel(source?.provider || source?.quoteProvider);
+  const parts = [
+    provider,
+    getQuoteDataDelayLabel(source?.dataDelay || source?.quoteDataDelay),
+    getQuoteVenueLabel(source?.venue || source?.quoteVenue)
+  ].filter(Boolean);
+
+  return parts.join(' · ');
+}
+
+function formatQuoteSourceDetail(source) {
+  return [
+    getQuoteLicenseTypeLabel(source?.licenseType || source?.quoteLicenseType),
+    source?.sourceNote || source?.quoteSourceNote || ''
+  ]
+    .filter(Boolean)
+    .join(' · ');
+}
+
+function getQuoteDataDelayLabel(value) {
+  const labels = {
+    realtime_estimated: '실시간 추정',
+    delayed: '지연',
+    delayed_or_close: '지연/종가',
+    eod: '일봉',
+    manual: '수동',
+    unknown: '성격 불명'
+  };
+
+  return labels[String(value || '').toLowerCase()] || '';
+}
+
+function getQuoteVenueLabel(value) {
+  const labels = {
+    krx_estimated: 'KRX 추정',
+    nxt_estimated: 'NXT 추정',
+    integrated: '통합',
+    us: '미국',
+    manual: '수동',
+    unknown: '시장 불명'
+  };
+
+  return labels[String(value || '').toLowerCase()] || '';
+}
+
+function getQuoteLicenseTypeLabel(value) {
+  const labels = {
+    unofficial: '무료/비공식',
+    public: '무료 공개',
+    keyed: 'API 키',
+    broker: '증권사',
+    contract: '계약 필요',
+    manual: '수동 입력',
+    unknown: '라이선스 불명'
+  };
+
+  return labels[String(value || '').toLowerCase()] || '';
+}
+
 function getProviderLabel(provider) {
   const labels = {
     naver: 'Naver',
@@ -2070,7 +2143,8 @@ function getProviderLabel(provider) {
     alphavantage: 'Alpha Vantage',
     publicdata: '공공데이터',
     opendart: 'OpenDART',
-    yahoo: 'Yahoo'
+    yahoo: 'Yahoo',
+    manual: '수동'
   };
 
   return labels[String(provider || '').toLowerCase()] || provider;
@@ -2267,6 +2341,26 @@ function formatHighPriceAt(stock) {
   }
 
   return `${formatDateOnly(stock.highPriceAt)} 기준`;
+}
+
+function formatHighPriceDetail(stock) {
+  return [formatHighPriceAt(stock), formatHighSourceDetail(stock)].filter(Boolean).join(' · ');
+}
+
+function formatHighSourceDetail(stock) {
+  if (!stock.highPriceSource && !stock.highPriceProvider) {
+    return '';
+  }
+
+  const provider = stock.highPriceProviderLabel || getProviderLabel(stock.highPriceProvider);
+  return [
+    getHighSourceLabel(stock.highPriceSource),
+    provider,
+    getQuoteDataDelayLabel(stock.highPriceDataDelay),
+    getQuoteVenueLabel(stock.highPriceVenue)
+  ]
+    .filter(Boolean)
+    .join(' · ');
 }
 
 function getAlertType(stock) {

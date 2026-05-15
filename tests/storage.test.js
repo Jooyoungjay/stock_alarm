@@ -177,6 +177,35 @@ test('JsonStore records quote provider success and failure stats', async () => {
   assert.equal(stats.recentAttempts[0].provider, 'alphavantage');
 });
 
+test('JsonStore preserves quote source metadata on stored stocks', async () => {
+  const store = await createStore();
+  const stock = await store.addStock(stockInput());
+
+  await store.replaceStock({
+    ...stock,
+    quoteProvider: 'naver',
+    quoteProviderLabel: 'Naver Finance',
+    quoteDataDelay: 'realtime_estimated',
+    quoteVenue: 'krx_estimated',
+    quoteLicenseType: 'unofficial',
+    quoteSourceNote: '무료/비공식 시세',
+    quoteRegularMarketTime: '2026-05-14T00:00:00.000Z',
+    highPriceProvider: 'naver',
+    highPriceProviderLabel: 'Naver Finance',
+    highPriceDataDelay: 'eod',
+    highPriceVenue: 'krx_estimated',
+    highPriceSourceNote: '무료/비공식 시세 · 일봉 데이터'
+  });
+
+  const saved = (await store.listStocks())[0];
+  assert.equal(saved.quoteProviderLabel, 'Naver Finance');
+  assert.equal(saved.quoteDataDelay, 'realtime_estimated');
+  assert.equal(saved.quoteVenue, 'krx_estimated');
+  assert.equal(saved.quoteRegularMarketTime, '2026-05-14T00:00:00.000Z');
+  assert.equal(saved.highPriceDataDelay, 'eod');
+  assert.equal(saved.highPriceVenue, 'krx_estimated');
+});
+
 async function createStore() {
   const dataDir = await fs.mkdtemp(path.join(os.tmpdir(), 'stock-alarm-storage-test-'));
   return new JsonStore(dataDir, {

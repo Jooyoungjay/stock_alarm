@@ -39,12 +39,33 @@ const baseStock = {
 };
 
 test('first quote sets the high price without alerting', () => {
-  const result = evaluateStock(baseStock, { price: 100, currency: 'USD' }, date('2026-05-11T00:01:00Z'));
+  const result = evaluateStock(
+    baseStock,
+    {
+      price: 100,
+      currency: 'USD',
+      provider: 'stooq',
+      providerLabel: 'Stooq',
+      dataDelay: 'delayed',
+      venue: 'us',
+      licenseType: 'public',
+      sourceNote: '무료 지연 시세',
+      regularMarketTime: '2026-05-11T00:00:00.000Z'
+    },
+    date('2026-05-11T00:01:00Z')
+  );
 
   assert.equal(result.alertDue, false);
   assert.equal(result.highUpdated, true);
   assert.equal(result.nextStock.highPrice, 100);
   assert.equal(result.thresholdPrice, 95);
+  assert.equal(result.nextStock.quoteProvider, 'stooq');
+  assert.equal(result.nextStock.quoteProviderLabel, 'Stooq');
+  assert.equal(result.nextStock.quoteDataDelay, 'delayed');
+  assert.equal(result.nextStock.quoteVenue, 'us');
+  assert.equal(result.nextStock.quoteRegularMarketTime, '2026-05-11T00:00:00.000Z');
+  assert.equal(result.nextStock.highPriceProvider, 'stooq');
+  assert.equal(result.nextStock.highPriceDataDelay, 'delayed');
 });
 
 test('drop below threshold creates an alert when cooldown allows it', () => {
@@ -221,6 +242,10 @@ test('purchase date initializes high price from historical daily data', async ()
           currency: 'USD',
           exchange: 'Stooq',
           provider: 'stooq',
+          providerLabel: 'Stooq',
+          dataDelay: 'eod',
+          venue: 'us',
+          sourceNote: '무료 지연 시세 · 일봉 데이터',
           points: 6
         };
       }
@@ -230,6 +255,10 @@ test('purchase date initializes high price from historical daily data', async ()
   assert.equal(stock.highPrice, 120);
   assert.equal(stock.highPriceAt, '2026-05-08T00:00:00.000Z');
   assert.equal(stock.highPriceSource, 'historical_daily');
+  assert.equal(stock.highPriceProvider, 'stooq');
+  assert.equal(stock.highPriceDataDelay, 'eod');
+  assert.equal(stock.highPriceVenue, 'us');
+  assert.equal(stock.quoteProvider || '', '');
   assert.equal(stock.lastCheckStatus, 'high_initialized');
   assert.equal(store.stocks[0].highPrice, 120);
 });

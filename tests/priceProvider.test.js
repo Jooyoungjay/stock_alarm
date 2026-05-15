@@ -69,6 +69,9 @@ test('Stooq CSV quote is parsed into a normalized quote', () => {
   assert.equal(quote.price, 293.32);
   assert.equal(quote.exchange, 'Stooq');
   assert.equal(quote.provider, 'stooq');
+  assert.equal(quote.providerLabel, 'Stooq');
+  assert.equal(quote.dataDelay, 'delayed');
+  assert.equal(quote.venue, 'us');
 });
 
 test('Stooq historical CSV is parsed into a highest daily price', () => {
@@ -86,6 +89,8 @@ test('Stooq historical CSV is parsed into a highest daily price', () => {
   assert.equal(high.highPrice, 294.76);
   assert.equal(high.highPriceAt, '2026-05-08T00:00:00.000Z');
   assert.equal(high.provider, 'stooq');
+  assert.equal(high.providerLabel, 'Stooq');
+  assert.equal(high.dataDelay, 'eod');
   assert.equal(high.points, 3);
 });
 
@@ -116,6 +121,9 @@ test('Naver quote response is parsed into a normalized quote', () => {
   assert.equal(quote.price, 287750);
   assert.equal(quote.currency, 'KRW');
   assert.equal(quote.provider, 'naver');
+  assert.equal(quote.providerLabel, 'Naver Finance');
+  assert.equal(quote.dataDelay, 'realtime_estimated');
+  assert.equal(quote.venue, 'krx_estimated');
 });
 
 test('Naver daily chart is parsed into a highest daily price', () => {
@@ -134,6 +142,8 @@ test('Naver daily chart is parsed into a highest daily price', () => {
   assert.equal(high.highPriceAt, '2026-05-08T00:00:00.000Z');
   assert.equal(high.currency, 'KRW');
   assert.equal(high.provider, 'naver');
+  assert.equal(high.dataDelay, 'eod');
+  assert.equal(high.venue, 'krx_estimated');
 });
 
 test('Yahoo historical chart is parsed into a highest daily price', () => {
@@ -166,6 +176,8 @@ test('Yahoo historical chart is parsed into a highest daily price', () => {
   assert.equal(high.highPriceAt, '2026-05-04T00:00:00.000Z');
   assert.equal(high.currency, 'USD');
   assert.equal(high.provider, 'yahoo');
+  assert.equal(high.dataDelay, 'eod');
+  assert.equal(high.venue, 'us');
 });
 
 test('Alpha Vantage global quote is parsed into a normalized quote', () => {
@@ -183,4 +195,6 @@ test('Alpha Vantage global quote is parsed into a normalized quote', () => {
   assert.equal(quote.symbol, 'IBM');
   assert.equal(quote.price, 229.76);
   assert.equal(quote.provider, 'alphavantage');
+  assert.equal(quote.dataDelay, 'delayed');
+  assert.equal(quote.licenseType, 'keyed');
 });
