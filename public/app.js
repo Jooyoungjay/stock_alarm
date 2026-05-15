@@ -1,4 +1,15 @@
+const APP_MODES = Object.freeze({
+  USER: 'user',
+  ADMIN: 'admin'
+});
+
+function getAppMode() {
+  const pathname = window.location.pathname.replace(/\/+$/, '') || '/';
+  return pathname === '/admin' ? APP_MODES.ADMIN : APP_MODES.USER;
+}
+
 const state = {
+  appMode: getAppMode(),
   stocks: [],
   alerts: [],
   backups: [],
@@ -15,10 +26,16 @@ const state = {
 };
 
 const elements = {
+  page: document.querySelector('.page'),
+  headerBadge: document.querySelector('.header-badge'),
+  headerTitle: document.querySelector('.header-title'),
+  userModeLink: document.querySelector('#userModeLink'),
+  adminModeLink: document.querySelector('#adminModeLink'),
   form: document.querySelector('#stockForm'),
   stockList: document.querySelector('#stockList'),
   alertList: document.querySelector('#alertList'),
   message: document.querySelector('#message'),
+  adminMessage: document.querySelector('#adminMessage'),
   watchSummaryBar: document.querySelector('#watchSummaryBar'),
   portfolioSummaryBar: document.querySelector('#portfolioSummaryBar'),
   quoteDiagnosticsPanel: document.querySelector('#quoteDiagnosticsPanel'),
@@ -61,6 +78,7 @@ const elements = {
 let symbolSearchTimer = null;
 let symbolSearchRequestId = 0;
 
+applyAppMode();
 elements.form.elements.purchaseDate.max = getTodayInputValue();
 syncAlertTypeControls(elements.form);
 renderRegistrationSummary();
@@ -282,11 +300,15 @@ async function loadHealth() {
 
 async function loadData() {
   try {
+    const roadmapRequest = isAdminMode()
+      ? api('/api/roadmap')
+          .then((payload) => ({ payload }))
+          .catch((error) => ({ error }))
+      : Promise.resolve({ payload: null });
+
     const [data, roadmapResult] = await Promise.all([
       api('/api/stocks'),
-      api('/api/roadmap')
-        .then((payload) => ({ payload }))
-        .catch((error) => ({ error }))
+      roadmapRequest
     ]);
     state.stocks = data.stocks || [];
     state.alerts = data.alerts || [];
@@ -299,10 +321,10 @@ async function loadData() {
     renderDividendDiagnostics(data.lastDividendRefresh);
     renderAlerts();
 
-    if (roadmapResult.payload) {
+    if (isAdminMode() && roadmapResult.payload) {
       state.roadmap = roadmapResult.payload.roadmap || null;
       renderRoadmap(state.roadmap);
-    } else {
+    } else if (isAdminMode()) {
       renderRoadmapError(roadmapResult.error);
     }
   } catch (error) {
@@ -346,6 +368,40 @@ async function api(path, options = {}) {
   }
 
   return payload;
+}
+
+function isAdminMode() {
+  return state.appMode === APP_MODES.ADMIN;
+}
+
+function applyAppMode() {
+  document.body.dataset.appMode = state.appMode;
+  elements.page?.classList.toggle('admin-page', isAdminMode());
+
+  setModeLinkState(elements.userModeLink, !isAdminMode());
+  setModeLinkState(elements.adminModeLink, isAdminMode());
+
+  if (elements.headerBadge) {
+    elements.headerBadge.textContent = isAdminMode() ? 'Admin Console' : 'Telegram MVP';
+  }
+
+  if (elements.headerTitle) {
+    elements.headerTitle.textContent = isAdminMode() ? 'Stock Alarm Admin' : 'Stock Alarm';
+  }
+}
+
+function setModeLinkState(link, isActive) {
+  if (!link) {
+    return;
+  }
+
+  link.classList.toggle('active', isActive);
+
+  if (isActive) {
+    link.setAttribute('aria-current', 'page');
+  } else {
+    link.removeAttribute('aria-current');
+  }
 }
 
 function normalizeStockPayload(payload) {
@@ -2864,12 +2920,18 @@ async function deleteStock(id) {
 }
 
 function showMessage(text, isError = false) {
-  elements.message.textContent = text;
-  elements.message.className = `message show${isError ? ' error' : ''}`;
+  const messageElement = isAdminMode() && elements.adminMessage ? elements.adminMessage : elements.message;
+
+  if (!messageElement) {
+    return;
+  }
+
+  messageElement.textContent = text;
+  messageElement.className = `message show${isError ? ' error' : ''}`;
 
   window.clearTimeout(showMessage.timer);
   showMessage.timer = window.setTimeout(() => {
-    elements.message.className = 'message';
+    messageElement.className = 'message';
   }, 4500);
 }
 
@@ -3342,13 +3404,21 @@ function isMobileViewport() {
   return window.matchMedia('(max-width: 768px)').matches;
 }
 
+function isSectionAvailableForMode(section) {
+  const scope = section.dataset.pageScope;
+  return !scope || scope === state.appMode;
+}
+
 function switchMobileTab(name) {
-  if (!isMobileViewport()) {
+  if (!isMobileViewport() || isAdminMode()) {
     return;
   }
 
   elements.tabSections.forEach((section) => {
-    section.classList.toggle('active', section.id === `tab-${name}`);
+    section.classList.toggle(
+      'active',
+      isSectionAvailableForMode(section) && section.id === `tab-${name}`
+    );
   });
   elements.mobileNavButtons.forEach((button) => {
     button.classList.toggle('active', button.dataset.tab === name);
@@ -3356,8 +3426,17 @@ function switchMobileTab(name) {
 }
 
 function syncResponsiveTabs() {
+  if (isAdminMode()) {
+    elements.tabSections.forEach((section) => {
+      section.classList.toggle('active', isSectionAvailableForMode(section));
+    });
+    return;
+  }
+
   if (!isMobileViewport()) {
-    elements.tabSections.forEach((section) => section.classList.add('active'));
+    elements.tabSections.forEach((section) => {
+      section.classList.toggle('active', isSectionAvailableForMode(section));
+    });
     return;
   }
 
@@ -3381,7 +3460,9 @@ syncResponsiveTabs();
 initWebApp();
 loadHealth();
 loadData();
-loadBackups();
+if (isAdminMode()) {
+  loadBackups();
+}
 window.setInterval(loadData, 15000);
 window.setInterval(loadHealth, 15000);
 

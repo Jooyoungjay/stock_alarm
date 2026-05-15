@@ -689,8 +689,18 @@ async function handleApi(request, response, url) {
   sendError(response, 404, 'API를 찾을 수 없습니다.');
 }
 
+function resolveStaticRequestPath(pathname) {
+  const normalizedPathname = pathname.replace(/\/+$/, '') || '/';
+
+  if (normalizedPathname === '/' || normalizedPathname === '/app' || normalizedPathname === '/admin') {
+    return '/index.html';
+  }
+
+  return pathname;
+}
+
 async function serveStatic(request, response, url) {
-  const requestedPath = url.pathname === '/' ? '/index.html' : url.pathname;
+  const requestedPath = resolveStaticRequestPath(url.pathname);
   const safePath = path.normalize(decodeURIComponent(requestedPath)).replace(/^(\.\.[/\\])+/, '');
   const filePath = path.join(config.publicDir, safePath);
   const relative = path.relative(config.publicDir, filePath);

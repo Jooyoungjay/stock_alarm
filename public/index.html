@@ -28,6 +28,10 @@
         <span class="header-badge">Telegram MVP</span>
         <span class="header-title">Stock Alarm</span>
       </div>
+      <nav class="mode-nav" aria-label="화면 모드">
+        <a id="userModeLink" class="mode-link" href="/">사용자</a>
+        <a id="adminModeLink" class="mode-link" href="/admin">관리자</a>
+      </nav>
       <div class="header-right" aria-live="polite">
         <span id="telegramStatus" class="status-chip connected">Telegram</span>
         <span id="quoteStatus" class="status-chip pipeline">Quotes</span>
@@ -36,7 +40,7 @@
     </header>
 
     <main class="page">
-      <section class="col-left tab-section active" id="tab-register" aria-labelledby="addStockTitle">
+      <section class="col-left tab-section active" id="tab-register" aria-labelledby="addStockTitle" data-page-scope="user">
         <div class="card">
           <div class="card-header">
             <div>
@@ -247,7 +251,7 @@
         </div>
       </section>
 
-      <section class="col-right tab-section" id="tab-watch" aria-labelledby="watchTitle">
+      <section class="col-right tab-section" id="tab-watch" aria-labelledby="watchTitle" data-page-scope="user">
         <div class="card">
           <div class="watch-header">
             <div>
@@ -274,8 +278,6 @@
           <div id="watchSummaryBar" class="watch-summary-bar" aria-live="polite"></div>
           <div id="portfolioSummaryBar" class="portfolio-summary-bar" aria-live="polite"></div>
           <div id="dividendCalendarPanel" class="dividend-calendar-panel" aria-live="polite"></div>
-          <div id="quoteDiagnosticsPanel" class="quote-diagnostics-panel" aria-live="polite"></div>
-          <div id="dividendDiagnosticsPanel" class="dividend-diagnostics-panel" aria-live="polite"></div>
           <div class="watch-controls" aria-label="감시 종목 보기 설정">
             <div id="watchFilterButtons" class="segmented-control" role="group" aria-label="감시 종목 필터">
               <button type="button" class="active" data-watch-filter="all">전체</button>
@@ -300,7 +302,9 @@
       </section>
 
       <section class="col-full tab-section" id="tab-alerts" aria-labelledby="alertsTitle">
-        <div class="card">
+        <div id="adminMessage" class="message" role="status" aria-live="polite" data-page-scope="admin"></div>
+
+        <div class="card" data-page-scope="admin">
           <div class="card-header">
             <div>
               <h2 id="serverStatusTitle" class="card-title">서버 상태</h2>
@@ -315,7 +319,18 @@
           <div id="serverStatusPanel" class="server-status-panel" aria-live="polite"></div>
         </div>
 
-        <div class="card">
+        <div class="card" data-page-scope="admin">
+          <div class="card-header">
+            <div>
+              <h2 id="diagnosticsTitle" class="card-title">운영 진단</h2>
+              <p class="card-subtitle">시세와 배당 provider 상태를 확인합니다.</p>
+            </div>
+          </div>
+          <div id="quoteDiagnosticsPanel" class="quote-diagnostics-panel" aria-live="polite"></div>
+          <div id="dividendDiagnosticsPanel" class="dividend-diagnostics-panel" aria-live="polite"></div>
+        </div>
+
+        <div class="card" data-page-scope="admin">
           <div class="card-header">
             <div>
               <h2 id="roadmapTitle" class="card-title">개발 로드맵</h2>
@@ -330,7 +345,7 @@
           <div id="roadmapPanel" class="roadmap-panel" aria-live="polite"></div>
         </div>
 
-        <div class="card">
+        <div class="card" data-page-scope="user">
           <div class="card-header">
             <div>
               <h2 id="alertsTitle" class="card-title">알림 기록</h2>
@@ -339,7 +354,7 @@
           <div id="alertList" class="alert-list"></div>
         </div>
 
-        <div class="card">
+        <div class="card" data-page-scope="admin">
           <div class="card-header">
             <div>
               <h2 id="backupsTitle" class="card-title">데이터 백업</h2>

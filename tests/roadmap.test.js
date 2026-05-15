@@ -15,10 +15,12 @@ test('parseRoadmapMarkdown extracts roadmap metadata and next task', async () =>
   assert.ok(roadmap.completedScope.some((item) => item.category === 'JSON -> DB 이전 설계'));
   assert.ok(roadmap.completedScope.some((item) => item.category === '사용자/관리자 화면 분리 설계'));
   assert.ok(roadmap.completedScope.some((item) => item.category === '저장소 인터페이스'));
+  assert.ok(roadmap.completedScope.some((item) => item.category === '사용자/관리자 라우팅'));
+  assert.ok(roadmap.completedScope.some((item) => item.category === '관리자 기능 이동'));
   assert.ok(roadmap.sections.length >= 9);
-  assert.equal(roadmap.recommendedOrder[0], '사용자/관리자 라우팅 분리');
-  assert.equal(roadmap.recommendedOrder[1], '관리자 기능 이동');
-  assert.equal(roadmap.nextTask.title, '사용자/관리자 라우팅 분리');
+  assert.equal(roadmap.recommendedOrder[0], '관리자 보호 방식 검토');
+  assert.equal(roadmap.recommendedOrder[1], '사용자 첫 화면 포트폴리오 중심 재정렬');
+  assert.equal(roadmap.nextTask.title, '관리자 보호 방식 검토');
   assert.ok(roadmap.summary.total > roadmap.summary.completed);
 });
 
