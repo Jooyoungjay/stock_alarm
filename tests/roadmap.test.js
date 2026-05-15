@@ -22,10 +22,11 @@ test('parseRoadmapMarkdown extracts roadmap metadata and next task', async () =>
   assert.ok(roadmap.completedScope.some((item) => item.category === '종목별 알림 토글'));
   assert.ok(roadmap.completedScope.some((item) => item.category === '관리자 링크 노출'));
   assert.ok(roadmap.completedScope.some((item) => item.category === '종목 등록 팝업'));
+  assert.ok(roadmap.completedScope.some((item) => item.category === '배당 포함 수익률'));
   assert.ok(roadmap.sections.length >= 9);
-  assert.equal(roadmap.recommendedOrder[0], '배당 포함 수익률');
-  assert.equal(roadmap.recommendedOrder[1], '매수 이유/매도 조건 카드');
-  assert.equal(roadmap.nextTask.title, '배당 포함 수익률');
+  assert.equal(roadmap.recommendedOrder[0], '매수 이유/매도 조건 카드');
+  assert.equal(roadmap.recommendedOrder[1], '모바일 앱 준비');
+  assert.equal(roadmap.nextTask.title, '매수 이유/매도 조건 카드');
   assert.ok(roadmap.summary.total > roadmap.summary.completed);
 });
 

@@ -101,11 +101,14 @@ test('buildDailyBriefing summarizes counts and portfolio metrics', () => {
   assert.equal(briefing.counts.inactive, 1);
   assert.equal(briefing.topRisks.length, 1);
   assert.equal(briefing.portfolio[0].expectedAnnualDividend, 12000);
+  assert.equal(briefing.portfolio[0].totalReturnAmount, 82000);
+  assert.ok(Math.abs(briefing.portfolio[0].totalReturnPercent - 6.0740740741) < 0.000001);
 
   const message = formatDailyBriefingMessage(briefing);
   assert.match(message, /일일 브리핑/);
   assert.match(message, /위험도 순위/);
   assert.match(message, /두산퓨얼셀/);
+  assert.match(message, /배당 포함 \+82,000 KRW \(\+6.07%\)/);
 });
 
 test('runDailyBriefing sends once per local day after scheduled time', async () => {

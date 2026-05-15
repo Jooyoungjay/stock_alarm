@@ -326,6 +326,9 @@ function buildPortfolioSummary(stocks) {
       marketValue: 0,
       valuedInvestmentAmount: 0,
       profit: 0,
+      totalReturnAmount: 0,
+      totalReturnInvestmentAmount: 0,
+      totalReturnTrackedCount: 0,
       expectedAnnualDividend: 0,
       dividendInvestmentAmount: 0
     };
@@ -334,17 +337,25 @@ function buildPortfolioSummary(stocks) {
 
     if (purchasePrice !== null && purchasePrice > 0) {
       const investmentAmount = quantity * purchasePrice;
+      const expectedAnnualDividend =
+        annualDividendPerShare !== null && annualDividendPerShare > 0
+          ? quantity * annualDividendPerShare
+          : null;
       group.investmentAmount += investmentAmount;
 
       if (currentPrice !== null && currentPrice > 0) {
         const marketValue = quantity * currentPrice;
+        const profit = marketValue - investmentAmount;
         group.marketValue += marketValue;
         group.valuedInvestmentAmount += investmentAmount;
-        group.profit += marketValue - investmentAmount;
+        group.profit += profit;
+        group.totalReturnAmount += profit + (expectedAnnualDividend ?? 0);
+        group.totalReturnInvestmentAmount += investmentAmount;
+        group.totalReturnTrackedCount += 1;
       }
 
-      if (annualDividendPerShare !== null && annualDividendPerShare > 0) {
-        group.expectedAnnualDividend += quantity * annualDividendPerShare;
+      if (expectedAnnualDividend !== null) {
+        group.expectedAnnualDividend += expectedAnnualDividend;
         group.dividendInvestmentAmount += investmentAmount;
       }
     }
@@ -358,6 +369,12 @@ function buildPortfolioSummary(stocks) {
     profit: group.valuedInvestmentAmount > 0 ? group.profit : null,
     profitPercent:
       group.valuedInvestmentAmount > 0 ? (group.profit / group.valuedInvestmentAmount) * 100 : null,
+    totalReturnAmount:
+      group.totalReturnTrackedCount > 0 ? group.totalReturnAmount : null,
+    totalReturnPercent:
+      group.totalReturnInvestmentAmount > 0
+        ? (group.totalReturnAmount / group.totalReturnInvestmentAmount) * 100
+        : null,
     expectedAnnualDividend:
       group.dividendInvestmentAmount > 0 ? group.expectedAnnualDividend : null,
     dividendYieldPercent:
@@ -386,6 +403,12 @@ function formatPortfolioLine(group) {
     `${currency || '통화 미지정'} ${group.stockCount}개`,
     `평가손익 ${formatSignedMoney(group.profit, currency)} (${formatSignedPercent(group.profitPercent)})`
   ];
+
+  if (group.expectedAnnualDividend !== null && group.totalReturnAmount !== null) {
+    parts.push(
+      `배당 포함 ${formatSignedMoney(group.totalReturnAmount, currency)} (${formatSignedPercent(group.totalReturnPercent)})`
+    );
+  }
 
   if (group.expectedAnnualDividend !== null) {
     parts.push(

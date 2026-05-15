@@ -961,6 +961,18 @@ function renderQuotePreview(preview) {
           : ''
       }
       ${
+        position?.expectedAnnualDividend &&
+        position?.maximumTotalReturnAmount !== null &&
+        position?.maximumTotalReturnAmount !== undefined
+          ? renderPreviewItem(
+              '배당 포함 최대 수익',
+              formatSignedMoney(position.maximumTotalReturnAmount, position.currency),
+              `${formatSignedPercent(position.maximumTotalReturnPercent)} · 예상 연 배당 포함`,
+              'up'
+            )
+          : ''
+      }
+      ${
         position?.retracedProfitAmount !== null &&
         position?.retracedProfitAmount !== undefined &&
         position?.alertType === 'profit_retracement'
@@ -969,6 +981,19 @@ function renderQuotePreview(preview) {
               formatMoney(position.retracedProfitAmount, position.currency),
               `${formatPercent(position.retracedProfitPercent)} 반납`,
               position.retracedProfitAmount > 0 ? 'down' : 'flat'
+            )
+          : ''
+      }
+      ${
+        position?.expectedAnnualDividend &&
+        position?.totalReturnRetracedAmount !== null &&
+        position?.totalReturnRetracedAmount !== undefined &&
+        position?.alertType === 'profit_retracement'
+          ? renderPreviewItem(
+              '배당 포함 반납률',
+              formatMoney(position.totalReturnRetracedAmount, position.currency),
+              `${formatPercent(position.totalReturnRetracedPercent)} 반납`,
+              position.totalReturnRetracedAmount > 0 ? 'down' : 'flat'
             )
           : ''
       }
@@ -983,6 +1008,18 @@ function renderQuotePreview(preview) {
               formatSignedMoney(position.unrealizedProfit, position.currency),
               formatSignedPercent(position.unrealizedProfitPercent),
               getProfitClass(position.unrealizedProfit)
+            )
+          : ''
+      }
+      ${
+        position?.expectedAnnualDividend &&
+        position?.totalReturnAmount !== null &&
+        position?.totalReturnAmount !== undefined
+          ? renderPreviewItem(
+              '배당 포함 손익',
+              formatSignedMoney(position.totalReturnAmount, position.currency),
+              formatSignedPercent(position.totalReturnPercent),
+              getProfitClass(position.totalReturnAmount)
             )
           : ''
       }
@@ -1897,8 +1934,11 @@ function renderPortfolioSummary(items) {
     ...groups.map((group) => {
       const item = document.createElement('div');
       const profitClass = getProfitClass(group.profit);
+      const totalReturnClass = getProfitClass(group.totalReturnAmount);
       const maximumProfitClass = getProfitClass(group.maximumProfitAmount);
+      const maximumTotalReturnClass = getProfitClass(group.maximumTotalReturnAmount);
       const retracedProfitClass = group.retracedProfitAmount > 0 ? 'down' : 'flat';
+      const totalReturnRetracedClass = group.totalReturnRetracedAmount > 0 ? 'down' : 'flat';
       item.className = `portfolio-summary-item ${profitClass}`;
       item.innerHTML = `
         <div class="portfolio-summary-head">
@@ -1914,12 +1954,38 @@ function renderPortfolioSummary(items) {
           <strong class="${profitClass}">${escapeHtml(formatSignedMoney(group.profit, group.currency))}</strong>
           <span>수익률</span>
           <strong class="${profitClass}">${escapeHtml(formatSignedPercent(group.profitPercent))}</strong>
+          ${
+            group.expectedAnnualDividend !== null
+              ? `
+                <span>배당 포함 손익</span>
+                <strong class="${totalReturnClass}">${escapeHtml(group.totalReturnAmount === null ? '-' : formatSignedMoney(group.totalReturnAmount, group.currency))}</strong>
+                <span>배당 포함 수익률</span>
+                <strong class="${totalReturnClass}">${escapeHtml(formatSignedPercent(group.totalReturnPercent))}</strong>
+              `
+              : ''
+          }
           <span>총 최대 수익금</span>
           <strong class="${maximumProfitClass}">${escapeHtml(formatSignedMoney(group.maximumProfitAmount, group.currency))}</strong>
+          ${
+            group.expectedAnnualDividend !== null
+              ? `
+                <span>배당 포함 최대 수익</span>
+                <strong class="${maximumTotalReturnClass}">${escapeHtml(group.maximumTotalReturnAmount === null ? '-' : formatSignedMoney(group.maximumTotalReturnAmount, group.currency))}</strong>
+              `
+              : ''
+          }
           <span>총 반납 금액</span>
           <strong class="${retracedProfitClass}">${escapeHtml(group.retracedProfitAmount === null ? '-' : formatMoney(group.retracedProfitAmount, group.currency))}</strong>
           <span>계좌 총 반납률</span>
           <strong class="${retracedProfitClass}">${escapeHtml(formatPercent(group.retracedProfitPercent))}</strong>
+          ${
+            group.expectedAnnualDividend !== null
+              ? `
+                <span>배당 포함 반납률</span>
+                <strong class="${totalReturnRetracedClass}">${escapeHtml(formatPercent(group.totalReturnRetracedPercent))}</strong>
+              `
+              : ''
+          }
           <span>예상 연 배당금</span>
           <strong>${escapeHtml(group.expectedAnnualDividend === null ? '-' : formatMoney(group.expectedAnnualDividend, group.currency))}</strong>
           <span>배당수익률</span>
@@ -1957,12 +2023,21 @@ function buildPortfolioSummaryGroups(stocks) {
         marketValue: 0,
         profit: 0,
         profitPercent: null,
+        totalReturnAmount: 0,
+        totalReturnInvestmentAmount: 0,
+        totalReturnTrackedCount: 0,
         maximumProfitAmount: 0,
         maximumProfitInvestmentAmount: 0,
         maximumProfitTrackedCount: 0,
+        maximumTotalReturnAmount: 0,
+        maximumTotalReturnInvestmentAmount: 0,
+        maximumTotalReturnTrackedCount: 0,
         retracedProfitAmount: 0,
         retracementBaseAmount: 0,
         retracementTrackedCount: 0,
+        totalReturnRetracedAmount: 0,
+        totalReturnRetracementBaseAmount: 0,
+        totalReturnRetracementTrackedCount: 0,
         dividendInvestmentAmount: 0,
         expectedAnnualDividend: 0,
         dividendYieldPercent: null,
@@ -1978,12 +2053,24 @@ function buildPortfolioSummaryGroups(stocks) {
       group.marketValue += metrics.marketValue;
       group.valuedInvestmentAmount += metrics.investmentAmount;
       group.profit += metrics.profit;
+
+      if (metrics.totalReturnAmount !== null) {
+        group.totalReturnAmount += metrics.totalReturnAmount;
+        group.totalReturnInvestmentAmount += metrics.investmentAmount;
+        group.totalReturnTrackedCount += 1;
+      }
     }
 
     if (metrics.maximumProfitAmount !== null) {
       group.maximumProfitAmount += metrics.maximumProfitAmount;
       group.maximumProfitInvestmentAmount += metrics.investmentAmount;
       group.maximumProfitTrackedCount += 1;
+    }
+
+    if (metrics.maximumTotalReturnAmount !== null) {
+      group.maximumTotalReturnAmount += metrics.maximumTotalReturnAmount;
+      group.maximumTotalReturnInvestmentAmount += metrics.investmentAmount;
+      group.maximumTotalReturnTrackedCount += 1;
     }
 
     if (
@@ -1994,6 +2081,16 @@ function buildPortfolioSummaryGroups(stocks) {
       group.retracedProfitAmount += metrics.retracedProfitAmount;
       group.retracementBaseAmount += metrics.maximumProfitAmount;
       group.retracementTrackedCount += 1;
+    }
+
+    if (
+      metrics.totalReturnRetracedAmount !== null &&
+      metrics.maximumTotalReturnAmount !== null &&
+      metrics.maximumTotalReturnAmount > 0
+    ) {
+      group.totalReturnRetracedAmount += metrics.totalReturnRetracedAmount;
+      group.totalReturnRetracementBaseAmount += metrics.maximumTotalReturnAmount;
+      group.totalReturnRetracementTrackedCount += 1;
     }
 
     if (metrics.expectedAnnualDividend !== null) {
@@ -2017,17 +2114,35 @@ function buildPortfolioSummaryGroups(stocks) {
       profit: group.valuedInvestmentAmount > 0 ? group.profit : null,
       profitPercent:
         group.valuedInvestmentAmount > 0 ? (group.profit / group.valuedInvestmentAmount) * 100 : null,
+      totalReturnAmount:
+        group.totalReturnTrackedCount > 0 ? group.totalReturnAmount : null,
+      totalReturnPercent:
+        group.totalReturnInvestmentAmount > 0
+          ? (group.totalReturnAmount / group.totalReturnInvestmentAmount) * 100
+          : null,
       maximumProfitAmount:
         group.maximumProfitTrackedCount > 0 ? group.maximumProfitAmount : null,
       maximumProfitPercent:
         group.maximumProfitInvestmentAmount > 0
           ? (group.maximumProfitAmount / group.maximumProfitInvestmentAmount) * 100
           : null,
+      maximumTotalReturnAmount:
+        group.maximumTotalReturnTrackedCount > 0 ? group.maximumTotalReturnAmount : null,
+      maximumTotalReturnPercent:
+        group.maximumTotalReturnInvestmentAmount > 0
+          ? (group.maximumTotalReturnAmount / group.maximumTotalReturnInvestmentAmount) * 100
+          : null,
       retracedProfitAmount:
         group.retracementTrackedCount > 0 ? group.retracedProfitAmount : null,
       retracedProfitPercent:
         group.retracementBaseAmount > 0
           ? (group.retracedProfitAmount / group.retracementBaseAmount) * 100
+          : null,
+      totalReturnRetracedAmount:
+        group.totalReturnRetracementTrackedCount > 0 ? group.totalReturnRetracedAmount : null,
+      totalReturnRetracedPercent:
+        group.totalReturnRetracementBaseAmount > 0
+          ? (group.totalReturnRetracedAmount / group.totalReturnRetracementBaseAmount) * 100
           : null,
       expectedAnnualDividend:
         group.dividendInvestmentAmount > 0 ? group.expectedAnnualDividend : null,
@@ -2878,6 +2993,10 @@ function renderHoldingSummary(stock) {
   }
 
   const profitClass = getProfitClass(metrics.profit);
+  const totalReturnClass = getProfitClass(metrics.totalReturnAmount);
+  const maximumTotalReturnClass = getProfitClass(metrics.maximumTotalReturnAmount);
+  const totalReturnRetracedClass = metrics.totalReturnRetracedAmount > 0 ? 'down' : 'flat';
+  const hasDividendReturn = metrics.expectedAnnualDividend !== null;
 
   return `
     <div class="stock-holding-grid">
@@ -2886,6 +3005,20 @@ function renderHoldingSummary(stock) {
       ${renderHoldingMetric('현재 평가금액', metrics.marketValue === null ? '-' : formatMoney(metrics.marketValue, stock.currency))}
       ${renderHoldingMetric('평가손익', formatSignedMoney(metrics.profit, stock.currency), profitClass)}
       ${renderHoldingMetric('수익률', formatSignedPercent(metrics.profitPercent), profitClass)}
+      ${
+        hasDividendReturn && metrics.totalReturnAmount !== null
+          ? renderHoldingMetric(
+              '배당 포함 손익',
+              formatSignedMoney(metrics.totalReturnAmount, stock.currency),
+              totalReturnClass
+            )
+          : ''
+      }
+      ${
+        hasDividendReturn && metrics.totalReturnPercent !== null
+          ? renderHoldingMetric('배당 포함 수익률', formatSignedPercent(metrics.totalReturnPercent), totalReturnClass)
+          : ''
+      }
       ${
         metrics.maximumProfitAmount !== null
           ? renderHoldingMetric(
@@ -2896,11 +3029,31 @@ function renderHoldingSummary(stock) {
           : ''
       }
       ${
+        hasDividendReturn && metrics.maximumTotalReturnAmount !== null
+          ? renderHoldingMetric(
+              '배당 포함 최대 수익',
+              formatSignedMoney(metrics.maximumTotalReturnAmount, stock.currency),
+              maximumTotalReturnClass
+            )
+          : ''
+      }
+      ${
         getAlertType(stock) === 'profit_retracement' && metrics.retracedProfitAmount !== null
           ? renderHoldingMetric(
               '반납 금액',
               formatMoney(metrics.retracedProfitAmount, stock.currency),
               metrics.retracedProfitAmount > 0 ? 'down' : 'flat'
+            )
+          : ''
+      }
+      ${
+        hasDividendReturn &&
+        getAlertType(stock) === 'profit_retracement' &&
+        metrics.totalReturnRetracedPercent !== null
+          ? renderHoldingMetric(
+              '배당 포함 반납률',
+              formatPercent(metrics.totalReturnRetracedPercent),
+              totalReturnRetracedClass
             )
           : ''
       }
@@ -3308,6 +3461,16 @@ function calculateHoldingMetrics(stock) {
     investmentAmount !== null && marketValue !== null ? marketValue - investmentAmount : null;
   const profitPercent =
     profit !== null && investmentAmount > 0 ? (profit / investmentAmount) * 100 : null;
+  const expectedAnnualDividend =
+    hasQuantity && annualDividendPerShare !== null && annualDividendPerShare > 0
+      ? quantity * annualDividendPerShare
+      : null;
+  const dividendReturnAmount = expectedAnnualDividend ?? 0;
+  const totalReturnAmount = profit !== null ? profit + dividendReturnAmount : null;
+  const totalReturnPercent =
+    totalReturnAmount !== null && investmentAmount > 0
+      ? (totalReturnAmount / investmentAmount) * 100
+      : null;
   const highPrice = parseFiniteNumber(stock.highPrice);
   const maximumProfitAmount =
     hasQuantity && highPrice !== null && highPrice > 0 && purchasePrice !== null && purchasePrice > 0
@@ -3317,6 +3480,12 @@ function calculateHoldingMetrics(stock) {
     maximumProfitAmount !== null && investmentAmount > 0
       ? (maximumProfitAmount / investmentAmount) * 100
       : null;
+  const maximumTotalReturnAmount =
+    maximumProfitAmount !== null ? maximumProfitAmount + dividendReturnAmount : null;
+  const maximumTotalReturnPercent =
+    maximumTotalReturnAmount !== null && investmentAmount > 0
+      ? (maximumTotalReturnAmount / investmentAmount) * 100
+      : null;
   const retracedProfitAmount =
     maximumProfitAmount !== null && profit !== null
       ? Math.max(0, maximumProfitAmount - profit)
@@ -3325,9 +3494,13 @@ function calculateHoldingMetrics(stock) {
     retracedProfitAmount !== null && maximumProfitAmount > 0
       ? (retracedProfitAmount / maximumProfitAmount) * 100
       : null;
-  const expectedAnnualDividend =
-    hasQuantity && annualDividendPerShare !== null && annualDividendPerShare > 0
-      ? quantity * annualDividendPerShare
+  const totalReturnRetracedAmount =
+    maximumTotalReturnAmount !== null && totalReturnAmount !== null
+      ? Math.max(0, maximumTotalReturnAmount - totalReturnAmount)
+      : null;
+  const totalReturnRetracedPercent =
+    totalReturnRetracedAmount !== null && maximumTotalReturnAmount > 0
+      ? (totalReturnRetracedAmount / maximumTotalReturnAmount) * 100
       : null;
   const dividendYieldPercent =
     expectedAnnualDividend !== null && investmentAmount > 0
@@ -3348,10 +3521,16 @@ function calculateHoldingMetrics(stock) {
     marketValue,
     profit,
     profitPercent,
+    totalReturnAmount,
+    totalReturnPercent,
     maximumProfitAmount,
     maximumProfitPercent,
+    maximumTotalReturnAmount,
+    maximumTotalReturnPercent,
     retracedProfitAmount,
     retracedProfitPercent,
+    totalReturnRetracedAmount,
+    totalReturnRetracedPercent,
     expectedAnnualDividend,
     dividendYieldPercent,
     dividendFrequency: dividendSchedule.frequency,

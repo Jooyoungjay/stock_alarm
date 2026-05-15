@@ -348,6 +348,29 @@ export function buildRegistrationPreview(input, quote, historicalHigh = null) {
     expectedAnnualDividend !== null && investmentAmount > 0
       ? (expectedAnnualDividend / investmentAmount) * 100
       : null;
+  const dividendReturnAmount = expectedAnnualDividend ?? 0;
+  const totalReturnAmount =
+    unrealizedProfit !== null ? unrealizedProfit + dividendReturnAmount : null;
+  const totalReturnPercent =
+    totalReturnAmount !== null && investmentAmount > 0
+      ? (totalReturnAmount / investmentAmount) * 100
+      : null;
+  const maximumTotalReturnAmount =
+    profitContext.maximumProfitAmount !== null
+      ? profitContext.maximumProfitAmount + dividendReturnAmount
+      : null;
+  const maximumTotalReturnPercent =
+    maximumTotalReturnAmount !== null && investmentAmount > 0
+      ? (maximumTotalReturnAmount / investmentAmount) * 100
+      : null;
+  const totalReturnRetracedAmount =
+    maximumTotalReturnAmount !== null && totalReturnAmount !== null
+      ? Math.max(0, maximumTotalReturnAmount - totalReturnAmount)
+      : null;
+  const totalReturnRetracedPercent =
+    totalReturnRetracedAmount !== null && maximumTotalReturnAmount > 0
+      ? (totalReturnRetracedAmount / maximumTotalReturnAmount) * 100
+      : null;
 
   return {
     quote,
@@ -360,11 +383,17 @@ export function buildRegistrationPreview(input, quote, historicalHigh = null) {
       marketValue,
       unrealizedProfit,
       unrealizedProfitPercent,
+      totalReturnAmount,
+      totalReturnPercent,
       maximumProfitAmount: profitContext.maximumProfitAmount,
       maximumProfitPercent: profitContext.maximumProfitPercent,
+      maximumTotalReturnAmount,
+      maximumTotalReturnPercent,
       currentProfitAmount: profitContext.currentProfitAmount,
       retracedProfitAmount: profitContext.retracedProfitAmount,
       retracedProfitPercent: profitContext.retracedProfitPercent,
+      totalReturnRetracedAmount,
+      totalReturnRetracedPercent,
       annualDividendPerShare: normalizedAnnualDividendPerShare,
       expectedAnnualDividend,
       dividendYieldPercent,

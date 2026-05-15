@@ -347,6 +347,12 @@ test('registration preview calculates threshold and drawdown before saving', () 
   assert.equal(preview.position.annualDividendPerShare, 2);
   assert.equal(preview.position.expectedAnnualDividend, 20);
   assert.ok(Math.abs(preview.position.dividendYieldPercent - 2.2222222222) < 0.000001);
+  assert.equal(preview.position.totalReturnAmount, 260);
+  assert.ok(Math.abs(preview.position.totalReturnPercent - 28.8888888889) < 0.000001);
+  assert.equal(preview.position.maximumTotalReturnAmount, 320);
+  assert.ok(Math.abs(preview.position.maximumTotalReturnPercent - 35.5555555556) < 0.000001);
+  assert.equal(preview.position.totalReturnRetracedAmount, 60);
+  assert.equal(preview.position.totalReturnRetracedPercent, 18.75);
 });
 
 test('registration preview uses purchase price when it is the highest baseline', () => {
