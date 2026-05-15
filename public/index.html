@@ -40,7 +40,7 @@
     </header>
 
     <main class="page">
-      <section class="col-left tab-section active" id="tab-register" aria-labelledby="addStockTitle" data-page-scope="user">
+      <section class="col-left tab-section" id="tab-register" aria-labelledby="addStockTitle" data-page-scope="user">
         <div class="card">
           <div class="card-header">
             <div>
@@ -251,11 +251,11 @@
         </div>
       </section>
 
-      <section class="col-right tab-section" id="tab-watch" aria-labelledby="watchTitle" data-page-scope="user">
+      <section class="col-right tab-section active" id="tab-watch" aria-labelledby="watchTitle" data-page-scope="user">
         <div class="card">
           <div class="watch-header">
             <div>
-              <h2 id="watchTitle" class="card-title">감시 종목</h2>
+              <h2 id="watchTitle" class="card-title">내 계좌 상황</h2>
               <p id="summaryText" class="card-subtitle">0개 등록</p>
             </div>
             <div class="watch-actions">
@@ -284,7 +284,7 @@
               <button type="button" data-watch-filter="attention">주의</button>
               <button type="button" data-watch-filter="alert">알림</button>
               <button type="button" data-watch-filter="error">조회 실패</button>
-              <button type="button" data-watch-filter="inactive">비활성</button>
+              <button type="button" data-watch-filter="inactive">알림 꺼짐</button>
             </div>
             <label class="watch-sort-control">
               <span>정렬</span>
@@ -409,19 +409,19 @@
 
     <nav class="mobile-nav" aria-label="모바일 화면 전환">
       <div class="mobile-nav-inner">
-        <button class="nav-item active" type="button" data-tab="register">
+        <button class="nav-item active" type="button" data-tab="watch">
+          <svg viewBox="0 0 24 24" aria-hidden="true">
+            <polyline points="22 12 18 12 15 21 9 3 6 12 2 12"></polyline>
+          </svg>
+          <span>내 계좌</span>
+        </button>
+        <button class="nav-item" type="button" data-tab="register">
           <svg viewBox="0 0 24 24" aria-hidden="true">
             <circle cx="12" cy="12" r="10"></circle>
             <line x1="12" y1="8" x2="12" y2="16"></line>
             <line x1="8" y1="12" x2="16" y2="12"></line>
           </svg>
           <span>종목 등록</span>
-        </button>
-        <button class="nav-item" type="button" data-tab="watch">
-          <svg viewBox="0 0 24 24" aria-hidden="true">
-            <polyline points="22 12 18 12 15 21 9 3 6 12 2 12"></polyline>
-          </svg>
-          <span>감시 종목</span>
         </button>
         <button class="nav-item" type="button" data-tab="alerts">
           <svg viewBox="0 0 24 24" aria-hidden="true">

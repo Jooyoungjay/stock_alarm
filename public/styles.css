@@ -253,6 +253,25 @@ body[data-admin-auth="locked"] [data-admin-protected="true"] {
   grid-row: 2;
 }
 
+body[data-app-mode="user"] .page {
+  grid-template-columns: minmax(0, 1fr) 340px;
+}
+
+body[data-app-mode="user"] .col-right {
+  grid-column: 1 / -1;
+  grid-row: 1;
+}
+
+body[data-app-mode="user"] .col-full {
+  grid-column: 1;
+  grid-row: 2;
+}
+
+body[data-app-mode="user"] .col-left {
+  grid-column: 2;
+  grid-row: 2;
+}
+
 .card {
   border: 1px solid var(--border);
   border-radius: var(--radius);
@@ -1513,6 +1532,73 @@ select:focus {
   flex-wrap: wrap;
 }
 
+.alert-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  min-height: 30px;
+  padding: 5px 10px 5px 6px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: var(--tag-bg);
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 800;
+  white-space: nowrap;
+  transition: border-color 0.15s, background 0.15s, color 0.15s;
+}
+
+.alert-toggle:hover {
+  border-color: var(--accent);
+  color: var(--text);
+}
+
+.alert-toggle.on {
+  border-color: color-mix(in srgb, var(--accent) 65%, transparent);
+  background: var(--accent-glow);
+  color: var(--accent);
+}
+
+.alert-toggle.off {
+  border-color: var(--border-soft);
+  background: var(--bg);
+  color: var(--dim);
+}
+
+.alert-toggle:disabled {
+  cursor: wait;
+  opacity: 0.75;
+}
+
+.alert-toggle-track {
+  position: relative;
+  width: 34px;
+  height: 18px;
+  border-radius: 999px;
+  background: var(--border);
+  flex: 0 0 auto;
+}
+
+.alert-toggle.on .alert-toggle-track {
+  background: var(--accent);
+}
+
+.alert-toggle-thumb {
+  position: absolute;
+  top: 3px;
+  left: 3px;
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  background: #fff;
+  box-shadow: 0 1px 3px #00000040;
+  transition: transform 0.15s;
+}
+
+.alert-toggle.on .alert-toggle-thumb {
+  transform: translateX(16px);
+}
+
 .manual-test-form {
   display: flex;
   align-items: center;
@@ -2110,6 +2196,13 @@ select:focus {
   .col-left,
   .col-right,
   .col-full {
+    grid-column: 1;
+    grid-row: auto;
+  }
+
+  body[data-app-mode="user"] .col-left,
+  body[data-app-mode="user"] .col-right,
+  body[data-app-mode="user"] .col-full {
     grid-column: 1;
     grid-row: auto;
   }

@@ -548,6 +548,35 @@ test('manual quote check marks recovery without sending an alert', async () => {
   assert.equal(sentMessages.length, 0);
 });
 
+test('runAlertCheck skips stocks whose alert toggle is off', async () => {
+  const store = createMemoryStore({
+    ...baseStock,
+    active: false
+  });
+  let fetched = false;
+
+  const result = await runAlertCheck(
+    store,
+    {
+      telegramBotToken: 'token',
+      telegramChatId: 'chat',
+      quoteTimeoutMs: 10000
+    },
+    {
+      now: date('2026-05-11T00:46:00Z'),
+      fetchQuote: async () => {
+        fetched = true;
+        throw new Error('fetchQuote should not be called');
+      }
+    }
+  );
+
+  assert.equal(result.results[0].status, 'skipped');
+  assert.equal(result.results[0].reason, 'inactive');
+  assert.equal(fetched, false);
+  assert.equal(store.alerts.length, 0);
+});
+
 test('quote fetch errors are persisted on the stock', async () => {
   const store = createMemoryStore(baseStock);
 

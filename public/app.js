@@ -1747,7 +1747,7 @@ function renderStocks() {
         <div class="stock-top">
           <div class="stock-title stock-info">
             <div class="stock-name">${escapeHtml(stock.displayName || stock.symbol)}</div>
-            <div class="stock-symbol">${escapeHtml(stock.symbol)} ${stock.active ? '' : '비활성'}</div>
+            <div class="stock-symbol">${escapeHtml(stock.symbol)} ${stock.active ? '' : '알림 꺼짐'}</div>
             ${renderPositionSummary(stock)}
           </div>
           <div class="metric price-block">
@@ -1786,14 +1786,12 @@ function renderStocks() {
       const actions = document.createElement('div');
       actions.className = 'stock-actions';
       actions.append(
+        alertToggle(stock),
         manualTestForm(stock),
         actionButton(state.editingStockId === stock.id ? '편집 닫기' : '편집', 'btn btn-ghost btn-sm secondary-button', () => {
           state.editingStockId = state.editingStockId === stock.id ? null : stock.id;
           renderStocks();
         }),
-        actionButton(stock.active ? '중지' : '재개', 'btn btn-ghost btn-sm text-button', () =>
-          patchStock(stock.id, { active: !stock.active })
-        ),
         actionButton(stock.purchaseDate ? '최고가 재계산' : '최고가 초기화', 'btn btn-ghost btn-sm secondary-button', () =>
           patchStock(stock.id, { resetHighPrice: true })
         ),
@@ -1829,7 +1827,7 @@ function renderWatchSummary(items, visibleCount) {
     createWatchSummaryItem('알림', counts.alert, 'alert'),
     createWatchSummaryItem('주의', counts.warning, 'warning'),
     createWatchSummaryItem('조회 실패', counts.error, 'error'),
-    createWatchSummaryItem('비활성', counts.inactive, 'inactive')
+    createWatchSummaryItem('알림 꺼짐', counts.inactive, 'inactive')
   );
 }
 
@@ -2387,6 +2385,33 @@ function manualTestForm(stock) {
   return form;
 }
 
+function alertToggle(stock) {
+  const button = document.createElement('button');
+  const enabled = stock.active !== false;
+  const displayName = stock.displayName || stock.symbol;
+
+  button.type = 'button';
+  button.className = `alert-toggle ${enabled ? 'on' : 'off'}`;
+  button.setAttribute('role', 'switch');
+  button.setAttribute('aria-checked', enabled ? 'true' : 'false');
+  button.setAttribute('aria-label', `${displayName} 알림 ${enabled ? '끄기' : '켜기'}`);
+  button.innerHTML = `
+    <span class="alert-toggle-track" aria-hidden="true">
+      <span class="alert-toggle-thumb"></span>
+    </span>
+    <span class="alert-toggle-text">${enabled ? '알림 켜짐' : '알림 꺼짐'}</span>
+  `;
+
+  button.addEventListener('click', () =>
+    withBusy(button, async () => {
+      await patchStock(stock.id, { active: !enabled });
+      showMessage(`${displayName} 알림을 ${enabled ? '껐습니다.' : '켰습니다.'}`);
+    })
+  );
+
+  return button;
+}
+
 function renderAlerts() {
   if (!state.alerts.length) {
     elements.alertList.innerHTML = '<div class="empty">알림 기록이 없습니다.</div>';
@@ -2550,7 +2575,7 @@ function renderManualTestMessage(result) {
     high_updated: '테스트 가격이 새 최고가로 저장됐습니다.',
     high_initialized: '구매일 이후 최고가를 계산했습니다.',
     checked: '테스트 가격을 확인했습니다. 아직 알림 기준에는 닿지 않았습니다.',
-    skipped: '비활성 종목이라 테스트 확인을 건너뛰었습니다.'
+    skipped: '알림이 꺼진 종목이라 테스트 확인을 건너뛰었습니다.'
   };
 
   return labels[result.status] || '테스트 가격을 확인했습니다.';
@@ -2558,7 +2583,7 @@ function renderManualTestMessage(result) {
 
 function getStockStatusLabel(stock) {
   if (!stock.active) {
-    return '비활성';
+    return '알림 꺼짐';
   }
 
   const labels = {
@@ -2611,8 +2636,8 @@ function getWatchStatus(stock) {
   if (!stock.active) {
     return {
       level: 'inactive',
-      label: '비활성',
-      detail: '감시가 중지된 종목입니다.',
+      label: '알림 꺼짐',
+      detail: '자동 가격 확인과 텔레그램 알림을 쉬고 있습니다.',
       distancePercent
     };
   }
@@ -3612,7 +3637,7 @@ function syncResponsiveTabs() {
     [...elements.mobileNavButtons].find((button) => button.classList.contains('active')) ||
     elements.mobileNavButtons[0];
 
-  switchMobileTab(activeButton?.dataset.tab || 'register');
+  switchMobileTab(activeButton?.dataset.tab || 'watch');
 }
 
 function escapeHtml(value) {

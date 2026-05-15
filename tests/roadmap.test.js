@@ -18,10 +18,12 @@ test('parseRoadmapMarkdown extracts roadmap metadata and next task', async () =>
   assert.ok(roadmap.completedScope.some((item) => item.category === '사용자/관리자 라우팅'));
   assert.ok(roadmap.completedScope.some((item) => item.category === '관리자 기능 이동'));
   assert.ok(roadmap.completedScope.some((item) => item.category === '관리자 보호'));
+  assert.ok(roadmap.completedScope.some((item) => item.category === '사용자 첫 화면'));
+  assert.ok(roadmap.completedScope.some((item) => item.category === '종목별 알림 토글'));
   assert.ok(roadmap.sections.length >= 9);
-  assert.equal(roadmap.recommendedOrder[0], '사용자 첫 화면 포트폴리오 중심 재정렬');
-  assert.equal(roadmap.recommendedOrder[1], '관리자 링크 노출 방식 정리');
-  assert.equal(roadmap.nextTask.title, '사용자 첫 화면 포트폴리오 중심 재정렬');
+  assert.equal(roadmap.recommendedOrder[0], '관리자 링크 노출 방식 정리');
+  assert.equal(roadmap.recommendedOrder[1], '배당 포함 수익률');
+  assert.equal(roadmap.nextTask.title, '관리자 링크 노출 방식 정리');
   assert.ok(roadmap.summary.total > roadmap.summary.completed);
 });
 

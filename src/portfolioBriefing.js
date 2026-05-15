@@ -22,7 +22,7 @@ const riskLabels = {
   error: '조회 실패',
   ok: '정상',
   unknown: '확인 전',
-  inactive: '비활성'
+  inactive: '알림 꺼짐'
 };
 
 export function buildRiskRanking(stocks, options = {}) {
@@ -108,7 +108,7 @@ export function formatDailyBriefingMessage(briefing, options = {}) {
   }
 
   if (counts.inactive) {
-    lines.push(`비활성 종목 ${counts.inactive}개는 브리핑 순위에서 뒤로 보냅니다.`);
+    lines.push(`알림이 꺼진 종목 ${counts.inactive}개는 브리핑 순위에서 뒤로 보냅니다.`);
   }
 
   return lines.filter((line) => line !== null && line !== undefined).join('\n');
@@ -230,7 +230,7 @@ function buildRiskItem(stock, options) {
       ...base,
       level: 'inactive',
       label: riskLabels.inactive,
-      detail: '감시가 중지된 종목입니다.'
+      detail: '자동 가격 확인과 텔레그램 알림을 쉬고 있습니다.'
     };
   }
 

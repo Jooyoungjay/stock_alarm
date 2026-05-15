@@ -16,8 +16,8 @@ const helpMessage = [
   '/list - 감시 종목 목록',
   '/brief - 위험도 순위와 일일 브리핑',
   '/check - 지금 바로 전체 확인',
-  '/pause <종목코드> - 감시 중지',
-  '/resume <종목코드> - 감시 재개',
+  '/pause <종목코드> - 알림 끄기',
+  '/resume <종목코드> - 알림 켜기',
   '/edit <종목코드> <항목> <값> - 알림 조건 수정',
   '/delete <종목코드> - 종목 삭제',
   '/backup - 현재 데이터 백업 생성',
@@ -748,7 +748,7 @@ async function setStockActive(store, query, active) {
   const stock = await findStock(store, query);
   const updated = await store.updateStock(stock.id, { active });
 
-  return `${updated.displayName || updated.symbol} (${updated.symbol}) 감시를 ${active ? '재개' : '중지'}했습니다.`;
+  return `${updated.displayName || updated.symbol} (${updated.symbol}) 알림을 ${active ? '켰습니다' : '껐습니다'}.`;
 }
 
 async function deleteStockFromCommand(store, query) {
@@ -815,7 +815,7 @@ function formatStockList(stocks) {
 function formatStockLine(stock) {
   const currentPrice = Number(stock.lastPrice);
   const line = [
-    `${stock.displayName || stock.symbol} (${stock.symbol}) ${stock.active ? '감시중' : '중지'}`,
+    `${stock.displayName || stock.symbol} (${stock.symbol}) ${stock.active ? '알림 켜짐' : '알림 꺼짐'}`,
     `기준: ${formatAlertType(stock.alertType)}`,
     stock.purchaseDate ? `매수일: ${stock.purchaseDate}` : '',
     stock.purchasePrice ? `매수가: ${formatNumber(stock.purchasePrice)}` : '',
