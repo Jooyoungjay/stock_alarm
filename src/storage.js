@@ -2,6 +2,7 @@ import fs from 'node:fs/promises';
 import path from 'node:path';
 import { createHash, randomBytes, randomUUID } from 'node:crypto';
 import { createBackup } from './backups.js';
+import { buildDataModelInfo, normalizeStoreEnvelope, touchStoreEnvelope } from './dataModel.js';
 import { normalizeSymbolInput } from './symbols.js';
 
 const emptyStore = {
@@ -873,19 +874,24 @@ export class JsonStore {
 
   async read() {
     await this.ready;
-    const data = await readJson(this.filePath, emptyStore);
+    const data = normalizeStoreEnvelope(await readJson(this.filePath, emptyStore));
 
     return {
       devices: Array.isArray(data.devices) ? data.devices.map(normalizeStoredDevice) : [],
       stocks: Array.isArray(data.stocks) ? data.stocks.map(normalizeStoredStock) : [],
       alerts: Array.isArray(data.alerts) ? data.alerts : [],
-      meta: data.meta && typeof data.meta === 'object' ? data.meta : {}
+      meta: data.meta
     };
   }
 
   async write(data) {
     await this.ready;
-    await writeJson(this.filePath, data);
+    await writeJson(this.filePath, touchStoreEnvelope(data));
+  }
+
+  async getDataModelInfo() {
+    const data = await this.read();
+    return buildDataModelInfo(data);
   }
 
   async createDevice(input = {}) {

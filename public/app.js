@@ -842,6 +842,7 @@ function renderServerStatus(health) {
       ${renderServerMetric('배당 갱신', formatDate(health.lastDividendRefresh?.checkedAt), getLastDividendRefreshDetail(health.lastDividendRefresh))}
       ${renderServerMetric('포트', String(health.port || '-'), `HOST ${health.host || '-'}`)}
       ${renderServerMetric('데이터', shortenPath(health.dataDir), '로컬 저장소')}
+      ${renderServerMetric('데이터 모델', formatDataModelVersion(health.dataModel), formatDataModelStoreSummary(health.dataModel?.store))}
       ${renderServerMetric('실행 방식', health.railwayRuntime ? 'Railway' : '로컬 PC', health.cwd || '')}
     </div>
     <div class="server-access">
@@ -871,6 +872,22 @@ function renderServerStatusError(error) {
   elements.serverStatusPanel.innerHTML = `
     <div class="message show error">${escapeHtml(error.message || '서버 상태를 확인하지 못했습니다.')}</div>
   `;
+}
+
+function formatDataModelVersion(dataModel) {
+  const version = Number(dataModel?.schemaVersion);
+
+  return Number.isInteger(version) && version > 0 ? `v${version}` : '-';
+}
+
+function formatDataModelStoreSummary(store) {
+  const counts = store?.counts;
+
+  if (!counts) {
+    return '스키마 요약 없음';
+  }
+
+  return `종목 ${counts.stocks || 0} · 알림 ${counts.alerts || 0} · 기기 ${counts.devices || 0}`;
 }
 
 function renderRoadmap(roadmap) {
@@ -1608,6 +1625,8 @@ function renderPortfolioSummary(items) {
     ...groups.map((group) => {
       const item = document.createElement('div');
       const profitClass = getProfitClass(group.profit);
+      const maximumProfitClass = getProfitClass(group.maximumProfitAmount);
+      const retracedProfitClass = group.retracedProfitAmount > 0 ? 'down' : 'flat';
       item.className = `portfolio-summary-item ${profitClass}`;
       item.innerHTML = `
         <div class="portfolio-summary-head">
@@ -1623,6 +1642,12 @@ function renderPortfolioSummary(items) {
           <strong class="${profitClass}">${escapeHtml(formatSignedMoney(group.profit, group.currency))}</strong>
           <span>수익률</span>
           <strong class="${profitClass}">${escapeHtml(formatSignedPercent(group.profitPercent))}</strong>
+          <span>총 최대 수익금</span>
+          <strong class="${maximumProfitClass}">${escapeHtml(formatSignedMoney(group.maximumProfitAmount, group.currency))}</strong>
+          <span>총 반납 금액</span>
+          <strong class="${retracedProfitClass}">${escapeHtml(group.retracedProfitAmount === null ? '-' : formatMoney(group.retracedProfitAmount, group.currency))}</strong>
+          <span>계좌 총 반납률</span>
+          <strong class="${retracedProfitClass}">${escapeHtml(formatPercent(group.retracedProfitPercent))}</strong>
           <span>예상 연 배당금</span>
           <strong>${escapeHtml(group.expectedAnnualDividend === null ? '-' : formatMoney(group.expectedAnnualDividend, group.currency))}</strong>
           <span>배당수익률</span>
@@ -1660,6 +1685,12 @@ function buildPortfolioSummaryGroups(stocks) {
         marketValue: 0,
         profit: 0,
         profitPercent: null,
+        maximumProfitAmount: 0,
+        maximumProfitInvestmentAmount: 0,
+        maximumProfitTrackedCount: 0,
+        retracedProfitAmount: 0,
+        retracementBaseAmount: 0,
+        retracementTrackedCount: 0,
         dividendInvestmentAmount: 0,
         expectedAnnualDividend: 0,
         dividendYieldPercent: null,
@@ -1675,6 +1706,22 @@ function buildPortfolioSummaryGroups(stocks) {
       group.marketValue += metrics.marketValue;
       group.valuedInvestmentAmount += metrics.investmentAmount;
       group.profit += metrics.profit;
+    }
+
+    if (metrics.maximumProfitAmount !== null) {
+      group.maximumProfitAmount += metrics.maximumProfitAmount;
+      group.maximumProfitInvestmentAmount += metrics.investmentAmount;
+      group.maximumProfitTrackedCount += 1;
+    }
+
+    if (
+      metrics.retracedProfitAmount !== null &&
+      metrics.maximumProfitAmount !== null &&
+      metrics.maximumProfitAmount > 0
+    ) {
+      group.retracedProfitAmount += metrics.retracedProfitAmount;
+      group.retracementBaseAmount += metrics.maximumProfitAmount;
+      group.retracementTrackedCount += 1;
     }
 
     if (metrics.expectedAnnualDividend !== null) {
@@ -1698,6 +1745,18 @@ function buildPortfolioSummaryGroups(stocks) {
       profit: group.valuedInvestmentAmount > 0 ? group.profit : null,
       profitPercent:
         group.valuedInvestmentAmount > 0 ? (group.profit / group.valuedInvestmentAmount) * 100 : null,
+      maximumProfitAmount:
+        group.maximumProfitTrackedCount > 0 ? group.maximumProfitAmount : null,
+      maximumProfitPercent:
+        group.maximumProfitInvestmentAmount > 0
+          ? (group.maximumProfitAmount / group.maximumProfitInvestmentAmount) * 100
+          : null,
+      retracedProfitAmount:
+        group.retracementTrackedCount > 0 ? group.retracedProfitAmount : null,
+      retracedProfitPercent:
+        group.retracementBaseAmount > 0
+          ? (group.retracedProfitAmount / group.retracementBaseAmount) * 100
+          : null,
       expectedAnnualDividend:
         group.dividendInvestmentAmount > 0 ? group.expectedAnnualDividend : null,
       dividendYieldPercent:

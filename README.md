@@ -97,6 +97,7 @@ stop-local.bat
 - 배당락일, 지급일, 최근 1주 배당금, 배당 변경 내역 표시
 - 향후 6개월 배당 캘린더와 월별 예상 지급액 표시
 - 이익금 반납률 기준을 이해할 수 있도록 최대 수익금과 반납 금액 표시
+- 포트폴리오 요약에서 계좌 총 최대 수익금, 총 반납 금액, 총 반납률 표시
 - 개발 WBS와 다음 개발 순서를 웹 대시보드에서 표시
 - 웹 대시보드와 텔레그램 명령어 기반 백업/복구/삭제
 - 서버 시작과 종목 변경 시 자동 백업
@@ -104,7 +105,7 @@ stop-local.bat
 - 같은 Wi-Fi 휴대폰 접속용 주소와 QR 코드 표시
 - 계정 없는 모바일 앱용 익명 기기 API 기초
 - 기기별 종목 격리와 푸시 토큰 저장
-- 로컬 JSON 파일 기반 데이터 저장
+- 로컬 JSON 파일 기반 데이터 저장, 스키마 버전, 데이터 모델 요약 API
 - 안전한 로컬 서버 종료 스크립트
 
 지원하는 알림 기준:
@@ -132,6 +133,7 @@ stock_alarm/
 │  ├─ dividendCalendar.js   # 향후 배당 지급월/지급일 캘린더 생성
 │  ├─ dividendProvider.js   # 배당 provider 조회와 응답 파싱
 │  ├─ dividendRefresh.js    # 배당 데이터 자동/수동 갱신
+│  ├─ dataModel.js          # 저장 데이터 모델과 스키마 버전
 │  ├─ storage.js            # 로컬 JSON 저장소
 │  ├─ telegram.js           # 텔레그램 API 호출
 │  ├─ telegramCommands.js   # 텔레그램 명령어 처리
@@ -782,6 +784,14 @@ data/server.json
 - 텔레그램 update offset
 - 알림 기록
 
+데이터 모델 기준:
+
+- 현재 스키마 버전은 `1`입니다.
+- 서버는 저장할 때 `meta.schemaVersion`, `meta.createdAt`, `meta.updatedAt`을 함께 관리합니다.
+- 주요 엔터티는 `devices`, `push_tokens`, `stocks`, `alerts`, `dividend_events`, `quote_provider_stats`입니다.
+- 웹 대시보드의 서버 상태에서 스키마 버전과 종목/알림/기기 개수를 확인할 수 있습니다.
+- 전체 데이터 모델은 `GET /api/data-model`에서 확인할 수 있습니다.
+
 백업 위치:
 
 ```text
@@ -1026,9 +1036,11 @@ Invoke-RestMethod http://127.0.0.1:3001/api/health
 - 개발 WBS/일정의 웹 대시보드 표시
 - 배당 캘린더 고도화
 - 이익금 반납률용 최대 수익금과 반납 금액 표시
+- 포트폴리오 계좌 총 최대 수익금과 총 반납률 표시
+- 데이터 모델 스키마 버전과 저장소 요약 API
 
 우선순위가 높은 순서:
 
-1. Postgres 저장소 설계와 JSON 데이터 이전 준비
-2. Expo 모바일 앱 초기 프로젝트 생성
-3. App Store / Play Store 출시 준비
+1. JSON -> DB 이전 설계
+2. Postgres 저장소 인터페이스
+3. Expo 모바일 앱 초기 프로젝트 생성

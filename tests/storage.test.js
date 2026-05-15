@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
+import { DATA_SCHEMA_VERSION } from '../src/dataModel.js';
 import { JsonStore } from '../src/storage.js';
 
 test('JsonStore creates and authenticates anonymous devices', async () => {
@@ -204,6 +205,71 @@ test('JsonStore preserves quote source metadata on stored stocks', async () => {
   assert.equal(saved.quoteRegularMarketTime, '2026-05-14T00:00:00.000Z');
   assert.equal(saved.highPriceDataDelay, 'eod');
   assert.equal(saved.highPriceVenue, 'krx_estimated');
+});
+
+test('JsonStore normalizes schema metadata and reports data model counts', async () => {
+  const store = await createStore();
+  await fs.writeFile(
+    store.filePath,
+    JSON.stringify(
+      {
+        devices: [
+          {
+            id: 'device-1',
+            platform: 'ios',
+            pushTokens: [
+              {
+                token: 'ExponentPushToken[test]',
+                provider: 'expo',
+                platform: 'ios',
+                enabled: true,
+                updatedAt: '2026-05-15T00:00:00.000Z'
+              }
+            ]
+          }
+        ],
+        stocks: [
+          stockInput({
+            id: 'stock-1',
+            active: true,
+            quantity: 2,
+            dividendHistory: [
+              {
+                checkedAt: '2026-05-15T00:00:00.000Z',
+                provider: 'manual',
+                annualDividendPerShare: 100
+              }
+            ]
+          })
+        ],
+        alerts: [{ id: 'alert-1', symbol: 'AAPL', createdAt: '2026-05-15T00:00:00.000Z' }]
+      },
+      null,
+      2
+    ),
+    'utf8'
+  );
+
+  const data = await store.read();
+  assert.equal(data.meta.schemaVersion, DATA_SCHEMA_VERSION);
+  assert.ok(data.meta.createdAt);
+  assert.ok(data.meta.updatedAt);
+
+  const info = await store.getDataModelInfo();
+  assert.equal(info.schemaVersion, DATA_SCHEMA_VERSION);
+  assert.equal(info.storageEngine, 'json');
+  assert.ok(info.entities.some((entity) => entity.name === 'stocks'));
+  assert.equal(info.store.counts.devices, 1);
+  assert.equal(info.store.counts.pushTokens, 1);
+  assert.equal(info.store.counts.stocks, 1);
+  assert.equal(info.store.counts.activeStocks, 1);
+  assert.equal(info.store.counts.alerts, 1);
+  assert.equal(info.store.counts.dividendEvents, 1);
+
+  await store.write(data);
+  const raw = JSON.parse(await fs.readFile(store.filePath, 'utf8'));
+  assert.equal(raw.meta.schemaVersion, DATA_SCHEMA_VERSION);
+  assert.ok(raw.meta.updatedAt);
 });
 
 async function createStore() {

@@ -273,10 +273,16 @@ async function handleApi(request, response, url) {
   const segments = url.pathname.split('/').filter(Boolean);
 
   if (request.method === 'GET' && url.pathname === '/api/health') {
-    const [dividendRefreshSnapshot, dailyBriefingSnapshot, quoteProviderStats] = await Promise.all([
+    const [
+      dividendRefreshSnapshot,
+      dailyBriefingSnapshot,
+      quoteProviderStats,
+      dataModelInfo
+    ] = await Promise.all([
       getLastDividendRefreshSnapshot(),
       getLastDailyBriefingSnapshot(),
-      store.getQuoteProviderStats()
+      store.getQuoteProviderStats(),
+      store.getDataModelInfo()
     ]);
 
     sendJson(response, 200, {
@@ -309,7 +315,21 @@ async function handleApi(request, response, url) {
       lastDividendRefresh: dividendRefreshSnapshot,
       lastDailyBriefing: dailyBriefingSnapshot,
       quoteProviderStats,
+      dataSchemaVersion: dataModelInfo.schemaVersion,
+      dataModel: {
+        schemaVersion: dataModelInfo.schemaVersion,
+        storageEngine: dataModelInfo.storageEngine,
+        summary: dataModelInfo.summary,
+        store: dataModelInfo.store
+      },
       lastCheck
+    });
+    return;
+  }
+
+  if (request.method === 'GET' && url.pathname === '/api/data-model') {
+    sendJson(response, 200, {
+      dataModel: await store.getDataModelInfo()
     });
     return;
   }
