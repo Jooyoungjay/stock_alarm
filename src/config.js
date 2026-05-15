@@ -108,6 +108,7 @@ export const config = {
   dataDir: process.env.DATA_DIR || defaultDataDir,
   storageEngine: process.env.STORAGE_ENGINE || 'json',
   databaseUrl: process.env.DATABASE_URL || '',
+  adminToken: process.env.ADMIN_TOKEN || '',
   host: process.env.HOST || defaultHost,
   port: toNumber(process.env.PORT, 3000, { min: 1, max: 65535 }),
   isRailwayRuntime,

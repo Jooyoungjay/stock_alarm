@@ -1,6 +1,7 @@
 import http from 'node:http';
 import fs from 'node:fs/promises';
 import path from 'node:path';
+import { getAdminAuthStatus, isAdminApiPath, isAdminRequestAuthorized } from './adminAuth.js';
 import { buildAccessUrls } from './accessUrls.js';
 import { createBackup, deleteBackup, listBackups, restoreBackup } from './backups.js';
 import { config } from './config.js';
@@ -99,6 +100,26 @@ function sendError(response, statusCode, message) {
   sendJson(response, statusCode, {
     error: message
   });
+}
+
+function sendAdminAuthError(response) {
+  sendJson(response, 401, {
+    error: '관리자 토큰이 필요합니다.',
+    adminAuthRequired: true
+  });
+}
+
+function requireAdminAuth(request, response, url) {
+  if (!isAdminApiPath(request.method, url.pathname)) {
+    return true;
+  }
+
+  if (isAdminRequestAuthorized(request, config)) {
+    return true;
+  }
+
+  sendAdminAuthError(response);
+  return false;
 }
 
 function serializeBackup(backup) {
@@ -270,6 +291,17 @@ async function initializePurchaseHigh(stock) {
 async function handleApi(request, response, url) {
   const segments = url.pathname.split('/').filter(Boolean);
 
+  if (request.method === 'GET' && url.pathname === '/api/admin/session') {
+    sendJson(response, 200, {
+      adminAuth: getAdminAuthStatus(request, config)
+    });
+    return;
+  }
+
+  if (!requireAdminAuth(request, response, url)) {
+    return;
+  }
+
   if (request.method === 'GET' && url.pathname === '/api/health') {
     const [
       dividendRefreshSnapshot,
@@ -334,6 +366,7 @@ async function handleApi(request, response, url) {
   }
 
   if (request.method === 'GET' && url.pathname === '/api/stocks') {
+    const canReadAdminDetails = isAdminRequestAuthorized(request, config);
     const [
       stocks,
       alerts,
@@ -343,9 +376,9 @@ async function handleApi(request, response, url) {
     ] = await Promise.all([
       store.listStocks(),
       store.listAlerts(30),
-      getLastDividendRefreshSnapshot(),
+      canReadAdminDetails ? getLastDividendRefreshSnapshot() : Promise.resolve(null),
       getLastDailyBriefingSnapshot(),
-      store.getQuoteProviderStats()
+      canReadAdminDetails ? store.getQuoteProviderStats() : Promise.resolve(null)
     ]);
     const dividendCalendar = buildDividendCalendar(stocks);
 

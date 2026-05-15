@@ -205,6 +205,7 @@ HISTORICAL_QUOTE_PROVIDERS=naver,stooq,alphavantage,yahoo
 DIVIDEND_PROVIDERS=publicdata,opendart,alphavantage,yahoo
 STORAGE_ENGINE=json
 DATABASE_URL=
+ADMIN_TOKEN=
 DATA_GO_KR_SERVICE_KEY=
 OPENDART_API_KEY=
 ALPHA_VANTAGE_API_KEY=
@@ -221,6 +222,7 @@ TELEGRAM_CHAT_ID=
 | `DATA_DIR` | `data` | 데이터 저장 폴더. 비우면 프로젝트의 `data/` 사용 |
 | `STORAGE_ENGINE` | `json` | 저장소 엔진. 현재 실행 가능한 값은 `json` |
 | `DATABASE_URL` | 빈 값 | 향후 Postgres 저장소용 연결 문자열. 현재 로컬 JSON 실행에서는 사용하지 않음 |
+| `ADMIN_TOKEN` | 빈 값 | `/admin` 화면과 운영 API 보호용 토큰. 비우면 관리자 보호가 꺼짐 |
 | `POLL_INTERVAL_SECONDS` | `60` | 시세 자동 확인 주기 |
 | `TELEGRAM_COMMAND_POLL_SECONDS` | `5` | 텔레그램 명령어 확인 주기 |
 | `DIVIDEND_REFRESH_INTERVAL_SECONDS` | `86400` | 배당 데이터 자동 보조 갱신 주기. 기본값은 하루 1회 |
@@ -458,6 +460,13 @@ http://192.168.0.15:3000
 - 백업 목록 확인
 - 선택한 백업으로 복구
 - 선택한 백업 삭제
+
+관리자 보호:
+
+- `.env`의 `ADMIN_TOKEN`이 비어 있으면 관리자 화면은 보호 없이 열립니다.
+- `ADMIN_TOKEN`을 설정하고 서버를 재시작하면 `/admin` 화면에서 토큰 입력 카드가 나타납니다.
+- 토큰이 맞으면 현재 브라우저 세션에만 저장되고, 운영 API 요청에 `x-admin-token` 헤더로 전송됩니다.
+- 보호 대상 운영 API는 `/api/health`, `/api/data-model`, `/api/roadmap`, `/api/backups`, `/api/check-now`, `/api/dividends/refresh`, `/api/briefing/send`, `/api/telegram/test`입니다.
 
 화면 분리 현황:
 
@@ -1006,6 +1015,12 @@ netstat -ano | Select-String -Pattern ':3001'
 Invoke-RestMethod http://127.0.0.1:3000/api/health
 ```
 
+`ADMIN_TOKEN`을 설정한 경우:
+
+```powershell
+Invoke-RestMethod http://127.0.0.1:3000/api/health -Headers @{ "x-admin-token" = "설정한_ADMIN_TOKEN" }
+```
+
 서버가 3001에서 실행 중이면:
 
 ```powershell
@@ -1087,9 +1102,10 @@ Invoke-RestMethod http://127.0.0.1:3001/api/health
 - 저장소 공통 계약과 저장소 팩토리 추가
 - `/`, `/app`, `/admin` 라우팅 분리
 - 서버 상태, provider 진단, 백업, 개발 WBS 관리자 화면 이동
+- `ADMIN_TOKEN` 기반 관리자 화면과 운영 API 보호
 
 우선순위가 높은 순서:
 
-1. 관리자 보호 방식 검토
-2. 사용자 첫 화면 포트폴리오 중심 재정렬
+1. 사용자 첫 화면 포트폴리오 중심 재정렬
+2. 관리자 링크 노출 방식 정리
 3. Expo 모바일 앱 초기 프로젝트 생성

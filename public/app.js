@@ -3,6 +3,8 @@ const APP_MODES = Object.freeze({
   ADMIN: 'admin'
 });
 
+const ADMIN_TOKEN_STORAGE_KEY = 'stock_alarm_admin_token';
+
 function getAppMode() {
   const pathname = window.location.pathname.replace(/\/+$/, '') || '/';
   return pathname === '/admin' ? APP_MODES.ADMIN : APP_MODES.USER;
@@ -17,6 +19,8 @@ const state = {
   roadmap: null,
   dividendCalendar: null,
   quoteProviderStats: null,
+  adminAuthRequired: false,
+  adminAuthenticated: false,
   backupRetention: 0,
   loading: false,
   registrationStep: 1,
@@ -47,6 +51,13 @@ const elements = {
   backupSummary: document.querySelector('#backupSummary'),
   serverStatusPanel: document.querySelector('#serverStatusPanel'),
   serverStatusSummary: document.querySelector('#serverStatusSummary'),
+  adminAuthCard: document.querySelector('.admin-auth-card'),
+  adminAuthForm: document.querySelector('#adminAuthForm'),
+  adminTokenInput: document.querySelector('#adminTokenInput'),
+  adminAuthBadge: document.querySelector('#adminAuthBadge'),
+  adminAuthSummary: document.querySelector('#adminAuthSummary'),
+  adminAuthHelp: document.querySelector('#adminAuthHelp'),
+  clearAdminTokenButton: document.querySelector('#clearAdminTokenButton'),
   roadmapPanel: document.querySelector('#roadmapPanel'),
   roadmapSummary: document.querySelector('#roadmapSummary'),
   summaryText: document.querySelector('#summaryText'),
@@ -135,6 +146,17 @@ elements.mobileNavButtons.forEach((button) => {
 });
 
 window.addEventListener('resize', syncResponsiveTabs);
+
+elements.adminAuthForm?.addEventListener('submit', async (event) => {
+  event.preventDefault();
+  await saveAdminToken();
+});
+
+elements.clearAdminTokenButton?.addEventListener('click', async () => {
+  clearAdminToken();
+  await loadAdminSession();
+  showMessage('관리자 토큰을 삭제했습니다.');
+});
 
 elements.form.elements.symbol.addEventListener('input', () => {
   renderQuotePreview(null);
@@ -288,12 +310,35 @@ elements.serverStatusPanel.addEventListener('click', async (event) => {
   await copyText(button.dataset.copy);
 });
 
+async function loadAdminSession() {
+  if (!isAdminMode()) {
+    return true;
+  }
+
+  try {
+    const data = await api('/api/admin/session');
+    const adminAuth = data.adminAuth || {};
+
+    state.adminAuthRequired = Boolean(adminAuth.required);
+    state.adminAuthenticated = Boolean(adminAuth.authenticated);
+    renderAdminAuth();
+    return canAccessAdminPanel();
+  } catch (error) {
+    state.adminAuthRequired = true;
+    state.adminAuthenticated = false;
+    renderAdminAuth();
+    showMessage(error.message, true);
+    return false;
+  }
+}
+
 async function loadHealth() {
   try {
     const health = await api('/api/health');
     state.health = health;
     renderServerStatus(health);
   } catch (error) {
+    handleAdminAuthFailure(error);
     renderServerStatusError(error);
   }
 }
@@ -328,6 +373,7 @@ async function loadData() {
       renderRoadmapError(roadmapResult.error);
     }
   } catch (error) {
+    handleAdminAuthFailure(error);
     showMessage(error.message, true);
   }
 }
@@ -338,6 +384,7 @@ async function loadRoadmap() {
     state.roadmap = data.roadmap || null;
     renderRoadmap(state.roadmap);
   } catch (error) {
+    handleAdminAuthFailure(error);
     renderRoadmapError(error);
   }
 }
@@ -349,22 +396,34 @@ async function loadBackups() {
     state.backupRetention = data.retention || 0;
     renderBackups();
   } catch (error) {
+    handleAdminAuthFailure(error);
     showMessage(error.message, true);
   }
 }
 
 async function api(path, options = {}) {
+  const headers = {
+    'content-type': 'application/json',
+    ...(options.headers || {})
+  };
+  const adminToken = isAdminMode() ? getAdminToken() : '';
+
+  if (adminToken && !headers['x-admin-token']) {
+    headers['x-admin-token'] = adminToken;
+  }
+
   const response = await fetch(path, {
-    headers: {
-      'content-type': 'application/json',
-      ...(options.headers || {})
-    },
-    ...options
+    ...options,
+    headers
   });
   const payload = await response.json().catch(() => ({}));
 
   if (!response.ok) {
-    throw new Error(payload.error || '요청에 실패했습니다.');
+    const error = new Error(payload.error || '요청에 실패했습니다.');
+    error.status = response.status;
+    error.payload = payload;
+    error.adminAuthRequired = Boolean(payload.adminAuthRequired);
+    throw error;
   }
 
   return payload;
@@ -376,6 +435,7 @@ function isAdminMode() {
 
 function applyAppMode() {
   document.body.dataset.appMode = state.appMode;
+  document.body.dataset.adminAuth = isAdminMode() ? 'checking' : 'none';
   elements.page?.classList.toggle('admin-page', isAdminMode());
 
   setModeLinkState(elements.userModeLink, !isAdminMode());
@@ -402,6 +462,113 @@ function setModeLinkState(link, isActive) {
   } else {
     link.removeAttribute('aria-current');
   }
+}
+
+function canAccessAdminPanel() {
+  return !isAdminMode() || !state.adminAuthRequired || state.adminAuthenticated;
+}
+
+function renderAdminAuth() {
+  if (!elements.adminAuthCard) {
+    return;
+  }
+
+  elements.adminAuthCard.dataset.authRequired = String(state.adminAuthRequired);
+
+  if (!isAdminMode()) {
+    document.body.dataset.adminAuth = 'none';
+    return;
+  }
+
+  if (!state.adminAuthRequired) {
+    document.body.dataset.adminAuth = 'open';
+    elements.adminAuthBadge.textContent = '보호 미설정';
+    elements.adminAuthBadge.className = 'status-badge alert';
+    elements.adminAuthSummary.textContent = 'ADMIN_TOKEN이 없어 관리자 기능이 열려 있습니다.';
+    elements.adminAuthHelp.textContent =
+      '.env에 ADMIN_TOKEN을 설정하고 서버를 재시작하면 운영 API 보호가 켜집니다.';
+    return;
+  }
+
+  if (state.adminAuthenticated) {
+    document.body.dataset.adminAuth = 'authenticated';
+    elements.adminAuthBadge.textContent = '인증됨';
+    elements.adminAuthBadge.className = 'status-badge ok';
+    elements.adminAuthSummary.textContent = '관리자 토큰이 확인되었습니다.';
+    elements.adminAuthHelp.textContent =
+      '토큰은 현재 브라우저 세션에만 저장됩니다. 브라우저를 닫으면 다시 입력해야 합니다.';
+    return;
+  }
+
+  document.body.dataset.adminAuth = 'locked';
+  elements.adminAuthBadge.textContent = '토큰 필요';
+  elements.adminAuthBadge.className = 'status-badge error';
+  elements.adminAuthSummary.textContent = '관리자 화면을 보려면 ADMIN_TOKEN을 입력해야 합니다.';
+  elements.adminAuthHelp.textContent =
+    '.env 또는 .env.local에 설정한 ADMIN_TOKEN을 입력하세요. 토큰은 서버로 확인 요청할 때만 전송됩니다.';
+}
+
+async function saveAdminToken() {
+  const token = elements.adminTokenInput?.value.trim() || '';
+
+  if (!token) {
+    showMessage('관리자 토큰을 입력하세요.', true);
+    return;
+  }
+
+  setAdminToken(token);
+  const authenticated = await loadAdminSession();
+
+  if (!authenticated) {
+    clearAdminToken();
+    showMessage('관리자 토큰이 맞지 않습니다.', true);
+    return;
+  }
+
+  if (elements.adminTokenInput) {
+    elements.adminTokenInput.value = '';
+  }
+
+  showMessage('관리자 인증이 완료되었습니다.');
+  await loadAdminData();
+}
+
+function getAdminToken() {
+  try {
+    return window.sessionStorage.getItem(ADMIN_TOKEN_STORAGE_KEY) || '';
+  } catch {
+    return '';
+  }
+}
+
+function setAdminToken(token) {
+  try {
+    window.sessionStorage.setItem(ADMIN_TOKEN_STORAGE_KEY, token);
+  } catch {
+    showMessage('브라우저 세션 저장소에 토큰을 저장하지 못했습니다.', true);
+  }
+}
+
+function clearAdminToken() {
+  try {
+    window.sessionStorage.removeItem(ADMIN_TOKEN_STORAGE_KEY);
+  } catch {
+    // Session storage can be unavailable in some privacy modes.
+  }
+
+  state.adminAuthenticated = !state.adminAuthRequired;
+  renderAdminAuth();
+}
+
+function handleAdminAuthFailure(error) {
+  if (!isAdminMode() || !error.adminAuthRequired) {
+    return false;
+  }
+
+  state.adminAuthRequired = true;
+  state.adminAuthenticated = false;
+  renderAdminAuth();
+  return true;
 }
 
 function normalizeStockPayload(payload) {
@@ -680,6 +847,7 @@ async function withBusy(button, callback) {
   try {
     await callback();
   } catch (error) {
+    handleAdminAuthFailure(error);
     showMessage(error.message, true);
   } finally {
     button.disabled = false;
@@ -3458,13 +3626,34 @@ function escapeHtml(value) {
 
 syncResponsiveTabs();
 initWebApp();
-loadHealth();
-loadData();
-if (isAdminMode()) {
-  loadBackups();
+initializeDashboard();
+window.setInterval(() => {
+  if (!isAdminMode() || canAccessAdminPanel()) {
+    loadData();
+  }
+}, 15000);
+window.setInterval(() => {
+  if (isAdminMode() && canAccessAdminPanel()) {
+    loadHealth();
+  }
+}, 15000);
+
+async function initializeDashboard() {
+  if (!isAdminMode()) {
+    await loadData();
+    return;
+  }
+
+  const canLoadAdminData = await loadAdminSession();
+
+  if (canLoadAdminData) {
+    await loadAdminData();
+  }
 }
-window.setInterval(loadData, 15000);
-window.setInterval(loadHealth, 15000);
+
+async function loadAdminData() {
+  await Promise.all([loadHealth(), loadData(), loadBackups()]);
+}
 
 function initWebApp() {
   if (!('serviceWorker' in navigator)) {

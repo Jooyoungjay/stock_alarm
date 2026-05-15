@@ -233,6 +233,11 @@ body[data-app-mode="admin"] .mobile-nav {
   display: none !important;
 }
 
+body[data-admin-auth="checking"] [data-admin-protected="true"],
+body[data-admin-auth="locked"] [data-admin-protected="true"] {
+  display: none !important;
+}
+
 .col-left {
   grid-column: 1;
   grid-row: 1;
@@ -1168,6 +1173,34 @@ select:focus {
   border-color: rgba(224, 92, 92, 0.35);
   background: var(--danger-soft);
   color: var(--danger);
+}
+
+.admin-auth-card {
+  border-color: rgba(26, 158, 110, 0.24);
+}
+
+.admin-auth-form {
+  display: grid;
+  grid-template-columns: minmax(220px, 1fr) auto;
+  gap: 12px;
+  align-items: end;
+}
+
+.admin-auth-actions {
+  display: flex;
+  gap: 8px;
+  justify-content: flex-end;
+  padding-bottom: 14px;
+}
+
+.admin-auth-help {
+  margin-top: 10px;
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.admin-auth-card[data-auth-required="false"] .admin-auth-form {
+  display: none;
 }
 
 .stock-list {
@@ -2115,6 +2148,19 @@ select:focus {
 
   .watch-controls {
     align-items: stretch;
+  }
+
+  .admin-auth-form {
+    grid-template-columns: 1fr;
+  }
+
+  .admin-auth-actions {
+    justify-content: stretch;
+    padding-bottom: 0;
+  }
+
+  .admin-auth-actions .btn {
+    flex: 1;
   }
 
   .watch-sort-control {

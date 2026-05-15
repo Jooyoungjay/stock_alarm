@@ -28,4 +28,6 @@ test('user and admin page split guide keeps product and admin scopes separate', 
   assert.match(markdown, /서버 상태/);
   assert.match(markdown, /백업/);
   assert.match(markdown, /포트폴리오 요약/);
+  assert.match(markdown, /ADMIN_TOKEN/);
+  assert.match(markdown, /x-admin-token/);
 });

@@ -304,7 +304,36 @@
       <section class="col-full tab-section" id="tab-alerts" aria-labelledby="alertsTitle">
         <div id="adminMessage" class="message" role="status" aria-live="polite" data-page-scope="admin"></div>
 
-        <div class="card" data-page-scope="admin">
+        <div class="card admin-auth-card" data-page-scope="admin">
+          <div class="card-header">
+            <div>
+              <h2 id="adminAuthTitle" class="card-title">관리자 보호</h2>
+              <p id="adminAuthSummary" class="card-subtitle">관리자 보호 상태를 확인하는 중입니다.</p>
+            </div>
+            <span id="adminAuthBadge" class="status-badge muted">확인 중</span>
+          </div>
+          <form id="adminAuthForm" class="admin-auth-form">
+            <div class="form-group">
+              <label class="form-label" for="adminTokenInput">관리자 토큰</label>
+              <input
+                id="adminTokenInput"
+                class="form-input"
+                type="password"
+                autocomplete="current-password"
+                placeholder="ADMIN_TOKEN"
+              />
+            </div>
+            <div class="admin-auth-actions">
+              <button id="saveAdminTokenButton" class="btn btn-primary" type="submit">토큰 저장</button>
+              <button id="clearAdminTokenButton" class="btn btn-outline" type="button">토큰 삭제</button>
+            </div>
+          </form>
+          <p id="adminAuthHelp" class="admin-auth-help">
+            `.env`에 ADMIN_TOKEN을 설정하고 서버를 재시작하면 관리자 보호가 켜집니다.
+          </p>
+        </div>
+
+        <div class="card" data-page-scope="admin" data-admin-protected="true">
           <div class="card-header">
             <div>
               <h2 id="serverStatusTitle" class="card-title">서버 상태</h2>
@@ -319,7 +348,7 @@
           <div id="serverStatusPanel" class="server-status-panel" aria-live="polite"></div>
         </div>
 
-        <div class="card" data-page-scope="admin">
+        <div class="card" data-page-scope="admin" data-admin-protected="true">
           <div class="card-header">
             <div>
               <h2 id="diagnosticsTitle" class="card-title">운영 진단</h2>
@@ -330,7 +359,7 @@
           <div id="dividendDiagnosticsPanel" class="dividend-diagnostics-panel" aria-live="polite"></div>
         </div>
 
-        <div class="card" data-page-scope="admin">
+        <div class="card" data-page-scope="admin" data-admin-protected="true">
           <div class="card-header">
             <div>
               <h2 id="roadmapTitle" class="card-title">개발 로드맵</h2>
@@ -354,7 +383,7 @@
           <div id="alertList" class="alert-list"></div>
         </div>
 
-        <div class="card" data-page-scope="admin">
+        <div class="card" data-page-scope="admin" data-admin-protected="true">
           <div class="card-header">
             <div>
               <h2 id="backupsTitle" class="card-title">데이터 백업</h2>
