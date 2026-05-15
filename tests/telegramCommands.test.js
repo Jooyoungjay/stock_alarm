@@ -45,6 +45,17 @@ test('parseAddArgs supports profit retracement commands', () => {
   assert.equal(input.thresholdPercent, '10');
 });
 
+test('parseAddArgs supports commands without a purchase date', () => {
+  const input = parseAddArgs(['336260', '두산퓨얼셀', '88779', 'profit', '10']);
+
+  assert.equal(input.symbol, '336260');
+  assert.equal(input.displayName, '두산퓨얼셀');
+  assert.equal(input.purchasePrice, '88779');
+  assert.equal(input.purchaseDate, '');
+  assert.equal(input.alertType, 'profit_retracement');
+  assert.equal(input.thresholdPercent, '10');
+});
+
 test('parseAddArgs supports keyed quantity commands', () => {
   const input = parseAddArgs([
     'symbol=336260',

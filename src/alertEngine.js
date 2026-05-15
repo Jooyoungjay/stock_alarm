@@ -189,7 +189,7 @@ export function buildAlertRule(stock, currentPrice) {
       alertType,
       alertTypeLabel: getAlertTypeLabel(alertType),
       referencePrice: highPrice,
-      referenceLabel: '구매일 이후 최고가',
+      referenceLabel: stock.purchaseDate ? '구매일 이후 최고가' : '감시 최고가',
       thresholdLabel: `최고 이익금 ${thresholdPercent}% 반납`,
       metricLabel: '이익금 반납률',
       metricPercent,
@@ -218,11 +218,16 @@ export function buildAlertRule(stock, currentPrice) {
     alertType,
     alertTypeLabel: getAlertTypeLabel(alertType),
     referencePrice,
-    referenceLabel: alertType === ALERT_TYPES.PURCHASE_LOSS ? '매수가' : '구매일 이후 최고가',
+    referenceLabel:
+      alertType === ALERT_TYPES.PURCHASE_LOSS
+        ? '매수가'
+        : stock.purchaseDate
+          ? '구매일 이후 최고가'
+          : '감시 최고가',
     thresholdLabel:
       alertType === ALERT_TYPES.PURCHASE_LOSS
         ? `매수가 -${thresholdPercent}%`
-        : `최고가 -${thresholdPercent}%`,
+        : `${stock.purchaseDate ? '최고가' : '감시 최고가'} -${thresholdPercent}%`,
     metricLabel:
       alertType === ALERT_TYPES.PURCHASE_LOSS ? '매수가 대비 손실률' : '최고가 대비 하락률',
     metricPercent,
@@ -271,6 +276,33 @@ export function buildPurchaseHighBaseline(stock, historicalHigh) {
   };
 }
 
+export function buildMonitoringHighBaseline(stock, quote, now = new Date()) {
+  const currentPrice = Number(quote.price);
+
+  if (!Number.isFinite(currentPrice) || currentPrice <= 0) {
+    throw new Error('현재가가 올바르지 않습니다.');
+  }
+
+  const purchasePrice = Number(stock.purchasePrice);
+  const purchasePriceIsHigher = Number.isFinite(purchasePrice) && purchasePrice > currentPrice;
+  const timestamp = quote.regularMarketTime || now.toISOString();
+
+  return {
+    symbol: quote.symbol || stock.symbol,
+    highPrice: purchasePriceIsHigher ? purchasePrice : currentPrice,
+    highPriceAt: timestamp,
+    currency: quote.currency || stock.currency || '',
+    exchange: quote.exchange || stock.exchange || '',
+    provider: quote.provider || '',
+    providerLabel: quote.providerLabel || '',
+    dataDelay: quote.dataDelay || '',
+    venue: quote.venue || '',
+    licenseType: quote.licenseType || '',
+    sourceNote: quote.sourceNote || '',
+    source: purchasePriceIsHigher ? 'purchase_price' : 'monitoring_start'
+  };
+}
+
 export function buildRegistrationPreview(input, quote, historicalHigh = null) {
   const currentPrice = Number(quote.price);
 
@@ -282,7 +314,7 @@ export function buildRegistrationPreview(input, quote, historicalHigh = null) {
   const needsHistoricalHigh =
     alertType === ALERT_TYPES.HIGH_DRAWDOWN || alertType === ALERT_TYPES.PROFIT_RETRACEMENT;
 
-  if (!historicalHigh && needsHistoricalHigh) {
+  if (!historicalHigh && needsHistoricalHigh && input.purchaseDate) {
     return {
       quote,
       position: null
@@ -302,7 +334,11 @@ export function buildRegistrationPreview(input, quote, historicalHigh = null) {
     throw new Error('매수가는 0보다 큰 숫자여야 합니다.');
   }
 
-  const baseline = historicalHigh ? buildPurchaseHighBaseline(input, historicalHigh) : null;
+  const baseline = historicalHigh
+    ? buildPurchaseHighBaseline(input, historicalHigh)
+    : needsHistoricalHigh
+      ? buildMonitoringHighBaseline(input, quote)
+      : null;
   const alertRule = buildAlertRule(
     {
       ...input,
@@ -451,12 +487,31 @@ export function evaluateStock(stock, quote, now = new Date()) {
     updatedAt: timestamp
   };
 
-  const highUpdated = !stock.highPrice || currentPrice > Number(stock.highPrice);
+  const existingHighPrice = Number(stock.highPrice);
+  const hasExistingHighPrice = Number.isFinite(existingHighPrice) && existingHighPrice > 0;
+  const baselineHigh = !hasExistingHighPrice && !stock.purchaseDate
+    ? buildMonitoringHighBaseline(stock, quote, now)
+    : null;
+  const baselineHighPrice = Number(baselineHigh?.highPrice);
+  const highUpdated =
+    !hasExistingHighPrice ||
+    (Number.isFinite(baselineHighPrice) && baselineHighPrice > existingHighPrice) ||
+    currentPrice > existingHighPrice;
 
   if (highUpdated) {
-    nextStock.highPrice = currentPrice;
-    nextStock.highPriceAt = timestamp;
-    nextStock.highPriceSource = quote.marketState === 'MANUAL_TEST' ? 'manual' : 'realtime';
+    const nextHighPrice =
+      baselineHigh && Number.isFinite(baselineHighPrice) && baselineHighPrice > currentPrice
+        ? baselineHighPrice
+        : currentPrice;
+    const nextHighFromBaseline = baselineHigh && nextHighPrice === baselineHighPrice;
+
+    nextStock.highPrice = nextHighPrice;
+    nextStock.highPriceAt = nextHighFromBaseline ? baselineHigh.highPriceAt : timestamp;
+    nextStock.highPriceSource = nextHighFromBaseline
+      ? baselineHigh.source
+      : quote.marketState === 'MANUAL_TEST'
+        ? 'manual'
+        : 'realtime';
     nextStock.highPriceProvider = quote.provider || stock.highPriceProvider || '';
     nextStock.highPriceProviderLabel = quote.providerLabel || stock.highPriceProviderLabel || '';
     nextStock.highPriceDataDelay = quote.dataDelay || stock.highPriceDataDelay || '';
@@ -466,8 +521,9 @@ export function evaluateStock(stock, quote, now = new Date()) {
 
   const alertRule = buildAlertRule(nextStock, currentPrice);
   const profitContext = buildProfitRetracementContext(nextStock, currentPrice);
+  const highUpdatedByCurrentPrice = highUpdated && Number(nextStock.highPrice) === currentPrice;
   const suppressAlertForNewHigh =
-    highUpdated && alertRule.alertType === ALERT_TYPES.HIGH_DRAWDOWN;
+    highUpdatedByCurrentPrice && alertRule.alertType === ALERT_TYPES.HIGH_DRAWDOWN;
   const isAlertConditionActive = !suppressAlertForNewHigh && alertRule.isBelowThreshold;
   const previousAlertState = stock.alertState === 'triggered' ? 'triggered' : 'clear';
   const recovered = previousAlertState === 'triggered' && !isAlertConditionActive;

@@ -26,10 +26,10 @@ const helpMessage = [
   '/delete-backup <백업파일명|번호> - 백업 삭제',
   '',
   '등록 예시',
+  '/add 336260 두산퓨얼셀 88779 high 10',
+  '/add 336260 두산퓨얼셀 88779 profit 10',
   '/add 336260 두산퓨얼셀 88779 2026-05-11 high 10',
-  '/add 336260 두산퓨얼셀 88779 2026-05-11 profit 10',
-  '/add 336260 두산퓨얼셀 88779 2026-05-11 loss 5',
-  '/add 336260 두산퓨얼셀 88779 2026-05-11 target 93000',
+  '/add 336260 두산퓨얼셀 88779 target 93000',
   '',
   '수정 예시',
   '/edit 336260 high 8',
@@ -293,7 +293,7 @@ async function addStockFromCommand(store, config, command, options) {
     stock.quantity ? `보유 수량: ${formatNumber(stock.quantity)}` : '',
     stock.annualDividendPerShare ? `주당 연 배당금: ${formatNumber(stock.annualDividendPerShare)}` : '',
     formatDividendScheduleLine(stock),
-    stock.highPrice ? `구매일 이후 최고가: ${formatNumber(stock.highPrice)}${stock.currency ? ` ${stock.currency}` : ''}` : ''
+    formatHighPriceLine(stock)
   ]
     .filter(Boolean)
     .join('\n');
@@ -323,7 +323,7 @@ async function editStockFromCommand(store, config, command, options) {
     stock.annualDividendPerShare ? `주당 연 배당금: ${formatNumber(stock.annualDividendPerShare)}` : '',
     formatDividendScheduleLine(stock),
     stock.purchaseDate ? `매수일: ${stock.purchaseDate}` : '',
-    stock.highPrice ? `구매일 이후 최고가: ${formatNumber(stock.highPrice)}${stock.currency ? ` ${stock.currency}` : ''}` : ''
+    formatHighPriceLine(stock)
   ]
     .filter(Boolean)
     .join('\n');
@@ -363,31 +363,35 @@ export function parseAddArgs(args) {
 
   const [symbol, ...rest] = args;
   const dateIndex = rest.findIndex((token) => /^\d{4}-\d{2}-\d{2}$/.test(token));
-
-  if (dateIndex === -1) {
-    throw new Error('구매일을 YYYY-MM-DD 형식으로 입력하세요.');
-  }
-
-  const beforeDate = rest.slice(0, dateIndex);
-  const afterDate = rest.slice(dateIndex + 1);
-  const priceIndex = findLastNumberIndex(beforeDate);
+  const beforeDate = dateIndex === -1 ? rest : rest.slice(0, dateIndex);
+  const afterDate = dateIndex === -1 ? [] : rest.slice(dateIndex + 1);
+  const typeIndex = dateIndex === -1 ? beforeDate.findIndex(isExplicitTypeToken) : -1;
+  const beforeType = typeIndex === -1 ? beforeDate : beforeDate.slice(0, typeIndex);
+  const afterType = typeIndex === -1 ? afterDate : beforeDate.slice(typeIndex + 1);
+  const typeToken = typeIndex === -1 ? afterDate[0] || 'high' : beforeDate[typeIndex];
+  const priceIndex = findLastNumberIndex(beforeType);
 
   if (priceIndex === -1) {
     throw new Error('매수가를 입력하세요.');
   }
 
-  const displayName = beforeDate.slice(0, priceIndex).join(' ');
-  const purchasePrice = beforeDate[priceIndex];
-  const typeToken = afterDate[0] || 'high';
+  const displayName = beforeType.slice(0, priceIndex).join(' ');
+  const purchasePrice = beforeType[priceIndex];
   const alertType = normalizeTypeToken(typeToken);
-  const valueToken = afterDate[1] || (alertType === ALERT_TYPES.TARGET_PRICE ? '' : afterDate[0]);
-  const cooldownToken = afterDate[2] || '';
+  const valueTokens =
+    typeIndex === -1
+      ? isExplicitTypeToken(afterDate[0])
+        ? afterDate.slice(1)
+        : afterDate
+      : afterType;
+  const valueToken = valueTokens[0] || '';
+  const cooldownToken = valueTokens[1] || '';
 
   return normalizeAddInput({
     symbol,
     displayName,
     purchasePrice,
-    purchaseDate: rest[dateIndex],
+    purchaseDate: dateIndex === -1 ? '' : rest[dateIndex],
     alertType,
     thresholdPercent: alertType === ALERT_TYPES.TARGET_PRICE ? undefined : valueToken,
     targetPrice: alertType === ALERT_TYPES.TARGET_PRICE ? valueToken : undefined,
@@ -589,6 +593,55 @@ function findLastNumberIndex(tokens) {
   }
 
   return -1;
+}
+
+function formatHighPriceLine(stock) {
+  if (!stock.highPrice) {
+    return '';
+  }
+
+  const label = stock.purchaseDate ? '구매일 이후 최고가' : '감시 최고가';
+  const currency = stock.currency ? ` ${stock.currency}` : '';
+  return `${label}: ${formatNumber(stock.highPrice)}${currency}`;
+}
+
+function isExplicitTypeToken(value) {
+  const token = String(value || '').toLowerCase();
+
+  return [
+    'high_drawdown',
+    'high',
+    'highest',
+    'drawdown',
+    'trailing',
+    '최고가',
+    'profit_retracement',
+    'profit',
+    'gain',
+    'retracement',
+    'retracing',
+    'giveback',
+    'takeprofit',
+    'take_profit',
+    '이익',
+    '수익',
+    '반납',
+    '이익금',
+    '수익금',
+    'purchase_loss',
+    'loss',
+    'stop',
+    'stoploss',
+    'buy',
+    '손절',
+    '매수가',
+    'target_price',
+    'target',
+    'price',
+    'direct',
+    '기준가',
+    '직접'
+  ].includes(token);
 }
 
 function normalizeTypeToken(value) {
@@ -1150,10 +1203,10 @@ function getShortUsage(commandName) {
   if (commandName === 'add') {
     return [
       '예시:',
+      '/add 336260 두산퓨얼셀 88779 high 10',
+      '/add 336260 두산퓨얼셀 88779 profit 10',
       '/add 336260 두산퓨얼셀 88779 2026-05-11 high 10',
-      '/add 336260 두산퓨얼셀 88779 2026-05-11 profit 10',
-      '/add 336260 두산퓨얼셀 88779 2026-05-11 loss 5',
-      '/add 336260 두산퓨얼셀 88779 2026-05-11 target 93000'
+      '/add 336260 두산퓨얼셀 88779 target 93000'
     ].join('\n');
   }
 

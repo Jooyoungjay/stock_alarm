@@ -70,6 +70,27 @@ test('first quote sets the high price without alerting', () => {
   assert.equal(result.nextStock.highPriceDataDelay, 'delayed');
 });
 
+test('first monitoring quote uses purchase price as high when purchase date is omitted', () => {
+  const stock = {
+    ...baseStock,
+    purchasePrice: 120,
+    purchaseDate: '',
+    highPrice: null,
+    highPriceAt: null,
+    highPriceSource: '',
+    lastAlertAt: null
+  };
+  const result = evaluateStock(stock, { price: 100, currency: 'USD' }, date('2026-05-11T00:10:00Z'));
+
+  assert.equal(result.highUpdated, true);
+  assert.equal(result.nextStock.highPrice, 120);
+  assert.equal(result.nextStock.highPriceSource, 'purchase_price');
+  assert.equal(result.referenceLabel, '감시 최고가');
+  assert.equal(result.thresholdPrice, 114);
+  assert.equal(result.alertDue, true);
+  assert.equal(result.nextStock.alertState, 'triggered');
+});
+
 test('drop below threshold creates an alert when cooldown allows it', () => {
   const stock = {
     ...baseStock,
@@ -453,6 +474,32 @@ test('registration preview supports profit-retracement basis', () => {
   assert.equal(preview.position.currentProfitAmount, 450);
   assert.equal(preview.position.retracedProfitAmount, 50);
   assert.equal(preview.position.retracedProfitPercent, 10);
+});
+
+test('registration preview uses monitoring high when purchase date is omitted', () => {
+  const preview = buildRegistrationPreview(
+    {
+      alertType: 'profit_retracement',
+      purchasePrice: 100,
+      quantity: 10,
+      thresholdPercent: 10
+    },
+    {
+      symbol: 'AAPL',
+      price: 120,
+      currency: 'USD',
+      provider: 'yahoo',
+      regularMarketTime: '2026-05-11T00:00:00.000Z'
+    }
+  );
+
+  assert.equal(preview.position.referenceLabel, '감시 최고가');
+  assert.equal(preview.position.highPrice, 120);
+  assert.equal(preview.position.highPriceSource, 'monitoring_start');
+  assert.equal(preview.position.thresholdPrice, 118);
+  assert.equal(preview.position.alertNow, false);
+  assert.equal(preview.position.maximumProfitAmount, 200);
+  assert.equal(preview.position.retracedProfitAmount, 0);
 });
 
 test('registration preview supports direct target price without historical high', () => {

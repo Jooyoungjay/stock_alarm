@@ -16,6 +16,7 @@ import {
 import { createQrSvg } from './qrCode.js';
 import { createStore } from './storageFactory.js';
 import {
+  buildMonitoringHighBaseline,
   buildRegistrationPreview,
   initializeHighFromPurchaseDate,
   runAlertCheck,
@@ -268,18 +269,63 @@ function recordQuoteProviderAttempt(attempt) {
 }
 
 async function initializePurchaseHigh(stock) {
-  if (!stock?.purchaseDate) {
-    return stock;
-  }
-
   try {
-    return await initializeHighFromPurchaseDate(store, config, stock);
+    if (stock?.purchaseDate) {
+      return await initializeHighFromPurchaseDate(store, config, stock);
+    }
+
+    const now = new Date();
+    const quote = await fetchQuote(stock.symbol, {
+      timeoutMs: config.quoteTimeoutMs,
+      providers: config.quoteProviders,
+      dataGoKrServiceKey: config.dataGoKrServiceKey,
+      alphaVantageApiKey: config.alphaVantageApiKey,
+      onProviderAttempt: (attempt) =>
+        recordQuoteProviderAttempt({
+          ...attempt,
+          stockId: stock.id,
+          source: 'initial_monitoring_high'
+        })
+    });
+    const baselineHigh = buildMonitoringHighBaseline(stock, quote, now);
+    const timestamp = now.toISOString();
+
+    return await store.replaceStock({
+      ...stock,
+      lastPrice: quote.price,
+      lastCheckedAt: timestamp,
+      currency: quote.currency || stock.currency || '',
+      exchange: quote.exchange || stock.exchange || '',
+      marketState: quote.marketState || stock.marketState || '',
+      quoteProvider: quote.provider || stock.quoteProvider || '',
+      quoteProviderLabel: quote.providerLabel || stock.quoteProviderLabel || '',
+      quoteDataDelay: quote.dataDelay || stock.quoteDataDelay || '',
+      quoteVenue: quote.venue || stock.quoteVenue || '',
+      quoteLicenseType: quote.licenseType || stock.quoteLicenseType || '',
+      quoteSourceNote: quote.sourceNote || stock.quoteSourceNote || '',
+      quoteRegularMarketTime: quote.regularMarketTime || stock.quoteRegularMarketTime || null,
+      highPrice: baselineHigh.highPrice,
+      highPriceAt: baselineHigh.highPriceAt,
+      highPriceSource: baselineHigh.source,
+      highPriceProvider: baselineHigh.provider || stock.highPriceProvider || '',
+      highPriceProviderLabel: baselineHigh.providerLabel || stock.highPriceProviderLabel || '',
+      highPriceDataDelay: baselineHigh.dataDelay || stock.highPriceDataDelay || '',
+      highPriceVenue: baselineHigh.venue || stock.highPriceVenue || '',
+      highPriceSourceNote: baselineHigh.sourceNote || stock.highPriceSourceNote || '',
+      lastCheckStatus: 'high_initialized',
+      lastError: '',
+      lastErrorAt: null,
+      updatedAt: timestamp
+    });
   } catch (error) {
     const timestamp = new Date().toISOString();
+    const message = stock.purchaseDate
+      ? `구매일 이후 최고가 계산 실패: ${error.message}`
+      : `감시 최고가 초기화 실패: ${error.message}`;
     const updated = await store.replaceStock({
       ...stock,
       lastCheckStatus: 'error',
-      lastError: `구매일 이후 최고가 계산 실패: ${error.message}`,
+      lastError: message,
       lastErrorAt: timestamp,
       updatedAt: timestamp
     });

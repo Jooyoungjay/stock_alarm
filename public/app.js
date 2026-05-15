@@ -729,11 +729,11 @@ function renderAlertRuleSummary(alertType = elements.form.elements.alertType.val
   const summaries = {
     high_drawdown: {
       value: '최고가 대비 하락률',
-      detail: '구매일 이후 최고가에서 설정한 비율만큼 내려오면 알림을 보냅니다.'
+      detail: '매수일을 입력하면 매수일 이후 최고가, 비우면 등록 이후 감시 최고가에서 설정 비율만큼 내려올 때 알림을 보냅니다.'
     },
     profit_retracement: {
       value: '이익금 반납률',
-      detail: '구매일 이후 최고 이익금 중 설정한 비율을 반납하면 알림을 보냅니다.'
+      detail: '평단가 대비 최고 이익금 중 설정한 비율을 반납하면 알림을 보냅니다. 매수일을 비우면 등록 이후 감시 최고가를 씁니다.'
     },
     purchase_loss: {
       value: '매수가 대비 손절률',
@@ -934,7 +934,7 @@ function renderQuotePreview(preview) {
       ${
         position?.highPrice
           ? renderPreviewItem(
-              '구매일 이후 최고가',
+              getHighPriceLabel(position),
               formatMoney(position.highPrice, position.currency),
               `${formatDateOnly(position.highPriceAt)} 기준 · ${getHighSourceLabel(position.highPriceSource)}`
             )
@@ -1048,7 +1048,8 @@ function renderRegistrationSummary() {
   const annualDividendPerShare = parseFiniteNumber(form.elements.annualDividendPerShare.value);
   const dividendFrequency = form.elements.dividendFrequency.value;
   const dividendMonths = parseDividendMonths(form.elements.dividendMonths.value);
-  const purchaseDate = form.elements.purchaseDate.value || '-';
+  const purchaseDate = form.elements.purchaseDate.value;
+  const purchaseDateDetail = purchaseDate || '미입력 시 등록 이후 감시 최고가 기준';
   const alertType = form.elements.alertType.value;
   const thresholdPercent = parseFiniteNumber(form.elements.thresholdPercent.value);
   const targetPrice = parseFiniteNumber(form.elements.targetPrice.value);
@@ -1086,7 +1087,7 @@ function renderRegistrationSummary() {
   elements.registrationSummary.innerHTML = `
     <div class="registration-summary-grid">
       ${renderSummaryItem('종목', displayName ? `${displayName} · ${symbol}` : symbol)}
-      ${renderSummaryItem('매수가', formatMoney(purchasePrice), purchaseDate)}
+      ${renderSummaryItem('매수가', formatMoney(purchasePrice), purchaseDateDetail)}
       ${renderSummaryItem('보유 수량', quantity ? formatQuantity(quantity) : '-', purchaseAmount ? `총 ${formatMoney(purchaseAmount)}` : '선택 입력')}
       ${renderSummaryItem('배당', annualDividendPerShare ? `주당 ${formatMoney(annualDividendPerShare)}` : '-', expectedAnnualDividend ? `연 ${formatMoney(expectedAnnualDividend)} · ${formatPercent(dividendYield)}` : '선택 입력')}
       ${renderSummaryItem('배당 일정', getDividendFrequencyLabel(dividendFrequency), dividendScheduleDetail)}
@@ -1865,7 +1866,7 @@ function renderStocks() {
           state.editingStockId = state.editingStockId === stock.id ? null : stock.id;
           renderStocks();
         }),
-        actionButton(stock.purchaseDate ? '최고가 재계산' : '최고가 초기화', 'btn btn-ghost btn-sm secondary-button', () =>
+        actionButton(stock.purchaseDate ? '최고가 재계산' : '감시 최고가 초기화', 'btn btn-ghost btn-sm secondary-button', () =>
           patchStock(stock.id, { resetHighPrice: true })
         ),
         actionButton('삭제', 'btn btn-danger btn-sm danger-button', () => deleteStock(stock.id))
@@ -2424,8 +2425,8 @@ function editStockForm(stock) {
       <input name="dividendMonths" type="text" inputmode="numeric" value="${escapeHtml(formatDividendMonthInput(stock.dividendMonths))}" placeholder="예: 3,6,9,12" />
     </label>
     <label>
-      <span>구매일</span>
-      <input name="purchaseDate" type="date" max="${getTodayInputValue()}" value="${escapeHtml(stock.purchaseDate || '')}" required />
+      <span>매수일 선택</span>
+      <input name="purchaseDate" type="date" max="${getTodayInputValue()}" value="${escapeHtml(stock.purchaseDate || '')}" />
     </label>
     <label>
       <span>알림 기준</span>
@@ -2724,7 +2725,7 @@ function renderManualTestMessage(result) {
     alert: '테스트 가격으로 알림을 보냈습니다.',
     recovered: '테스트 가격이 알림 기준 위로 회복됐습니다.',
     high_updated: '테스트 가격이 새 최고가로 저장됐습니다.',
-    high_initialized: '구매일 이후 최고가를 계산했습니다.',
+    high_initialized: '최고가 기준을 초기화했습니다.',
     checked: '테스트 가격을 확인했습니다. 아직 알림 기준에는 닿지 않았습니다.',
     skipped: '알림이 꺼진 종목이라 테스트 확인을 건너뛰었습니다.'
   };
@@ -3187,6 +3188,7 @@ function getHighSourceLabel(source) {
   const labels = {
     historical_daily: '일봉',
     purchase_price: '매수가',
+    monitoring_start: '감시 시작',
     realtime: '현재가',
     manual: '수동'
   };
