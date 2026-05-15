@@ -69,6 +69,65 @@ export function calculateProfitRetracementPercent(highPrice, purchasePrice, curr
   return Math.max(0, ((high - current) / (high - purchase)) * 100);
 }
 
+export function calculateMaximumProfitAmount(highPrice, purchasePrice, quantity) {
+  const high = Number(highPrice);
+  const purchase = Number(purchasePrice);
+  const shares = Number(quantity);
+
+  if (
+    !Number.isFinite(high) ||
+    !Number.isFinite(purchase) ||
+    !Number.isFinite(shares) ||
+    high <= 0 ||
+    purchase <= 0 ||
+    shares <= 0
+  ) {
+    return null;
+  }
+
+  return Math.max(0, (high - purchase) * shares);
+}
+
+export function buildProfitRetracementContext(stock, currentPrice) {
+  const quantity = Number(stock.quantity);
+  const purchasePrice = Number(stock.purchasePrice);
+  const highPrice = Number(stock.highPrice);
+  const current = Number(currentPrice);
+  const maximumProfitAmount = calculateMaximumProfitAmount(highPrice, purchasePrice, quantity);
+
+  if (
+    maximumProfitAmount === null ||
+    !Number.isFinite(current) ||
+    current <= 0 ||
+    !Number.isFinite(purchasePrice) ||
+    purchasePrice <= 0 ||
+    !Number.isFinite(quantity) ||
+    quantity <= 0
+  ) {
+    return {
+      maximumProfitAmount,
+      maximumProfitPercent: null,
+      currentProfitAmount: null,
+      retracedProfitAmount: null,
+      retracedProfitPercent: null
+    };
+  }
+
+  const investmentAmount = purchasePrice * quantity;
+  const currentProfitAmount = (current - purchasePrice) * quantity;
+  const retracedProfitAmount = Math.max(0, maximumProfitAmount - currentProfitAmount);
+
+  return {
+    maximumProfitAmount,
+    maximumProfitPercent:
+      investmentAmount > 0 ? (maximumProfitAmount / investmentAmount) * 100 : null,
+    currentProfitAmount,
+    retracedProfitAmount,
+    retracedProfitPercent:
+      maximumProfitAmount > 0 ? (retracedProfitAmount / maximumProfitAmount) * 100 : null
+  };
+}
+
 export function getAlertTypeLabel(alertType) {
   return alertTypeLabels[getNormalizedAlertType(alertType)] || alertTypeLabels[DEFAULT_ALERT_TYPE];
 }
@@ -268,6 +327,15 @@ export function buildRegistrationPreview(input, quote, historicalHigh = null) {
     investmentAmount !== null && marketValue !== null ? marketValue - investmentAmount : null;
   const unrealizedProfitPercent =
     unrealizedProfit !== null && investmentAmount > 0 ? (unrealizedProfit / investmentAmount) * 100 : null;
+  const profitContext = buildProfitRetracementContext(
+    {
+      ...input,
+      purchasePrice,
+      quantity: normalizedQuantity,
+      highPrice: baseline?.highPrice ?? null
+    },
+    currentPrice
+  );
   const normalizedAnnualDividendPerShare =
     Number.isFinite(annualDividendPerShare) && annualDividendPerShare > 0
       ? annualDividendPerShare
@@ -292,6 +360,11 @@ export function buildRegistrationPreview(input, quote, historicalHigh = null) {
       marketValue,
       unrealizedProfit,
       unrealizedProfitPercent,
+      maximumProfitAmount: profitContext.maximumProfitAmount,
+      maximumProfitPercent: profitContext.maximumProfitPercent,
+      currentProfitAmount: profitContext.currentProfitAmount,
+      retracedProfitAmount: profitContext.retracedProfitAmount,
+      retracedProfitPercent: profitContext.retracedProfitPercent,
       annualDividendPerShare: normalizedAnnualDividendPerShare,
       expectedAnnualDividend,
       dividendYieldPercent,
@@ -363,6 +436,7 @@ export function evaluateStock(stock, quote, now = new Date()) {
   }
 
   const alertRule = buildAlertRule(nextStock, currentPrice);
+  const profitContext = buildProfitRetracementContext(nextStock, currentPrice);
   const suppressAlertForNewHigh =
     highUpdated && alertRule.alertType === ALERT_TYPES.HIGH_DRAWDOWN;
   const isAlertConditionActive = !suppressAlertForNewHigh && alertRule.isBelowThreshold;
@@ -409,7 +483,8 @@ export function evaluateStock(stock, quote, now = new Date()) {
     referencePrice: alertRule.referencePrice,
     referenceLabel: alertRule.referenceLabel,
     thresholdLabel: alertRule.thresholdLabel,
-    metricLabel: alertRule.metricLabel
+    metricLabel: alertRule.metricLabel,
+    ...profitContext
   };
 }
 
@@ -559,6 +634,7 @@ async function processStockQuote(store, config, stock, quote, options = {}) {
         symbol: stock.symbol,
         displayName: stock.displayName || quote.name || stock.symbol,
         price: quote.price,
+        currency: quote.currency || nextStock.currency || '',
         highPrice: nextStock.highPrice,
         alertType: evaluation.alertType,
         alertTypeLabel: evaluation.alertTypeLabel,
@@ -566,6 +642,10 @@ async function processStockQuote(store, config, stock, quote, options = {}) {
         thresholdPrice: evaluation.thresholdPrice,
         metricLabel: evaluation.metricLabel,
         drawdownPercent: evaluation.drawdownPercent,
+        maximumProfitAmount: evaluation.maximumProfitAmount,
+        currentProfitAmount: evaluation.currentProfitAmount,
+        retracedProfitAmount: evaluation.retracedProfitAmount,
+        retracedProfitPercent: evaluation.retracedProfitPercent,
         alertState: nextStock.alertState,
         alertRepeatCount: evaluation.alertRepeatCount,
         lastRecoveredAt: nextStock.alertRecoveredAt,
@@ -597,6 +677,10 @@ async function processStockQuote(store, config, stock, quote, options = {}) {
       drawdownPercent: evaluation.drawdownPercent,
       thresholdPrice: evaluation.thresholdPrice,
       metricLabel: evaluation.metricLabel,
+      maximumProfitAmount: evaluation.maximumProfitAmount,
+      currentProfitAmount: evaluation.currentProfitAmount,
+      retracedProfitAmount: evaluation.retracedProfitAmount,
+      retracedProfitPercent: evaluation.retracedProfitPercent,
       deliveryStatus,
       alert
     };

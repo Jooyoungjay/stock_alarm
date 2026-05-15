@@ -12,8 +12,8 @@ test('parseRoadmapMarkdown extracts roadmap metadata and next task', async () =>
   assert.equal(roadmap.dateLabel, '2026-05-15');
   assert.ok(roadmap.completedScope.some((item) => item.category === '공식 일봉 provider 실험'));
   assert.ok(roadmap.sections.length >= 8);
-  assert.equal(roadmap.recommendedOrder[0], '배당 캘린더 고도화');
-  assert.equal(roadmap.nextTask.title, '배당 캘린더 고도화');
+  assert.equal(roadmap.recommendedOrder[0], '데이터 저장소 개선');
+  assert.equal(roadmap.nextTask.title, '데이터 저장소 개선');
   assert.ok(roadmap.summary.total > roadmap.summary.completed);
 });
 

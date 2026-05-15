@@ -18,9 +18,22 @@ export function formatAlertMessage(stock, quote, drawdownPercent, thresholdPrice
   const metricLabel = alertRule.metricLabel || '하락률';
   const metricPrefix = alertRule.alertType === 'profit_retracement' ? '' : '-';
   const repeatCount = Number(alertRule.alertRepeatCount || 0);
+  const profitContext = getProfitRetracementContext(stock, quote.price);
   const highLabel = stock.purchaseDate
     ? `구매일 이후 최고가: ${high}${currency} (${formatDateOnly(stock.highPriceAt)} 기준)`
     : `감시 최고가: ${high}${currency}`;
+  const profitLines =
+    alertRule.alertType === 'profit_retracement' && profitContext.maximumProfitAmount !== null
+      ? [
+          `최대 수익금: ${formatNumber(profitContext.maximumProfitAmount)}${currency}`,
+          profitContext.currentProfitAmount !== null
+            ? `현재 수익금: ${formatNumber(profitContext.currentProfitAmount)}${currency}`
+            : '',
+          profitContext.retracedProfitAmount !== null
+            ? `반납 금액: ${formatNumber(profitContext.retracedProfitAmount)}${currency}`
+            : ''
+        ]
+      : [];
 
   return [
     `[Stock Alarm] 매도 알림`,
@@ -30,11 +43,52 @@ export function formatAlertMessage(stock, quote, drawdownPercent, thresholdPrice
     highLabel,
     `${thresholdLabel}: ${threshold}${currency} 이하`,
     `${metricLabel}: ${metricPrefix}${drawdown}%`,
+    ...profitLines,
     repeatCount > 0 ? `알림 회차: ${repeatCount}회` : '',
     `반복 간격: ${stock.alertCooldownMinutes}분`
   ]
     .filter(Boolean)
     .join('\n');
+}
+
+function getProfitRetracementContext(stock, currentPrice) {
+  const quantity = Number(stock.quantity);
+  const purchasePrice = Number(stock.purchasePrice);
+  const highPrice = Number(stock.highPrice);
+  const current = Number(currentPrice);
+
+  if (
+    !Number.isFinite(quantity) ||
+    quantity <= 0 ||
+    !Number.isFinite(purchasePrice) ||
+    purchasePrice <= 0 ||
+    !Number.isFinite(highPrice) ||
+    highPrice <= 0
+  ) {
+    return {
+      maximumProfitAmount: null,
+      currentProfitAmount: null,
+      retracedProfitAmount: null
+    };
+  }
+
+  const maximumProfitAmount = Math.max(0, (highPrice - purchasePrice) * quantity);
+
+  if (!Number.isFinite(current) || current <= 0) {
+    return {
+      maximumProfitAmount,
+      currentProfitAmount: null,
+      retracedProfitAmount: null
+    };
+  }
+
+  const currentProfitAmount = (current - purchasePrice) * quantity;
+
+  return {
+    maximumProfitAmount,
+    currentProfitAmount,
+    retracedProfitAmount: Math.max(0, maximumProfitAmount - currentProfitAmount)
+  };
 }
 
 export async function fetchTelegramUpdates(config, offset = null, options = {}) {

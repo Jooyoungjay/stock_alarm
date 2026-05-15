@@ -2,6 +2,8 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
   buildRegistrationPreview,
+  buildProfitRetracementContext,
+  calculateMaximumProfitAmount,
   calculateDrawdownPercent,
   calculateProfitRetracementPercent,
   calculateProfitRetracementThreshold,
@@ -106,6 +108,7 @@ test('profit-retracement alert uses peak profit as the alert basis', () => {
     ...baseStock,
     alertType: 'profit_retracement',
     purchasePrice: 100,
+    quantity: 10,
     thresholdPercent: 10,
     highPrice: 150,
     highPriceAt: '2026-05-11T00:01:00.000Z'
@@ -117,6 +120,10 @@ test('profit-retracement alert uses peak profit as the alert basis', () => {
   assert.equal(result.thresholdPrice, 145);
   assert.equal(result.drawdownPercent, 12);
   assert.equal(result.metricLabel, '이익금 반납률');
+  assert.equal(result.maximumProfitAmount, 500);
+  assert.equal(result.currentProfitAmount, 440);
+  assert.equal(result.retracedProfitAmount, 60);
+  assert.equal(result.retracedProfitPercent, 12);
 });
 
 test('profit-retracement alert waits until a peak profit exists', () => {
@@ -220,6 +227,14 @@ test('drawdown and threshold helpers handle basic math', () => {
   assert.equal(calculateThresholdPrice(200, 7.5), 185);
   assert.equal(calculateProfitRetracementThreshold(150, 100, 10), 145);
   assert.equal(calculateProfitRetracementPercent(150, 100, 144), 12);
+  assert.equal(calculateMaximumProfitAmount(150, 100, 10), 500);
+  assert.deepEqual(buildProfitRetracementContext({ highPrice: 150, purchasePrice: 100, quantity: 10 }, 144), {
+    maximumProfitAmount: 500,
+    maximumProfitPercent: 50,
+    currentProfitAmount: 440,
+    retracedProfitAmount: 60,
+    retracedProfitPercent: 12
+  });
 });
 
 test('purchase date initializes high price from historical daily data', async () => {
@@ -402,6 +417,7 @@ test('registration preview supports profit-retracement basis', () => {
     {
       alertType: 'profit_retracement',
       purchasePrice: 100,
+      quantity: 10,
       purchaseDate: '2026-05-01',
       thresholdPercent: 10
     },
@@ -427,6 +443,10 @@ test('registration preview supports profit-retracement basis', () => {
   assert.equal(preview.position.thresholdPrice, 145);
   assert.equal(preview.position.drawdownPercent, 10);
   assert.equal(preview.position.alertNow, true);
+  assert.equal(preview.position.maximumProfitAmount, 500);
+  assert.equal(preview.position.currentProfitAmount, 450);
+  assert.equal(preview.position.retracedProfitAmount, 50);
+  assert.equal(preview.position.retracedProfitPercent, 10);
 });
 
 test('registration preview supports direct target price without historical high', () => {

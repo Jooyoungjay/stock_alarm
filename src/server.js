@@ -4,6 +4,7 @@ import path from 'node:path';
 import { buildAccessUrls } from './accessUrls.js';
 import { createBackup, deleteBackup, listBackups, restoreBackup } from './backups.js';
 import { config } from './config.js';
+import { buildDividendCalendar } from './dividendCalendar.js';
 import { runDividendRefresh } from './dividendRefresh.js';
 import {
   buildDailyBriefing,
@@ -327,10 +328,12 @@ async function handleApi(request, response, url) {
       getLastDailyBriefingSnapshot(),
       store.getQuoteProviderStats()
     ]);
+    const dividendCalendar = buildDividendCalendar(stocks);
 
     sendJson(response, 200, {
       stocks,
       alerts,
+      dividendCalendar,
       briefing: buildDailyBriefing(stocks, {
         warningDistancePercent: config.dailyBriefingWarningDistancePercent,
         topLimit: config.dailyBriefingTopLimit
@@ -349,6 +352,14 @@ async function handleApi(request, response, url) {
       lastDividendRefresh: dividendRefreshSnapshot,
       quoteProviderStats,
       lastCheck
+    });
+    return;
+  }
+
+  if (request.method === 'GET' && url.pathname === '/api/dividend-calendar') {
+    const stocks = await store.listStocks();
+    sendJson(response, 200, {
+      dividendCalendar: buildDividendCalendar(stocks)
     });
     return;
   }

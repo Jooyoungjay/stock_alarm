@@ -636,6 +636,10 @@ select:focus {
   color: var(--danger);
 }
 
+.quote-preview-value.up {
+  color: var(--ok);
+}
+
 .watch-actions {
   display: flex;
   flex-shrink: 0;
@@ -785,6 +789,141 @@ select:focus {
 
 .dividend-cashflow-item strong {
   color: var(--text);
+}
+
+.dividend-calendar-panel {
+  display: grid;
+  gap: 12px;
+  margin-bottom: 12px;
+  padding: 12px;
+  border: 1px solid rgba(26, 158, 110, 0.22);
+  border-radius: var(--radius-sm);
+  background: rgba(26, 158, 110, 0.05);
+}
+
+.dividend-calendar-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.dividend-calendar-head > div:first-child,
+.dividend-calendar-total {
+  display: grid;
+  gap: 3px;
+  min-width: 0;
+}
+
+.dividend-calendar-eyebrow {
+  color: var(--accent);
+  font-size: 10px;
+  font-weight: 900;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+
+.dividend-calendar-head strong {
+  color: var(--text);
+  font-size: 14px;
+  font-weight: 900;
+}
+
+.dividend-calendar-head p,
+.dividend-calendar-total span {
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.dividend-calendar-total {
+  text-align: right;
+}
+
+.dividend-calendar-months {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: 8px;
+}
+
+.dividend-calendar-month {
+  display: grid;
+  gap: 8px;
+  min-width: 0;
+  padding: 10px;
+  border: 1px solid var(--border-soft);
+  border-radius: var(--radius-sm);
+  background: var(--bg);
+}
+
+.dividend-calendar-month-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.dividend-calendar-month-head strong {
+  color: var(--text);
+  font-size: 12px;
+  font-weight: 900;
+}
+
+.dividend-calendar-month-head span,
+.dividend-calendar-empty {
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 700;
+  text-align: right;
+}
+
+.dividend-calendar-events {
+  display: grid;
+  gap: 6px;
+}
+
+.dividend-calendar-event {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 8px;
+  align-items: center;
+  min-width: 0;
+  padding: 8px;
+  border: 1px solid var(--border-soft);
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+}
+
+.dividend-calendar-event.confirmed {
+  border-color: rgba(46, 168, 77, 0.28);
+}
+
+.dividend-calendar-event.ex-dividend {
+  border-color: rgba(210, 153, 34, 0.24);
+}
+
+.dividend-calendar-event > div {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+
+.dividend-calendar-event > div:last-child {
+  text-align: right;
+}
+
+.dividend-calendar-event strong {
+  overflow-wrap: anywhere;
+  color: var(--text);
+  font-size: 12px;
+  font-weight: 900;
+}
+
+.dividend-calendar-event span {
+  overflow-wrap: anywhere;
+  color: var(--muted);
+  font-size: 10px;
+  font-weight: 700;
 }
 
 .dividend-diagnostics-panel,
@@ -1897,6 +2036,14 @@ select:focus {
 
   .watch-summary-bar {
     grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .dividend-calendar-head {
+    flex-direction: column;
+  }
+
+  .dividend-calendar-total {
+    text-align: left;
   }
 
   .watch-controls {

@@ -4,6 +4,7 @@ const state = {
   backups: [],
   health: null,
   roadmap: null,
+  dividendCalendar: null,
   quoteProviderStats: null,
   backupRetention: 0,
   loading: false,
@@ -22,6 +23,7 @@ const elements = {
   portfolioSummaryBar: document.querySelector('#portfolioSummaryBar'),
   quoteDiagnosticsPanel: document.querySelector('#quoteDiagnosticsPanel'),
   dividendDiagnosticsPanel: document.querySelector('#dividendDiagnosticsPanel'),
+  dividendCalendarPanel: document.querySelector('#dividendCalendarPanel'),
   watchFilterButtons: document.querySelectorAll('[data-watch-filter]'),
   watchSortSelect: document.querySelector('#watchSortSelect'),
   backupList: document.querySelector('#backupList'),
@@ -288,9 +290,11 @@ async function loadData() {
     ]);
     state.stocks = data.stocks || [];
     state.alerts = data.alerts || [];
+    state.dividendCalendar = data.dividendCalendar || null;
     state.quoteProviderStats = data.quoteProviderStats || null;
     renderStatus(data);
     renderStocks();
+    renderDividendCalendar(state.dividendCalendar);
     renderQuoteDiagnostics(data.quoteProviderStats);
     renderDividendDiagnostics(data.lastDividendRefresh);
     renderAlerts();
@@ -686,6 +690,28 @@ function renderQuotePreview(preview) {
       }
       ${position?.investmentAmount ? renderPreviewItem('총 매수금액', formatMoney(position.investmentAmount, position.currency)) : ''}
       ${position?.marketValue ? renderPreviewItem('현재 평가금액', formatMoney(position.marketValue, position.currency)) : ''}
+      ${
+        position?.maximumProfitAmount !== null && position?.maximumProfitAmount !== undefined
+          ? renderPreviewItem(
+              '최대 수익금',
+              formatSignedMoney(position.maximumProfitAmount, position.currency),
+              `${formatSignedPercent(position.maximumProfitPercent)} · 최고가 기준`,
+              'up'
+            )
+          : ''
+      }
+      ${
+        position?.retracedProfitAmount !== null &&
+        position?.retracedProfitAmount !== undefined &&
+        position?.alertType === 'profit_retracement'
+          ? renderPreviewItem(
+              '반납 금액',
+              formatMoney(position.retracedProfitAmount, position.currency),
+              `${formatPercent(position.retracedProfitPercent)} 반납`,
+              position.retracedProfitAmount > 0 ? 'down' : 'flat'
+            )
+          : ''
+      }
       ${position?.annualDividendPerShare ? renderPreviewItem('주당 연 배당금', formatMoney(position.annualDividendPerShare, position.currency)) : ''}
       ${position?.expectedAnnualDividend ? renderPreviewItem('예상 연 배당금', formatMoney(position.expectedAnnualDividend, position.currency), formatPercent(position.dividendYieldPercent)) : ''}
       ${dividendSchedule?.frequency ? renderPreviewItem('배당 주기', getDividendFrequencyLabel(dividendSchedule.frequency), formatDividendMonths(dividendSchedule.months)) : ''}
@@ -1712,6 +1738,122 @@ function renderDividendCashFlow(group) {
   `;
 }
 
+function renderDividendCalendar(calendar) {
+  if (!elements.dividendCalendarPanel) {
+    return;
+  }
+
+  const months = Array.isArray(calendar?.months) ? calendar.months : [];
+  const summary = calendar?.summary || {};
+
+  if (!months.length || !summary.stocksWithDividends) {
+    elements.dividendCalendarPanel.innerHTML =
+      '<div class="portfolio-summary-empty">배당금과 배당 지급월을 입력하면 배당 캘린더가 표시됩니다.</div>';
+    return;
+  }
+
+  const annualTotals = formatCurrencyTotals(summary.annualDividendTotals || []);
+  const eventCount = Number(summary.eventCount || 0);
+
+  elements.dividendCalendarPanel.innerHTML = `
+    <div class="dividend-calendar-head">
+      <div>
+        <span class="dividend-calendar-eyebrow">Dividend Calendar</span>
+        <strong>배당 캘린더</strong>
+        <p>${escapeHtml(summary.stocksWithDividends)}개 배당 종목 · 향후 ${escapeHtml(summary.monthsAhead || months.length)}개월 · ${escapeHtml(eventCount)}개 일정</p>
+      </div>
+      <div class="dividend-calendar-total">
+        <span>예상 연 배당금</span>
+        <strong>${escapeHtml(annualTotals || '-')}</strong>
+      </div>
+    </div>
+    <div class="dividend-calendar-months">
+      ${months.map(renderDividendCalendarMonth).join('')}
+    </div>
+    ${
+      summary.pendingScheduleCount
+        ? `<div class="portfolio-summary-note">${escapeHtml(summary.pendingScheduleCount)}개 종목은 배당 지급월이 없어 캘린더에 배치하지 못했습니다.</div>`
+        : ''
+    }
+  `;
+}
+
+function renderDividendCalendarMonth(month) {
+  const events = Array.isArray(month.events) ? month.events : [];
+  const totals = formatCurrencyTotals(month.totals || []);
+
+  return `
+    <section class="dividend-calendar-month">
+      <div class="dividend-calendar-month-head">
+        <strong>${escapeHtml(month.label || `${month.month}월`)}</strong>
+        <span>${escapeHtml(totals || '일정 없음')}</span>
+      </div>
+      <div class="dividend-calendar-events">
+        ${
+          events.length
+            ? events.map(renderDividendCalendarEvent).join('')
+            : '<div class="dividend-calendar-empty">예상 배당 없음</div>'
+        }
+      </div>
+    </section>
+  `;
+}
+
+function renderDividendCalendarEvent(event) {
+  const eventClass = getDividendCalendarEventClass(event);
+  const amount = event.amount === null || event.amount === undefined
+    ? '-'
+    : formatMoney(event.amount, event.currency);
+  const dateText = event.paymentDate
+    ? `지급 ${formatDateOnly(event.paymentDate)}`
+    : event.exDividendDate
+      ? `배당락 ${formatDateOnly(event.exDividendDate)}`
+      : event.frequencyLabel || '예상';
+  const sourceText = event.dividendProvider
+    ? getProviderLabel(event.dividendProvider)
+    : event.dividendDataSource
+      ? getProviderLabel(event.dividendDataSource)
+      : event.frequencyLabel || '예상';
+
+  return `
+    <div class="dividend-calendar-event ${eventClass}">
+      <div>
+        <strong>${escapeHtml(event.displayName || event.symbol)}</strong>
+        <span>${escapeHtml(event.symbol)} · ${escapeHtml(dateText)}</span>
+      </div>
+      <div>
+        <strong>${escapeHtml(amount)}</strong>
+        <span>${escapeHtml(sourceText)}</span>
+      </div>
+    </div>
+  `;
+}
+
+function getDividendCalendarEventClass(event) {
+  if (event.type === 'confirmed') {
+    return 'confirmed';
+  }
+
+  if (event.type === 'payment') {
+    return 'payment';
+  }
+
+  if (event.type === 'ex_dividend') {
+    return 'ex-dividend';
+  }
+
+  return 'estimated';
+}
+
+function formatCurrencyTotals(totals) {
+  const items = Array.isArray(totals) ? totals : [];
+
+  return items
+    .filter((item) => Number(item.amount) > 0)
+    .map((item) => formatMoney(item.amount, item.currency))
+    .join(' · ');
+}
+
 function renderWatchControls() {
   elements.watchFilterButtons.forEach((button) => {
     button.classList.toggle('active', button.dataset.watchFilter === state.watchFilter);
@@ -1967,6 +2109,7 @@ function renderAlerts() {
           <span class="metric-label">${escapeHtml(alert.metricLabel || '하락률')}</span>
           <span class="metric-value down">${formatAlertMetricPercent(alert.drawdownPercent, alert.alertType !== 'profit_retracement')}</span>
           ${alert.alertRepeatCount ? `<span class="metric-detail">${Number(alert.alertRepeatCount)}회차</span>` : ''}
+          ${renderAlertProfitDetail(alert)}
         </div>
         <div class="metric">
           <span class="metric-label">전송</span>
@@ -1980,6 +2123,21 @@ function renderAlerts() {
       return row;
     })
   );
+}
+
+function renderAlertProfitDetail(alert) {
+  if (alert.alertType !== 'profit_retracement' || alert.maximumProfitAmount === null || alert.maximumProfitAmount === undefined) {
+    return '';
+  }
+
+  const parts = [
+    `최대 ${formatMoney(alert.maximumProfitAmount, alert.currency)}`,
+    alert.retracedProfitAmount !== null && alert.retracedProfitAmount !== undefined
+      ? `반납 ${formatMoney(alert.retracedProfitAmount, alert.currency)}`
+      : ''
+  ].filter(Boolean);
+
+  return `<span class="metric-detail">${escapeHtml(parts.join(' · '))}</span>`;
 }
 
 function renderBackups() {
@@ -2370,6 +2528,24 @@ function renderHoldingSummary(stock) {
       ${renderHoldingMetric('현재 평가금액', metrics.marketValue === null ? '-' : formatMoney(metrics.marketValue, stock.currency))}
       ${renderHoldingMetric('평가손익', formatSignedMoney(metrics.profit, stock.currency), profitClass)}
       ${renderHoldingMetric('수익률', formatSignedPercent(metrics.profitPercent), profitClass)}
+      ${
+        metrics.maximumProfitAmount !== null
+          ? renderHoldingMetric(
+              '최대 수익금',
+              formatSignedMoney(metrics.maximumProfitAmount, stock.currency),
+              metrics.maximumProfitAmount > 0 ? 'up' : 'flat'
+            )
+          : ''
+      }
+      ${
+        getAlertType(stock) === 'profit_retracement' && metrics.retracedProfitAmount !== null
+          ? renderHoldingMetric(
+              '반납 금액',
+              formatMoney(metrics.retracedProfitAmount, stock.currency),
+              metrics.retracedProfitAmount > 0 ? 'down' : 'flat'
+            )
+          : ''
+      }
       ${renderHoldingMetric('예상 연 배당금', metrics.expectedAnnualDividend === null ? '-' : formatMoney(metrics.expectedAnnualDividend, stock.currency))}
       ${renderHoldingMetric('배당수익률', formatPercent(metrics.dividendYieldPercent))}
       ${renderHoldingMetric('1회 예상 배당금', metrics.dividendPaymentAmount === null ? '-' : formatMoney(metrics.dividendPaymentAmount, stock.currency))}
@@ -2768,6 +2944,23 @@ function calculateHoldingMetrics(stock) {
     investmentAmount !== null && marketValue !== null ? marketValue - investmentAmount : null;
   const profitPercent =
     profit !== null && investmentAmount > 0 ? (profit / investmentAmount) * 100 : null;
+  const highPrice = parseFiniteNumber(stock.highPrice);
+  const maximumProfitAmount =
+    hasQuantity && highPrice !== null && highPrice > 0 && purchasePrice !== null && purchasePrice > 0
+      ? Math.max(0, (highPrice - purchasePrice) * quantity)
+      : null;
+  const maximumProfitPercent =
+    maximumProfitAmount !== null && investmentAmount > 0
+      ? (maximumProfitAmount / investmentAmount) * 100
+      : null;
+  const retracedProfitAmount =
+    maximumProfitAmount !== null && profit !== null
+      ? Math.max(0, maximumProfitAmount - profit)
+      : null;
+  const retracedProfitPercent =
+    retracedProfitAmount !== null && maximumProfitAmount > 0
+      ? (retracedProfitAmount / maximumProfitAmount) * 100
+      : null;
   const expectedAnnualDividend =
     hasQuantity && annualDividendPerShare !== null && annualDividendPerShare > 0
       ? quantity * annualDividendPerShare
@@ -2791,6 +2984,10 @@ function calculateHoldingMetrics(stock) {
     marketValue,
     profit,
     profitPercent,
+    maximumProfitAmount,
+    maximumProfitPercent,
+    retracedProfitAmount,
+    retracedProfitPercent,
     expectedAnnualDividend,
     dividendYieldPercent,
     dividendFrequency: dividendSchedule.frequency,
