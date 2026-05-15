@@ -150,6 +150,8 @@ stock_alarm/
 │  └─ check-railway-config.js
 ├─ docs/
 │  ├─ development-roadmap.md       # 개발 WBS와 다음 작업 순서
+│  ├─ json-to-db-migration.md      # JSON -> DB 이전 전략
+│  ├─ user-admin-page-split.md     # 사용자/관리자 화면 분리 전략
 │  ├─ market-data-api-candidates.md # 공식/유료 시세 API 후보 검토
 │  ├─ nxt-market-data-review.md    # NXT 시세 API 검토
 │  └─ railway-deploy.md            # Railway 배포 가이드
@@ -432,6 +434,14 @@ http://192.168.0.15:3000
 - 백업 목록 확인
 - 선택한 백업으로 복구
 - 선택한 백업 삭제
+
+화면 분리 방향:
+
+- 현재는 하나의 대시보드에 사용자 기능과 관리자 기능이 함께 있습니다.
+- 다음 단계에서는 사용자 화면과 관리자 화면을 분리합니다.
+- 사용자 화면에는 종목 등록, 감시 종목, 알림 기록, 배당 캘린더, 포트폴리오 요약을 남깁니다.
+- 관리자 화면에는 서버 상태, 데이터 모델, provider 진단, 백업/복구/삭제, 개발 WBS를 옮깁니다.
+- 상세 기준은 [사용자/관리자 페이지 분리 설계](docs/user-admin-page-split.md)에 정리되어 있습니다.
 
 종목 등록 흐름:
 
@@ -791,6 +801,14 @@ data/server.json
 - 주요 엔터티는 `devices`, `push_tokens`, `stocks`, `alerts`, `dividend_events`, `quote_provider_stats`입니다.
 - 웹 대시보드의 서버 상태에서 스키마 버전과 종목/알림/기기 개수를 확인할 수 있습니다.
 - 전체 데이터 모델은 `GET /api/data-model`에서 확인할 수 있습니다.
+- DB 이전 전략은 [JSON -> DB 이전 설계](docs/json-to-db-migration.md)에 정리되어 있습니다.
+
+향후 Postgres 이전 방향:
+
+- 현재 로컬 JSON 실행은 유지합니다.
+- 먼저 저장소 인터페이스를 고정합니다.
+- 이후 `JsonStore`와 같은 계약을 따르는 `PostgresStore`를 추가합니다.
+- 실제 이전 전에는 JSON 백업, dry-run, 건수 검증, API 응답 비교를 수행합니다.
 
 백업 위치:
 
@@ -1038,9 +1056,11 @@ Invoke-RestMethod http://127.0.0.1:3001/api/health
 - 이익금 반납률용 최대 수익금과 반납 금액 표시
 - 포트폴리오 계좌 총 최대 수익금과 총 반납률 표시
 - 데이터 모델 스키마 버전과 저장소 요약 API
+- JSON -> DB 이전 전략 문서화
+- 사용자/관리자 화면 분리 전략 문서화
 
 우선순위가 높은 순서:
 
-1. JSON -> DB 이전 설계
-2. Postgres 저장소 인터페이스
+1. Postgres 저장소 인터페이스
+2. 사용자/관리자 라우팅 분리
 3. Expo 모바일 앱 초기 프로젝트 생성

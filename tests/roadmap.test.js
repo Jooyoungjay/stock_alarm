@@ -12,9 +12,12 @@ test('parseRoadmapMarkdown extracts roadmap metadata and next task', async () =>
   assert.equal(roadmap.dateLabel, '2026-05-15');
   assert.ok(roadmap.completedScope.some((item) => item.category === '공식 일봉 provider 실험'));
   assert.ok(roadmap.completedScope.some((item) => item.category === '데이터 모델 정리'));
-  assert.ok(roadmap.sections.length >= 8);
-  assert.equal(roadmap.recommendedOrder[0], 'JSON -> DB 이전 설계');
-  assert.equal(roadmap.nextTask.title, 'JSON -> DB 이전 설계');
+  assert.ok(roadmap.completedScope.some((item) => item.category === 'JSON -> DB 이전 설계'));
+  assert.ok(roadmap.completedScope.some((item) => item.category === '사용자/관리자 화면 분리 설계'));
+  assert.ok(roadmap.sections.length >= 9);
+  assert.equal(roadmap.recommendedOrder[0], 'Postgres 저장소 인터페이스');
+  assert.equal(roadmap.recommendedOrder[1], '사용자/관리자 라우팅 분리');
+  assert.equal(roadmap.nextTask.title, 'Postgres 저장소 인터페이스');
   assert.ok(roadmap.summary.total > roadmap.summary.completed);
 });
 
