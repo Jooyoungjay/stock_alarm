@@ -15,6 +15,8 @@
 - 스키마 버전: `1`
 - 데이터 모델 정의: `src/dataModel.js`
 - 데이터 모델 확인 API: `GET /api/data-model`
+- 저장소 계약: `src/storageContract.js`
+- 저장소 생성: `src/storageFactory.js`
 - 백업 위치: `data/backups/`
 
 현재 JSON 최상위 구조:
@@ -136,7 +138,7 @@
 
 ## 저장소 인터페이스 목표
 
-다음 단계에서 `JsonStore`와 `PostgresStore`가 같은 메서드를 제공해야 합니다.
+`JsonStore`와 향후 `PostgresStore`는 `src/storageContract.js`의 같은 메서드를 제공해야 합니다. 서버는 저장소 구현을 직접 생성하지 않고 `src/storageFactory.js`를 통해 생성합니다.
 
 필수 메서드:
 
@@ -209,8 +211,8 @@ DB 이전은 화면 분리와 직접 연결됩니다. 사용자 화면은 종목
 
 ## 다음 구현 작업
 
-1. `storage` 계층 공통 인터페이스 문서화와 테스트 고정
-2. `JsonStore`가 공통 인터페이스를 만족하는지 테스트 추가
-3. `PostgresStore` 골격 추가
-4. JSON -> Postgres dry-run 마이그레이션 스크립트 추가
-5. 사용자/관리자 라우팅 분리 설계 반영
+1. 사용자/관리자 라우팅 분리 구현
+2. `PostgresStore` 골격 추가
+3. JSON -> Postgres dry-run 마이그레이션 스크립트 추가
+4. 관리자 API 보호 방식 적용
+5. DB 백업/복구 전략 구현

@@ -13,7 +13,7 @@ import {
   runDailyBriefing
 } from './portfolioBriefing.js';
 import { createQrSvg } from './qrCode.js';
-import { JsonStore } from './storage.js';
+import { createStore } from './storageFactory.js';
 import {
   buildRegistrationPreview,
   initializeHighFromPurchaseDate,
@@ -34,11 +34,9 @@ import { isTelegramConfigured, sendTelegramMessage } from './telegram.js';
 import { pollTelegramCommands } from './telegramCommands.js';
 import { normalizeSymbolInput, searchSymbols } from './symbols.js';
 
-const store = new JsonStore(config.dataDir, {
-  defaultAlertCooldownMinutes: config.defaultAlertCooldownMinutes,
+const store = createStore(config, {
   backups: {
-    enabled: true,
-    maxBackups: config.backupRetention
+    enabled: true
   }
 });
 
@@ -293,6 +291,7 @@ async function handleApi(request, response, url) {
       cwd: process.cwd(),
       rootDir: config.rootDir,
       dataDir: config.dataDir,
+      storageEngine: store.engine || config.storageEngine,
       host: config.host,
       railwayRuntime: config.isRailwayRuntime,
       startedAt,

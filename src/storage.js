@@ -3,6 +3,7 @@ import path from 'node:path';
 import { createHash, randomBytes, randomUUID } from 'node:crypto';
 import { createBackup } from './backups.js';
 import { buildDataModelInfo, normalizeStoreEnvelope, touchStoreEnvelope } from './dataModel.js';
+import { STORAGE_ENGINES } from './storageContract.js';
 import { normalizeSymbolInput } from './symbols.js';
 
 const emptyStore = {
@@ -862,6 +863,7 @@ function normalizeStoredDividendMonths(value) {
 
 export class JsonStore {
   constructor(dataDir, defaults = {}) {
+    this.engine = STORAGE_ENGINES.JSON;
     this.dataDir = dataDir;
     this.filePath = path.join(dataDir, 'store.json');
     this.defaults = defaults;

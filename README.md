@@ -135,6 +135,8 @@ stock_alarm/
 │  ├─ dividendRefresh.js    # 배당 데이터 자동/수동 갱신
 │  ├─ dataModel.js          # 저장 데이터 모델과 스키마 버전
 │  ├─ storage.js            # 로컬 JSON 저장소
+│  ├─ storageContract.js    # 저장소 공통 계약
+│  ├─ storageFactory.js     # 저장소 엔진 선택
 │  ├─ telegram.js           # 텔레그램 API 호출
 │  ├─ telegramCommands.js   # 텔레그램 명령어 처리
 │  ├─ backups.js            # 데이터 백업/복구/삭제
@@ -200,6 +202,8 @@ QUOTE_TIMEOUT_MS=10000
 QUOTE_PROVIDERS=naver,stooq,alphavantage,yahoo
 HISTORICAL_QUOTE_PROVIDERS=naver,stooq,alphavantage,yahoo
 DIVIDEND_PROVIDERS=publicdata,opendart,alphavantage,yahoo
+STORAGE_ENGINE=json
+DATABASE_URL=
 DATA_GO_KR_SERVICE_KEY=
 OPENDART_API_KEY=
 ALPHA_VANTAGE_API_KEY=
@@ -214,6 +218,8 @@ TELEGRAM_CHAT_ID=
 | `HOST` | `127.0.0.1` | 로컬 PC만 접속하려면 기본값 사용. 휴대폰 테스트는 `0.0.0.0` 사용 |
 | `PORT` | `3000` | 서버 포트. 사용 중이면 로컬 시작 스크립트가 다음 포트를 찾음 |
 | `DATA_DIR` | `data` | 데이터 저장 폴더. 비우면 프로젝트의 `data/` 사용 |
+| `STORAGE_ENGINE` | `json` | 저장소 엔진. 현재 실행 가능한 값은 `json` |
+| `DATABASE_URL` | 빈 값 | 향후 Postgres 저장소용 연결 문자열. 현재 로컬 JSON 실행에서는 사용하지 않음 |
 | `POLL_INTERVAL_SECONDS` | `60` | 시세 자동 확인 주기 |
 | `TELEGRAM_COMMAND_POLL_SECONDS` | `5` | 텔레그램 명령어 확인 주기 |
 | `DIVIDEND_REFRESH_INTERVAL_SECONDS` | `86400` | 배당 데이터 자동 보조 갱신 주기. 기본값은 하루 1회 |
@@ -806,9 +812,11 @@ data/server.json
 향후 Postgres 이전 방향:
 
 - 현재 로컬 JSON 실행은 유지합니다.
-- 먼저 저장소 인터페이스를 고정합니다.
+- 저장소 인터페이스는 `src/storageContract.js`에 고정되어 있습니다.
+- 서버는 `src/storageFactory.js`를 통해 저장소를 생성합니다.
 - 이후 `JsonStore`와 같은 계약을 따르는 `PostgresStore`를 추가합니다.
 - 실제 이전 전에는 JSON 백업, dry-run, 건수 검증, API 응답 비교를 수행합니다.
+- `STORAGE_ENGINE=postgres`는 아직 실제 실행 저장소가 아니며, 현재는 명확한 오류를 내도록 막아두었습니다.
 
 백업 위치:
 
@@ -1058,9 +1066,10 @@ Invoke-RestMethod http://127.0.0.1:3001/api/health
 - 데이터 모델 스키마 버전과 저장소 요약 API
 - JSON -> DB 이전 전략 문서화
 - 사용자/관리자 화면 분리 전략 문서화
+- 저장소 공통 계약과 저장소 팩토리 추가
 
 우선순위가 높은 순서:
 
-1. Postgres 저장소 인터페이스
-2. 사용자/관리자 라우팅 분리
+1. 사용자/관리자 라우팅 분리
+2. 관리자 기능 이동
 3. Expo 모바일 앱 초기 프로젝트 생성

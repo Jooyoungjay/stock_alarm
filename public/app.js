@@ -841,7 +841,7 @@ function renderServerStatus(health) {
       ${renderServerMetric('마지막 확인', formatDate(health.lastCheck?.checkedAt), getLastCheckDetail(health.lastCheck))}
       ${renderServerMetric('배당 갱신', formatDate(health.lastDividendRefresh?.checkedAt), getLastDividendRefreshDetail(health.lastDividendRefresh))}
       ${renderServerMetric('포트', String(health.port || '-'), `HOST ${health.host || '-'}`)}
-      ${renderServerMetric('데이터', shortenPath(health.dataDir), '로컬 저장소')}
+      ${renderServerMetric('데이터', shortenPath(health.dataDir), formatStorageEngine(health.storageEngine))}
       ${renderServerMetric('데이터 모델', formatDataModelVersion(health.dataModel), formatDataModelStoreSummary(health.dataModel?.store))}
       ${renderServerMetric('실행 방식', health.railwayRuntime ? 'Railway' : '로컬 PC', health.cwd || '')}
     </div>
@@ -888,6 +888,20 @@ function formatDataModelStoreSummary(store) {
   }
 
   return `종목 ${counts.stocks || 0} · 알림 ${counts.alerts || 0} · 기기 ${counts.devices || 0}`;
+}
+
+function formatStorageEngine(engine) {
+  const value = String(engine || 'json').trim().toLowerCase();
+
+  if (value === 'json') {
+    return 'JSON 저장소';
+  }
+
+  if (value === 'postgres') {
+    return 'Postgres 저장소';
+  }
+
+  return `${value || '-'} 저장소`;
 }
 
 function renderRoadmap(roadmap) {
