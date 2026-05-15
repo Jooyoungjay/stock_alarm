@@ -28,6 +28,7 @@ import {
   removeRuntimeInfo,
   writeRuntimeInfo
 } from './runtimeInfo.js';
+import { readRoadmap } from './roadmap.js';
 import { isTelegramConfigured, sendTelegramMessage } from './telegram.js';
 import { pollTelegramCommands } from './telegramCommands.js';
 import { normalizeSymbolInput, searchSymbols } from './symbols.js';
@@ -348,6 +349,13 @@ async function handleApi(request, response, url) {
       lastDividendRefresh: dividendRefreshSnapshot,
       quoteProviderStats,
       lastCheck
+    });
+    return;
+  }
+
+  if (request.method === 'GET' && url.pathname === '/api/roadmap') {
+    sendJson(response, 200, {
+      roadmap: await readRoadmap(config.rootDir)
     });
     return;
   }

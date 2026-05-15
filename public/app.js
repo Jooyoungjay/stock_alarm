@@ -3,6 +3,7 @@ const state = {
   alerts: [],
   backups: [],
   health: null,
+  roadmap: null,
   quoteProviderStats: null,
   backupRetention: 0,
   loading: false,
@@ -27,6 +28,8 @@ const elements = {
   backupSummary: document.querySelector('#backupSummary'),
   serverStatusPanel: document.querySelector('#serverStatusPanel'),
   serverStatusSummary: document.querySelector('#serverStatusSummary'),
+  roadmapPanel: document.querySelector('#roadmapPanel'),
+  roadmapSummary: document.querySelector('#roadmapSummary'),
   summaryText: document.querySelector('#summaryText'),
   telegramStatus: document.querySelector('#telegramStatus'),
   quoteStatus: document.querySelector('#quoteStatus'),
@@ -48,6 +51,7 @@ const elements = {
   createBackupButton: document.querySelector('#createBackupButton'),
   refreshBackupsButton: document.querySelector('#refreshBackupsButton'),
   refreshServerStatusButton: document.querySelector('#refreshServerStatusButton'),
+  refreshRoadmapButton: document.querySelector('#refreshRoadmapButton'),
   tabSections: document.querySelectorAll('.tab-section'),
   mobileNavButtons: document.querySelectorAll('.nav-item')
 };
@@ -238,6 +242,10 @@ elements.refreshServerStatusButton.addEventListener('click', async () => {
   await withBusy(elements.refreshServerStatusButton, loadHealth);
 });
 
+elements.refreshRoadmapButton.addEventListener('click', async () => {
+  await withBusy(elements.refreshRoadmapButton, loadRoadmap);
+});
+
 elements.watchFilterButtons.forEach((button) => {
   button.addEventListener('click', () => {
     state.watchFilter = button.dataset.watchFilter || 'all';
@@ -272,7 +280,12 @@ async function loadHealth() {
 
 async function loadData() {
   try {
-    const data = await api('/api/stocks');
+    const [data, roadmapResult] = await Promise.all([
+      api('/api/stocks'),
+      api('/api/roadmap')
+        .then((payload) => ({ payload }))
+        .catch((error) => ({ error }))
+    ]);
     state.stocks = data.stocks || [];
     state.alerts = data.alerts || [];
     state.quoteProviderStats = data.quoteProviderStats || null;
@@ -281,8 +294,25 @@ async function loadData() {
     renderQuoteDiagnostics(data.quoteProviderStats);
     renderDividendDiagnostics(data.lastDividendRefresh);
     renderAlerts();
+
+    if (roadmapResult.payload) {
+      state.roadmap = roadmapResult.payload.roadmap || null;
+      renderRoadmap(state.roadmap);
+    } else {
+      renderRoadmapError(roadmapResult.error);
+    }
   } catch (error) {
     showMessage(error.message, true);
+  }
+}
+
+async function loadRoadmap() {
+  try {
+    const data = await api('/api/roadmap');
+    state.roadmap = data.roadmap || null;
+    renderRoadmap(state.roadmap);
+  } catch (error) {
+    renderRoadmapError(error);
   }
 }
 
@@ -815,6 +845,145 @@ function renderServerStatusError(error) {
   elements.serverStatusPanel.innerHTML = `
     <div class="message show error">${escapeHtml(error.message || '서버 상태를 확인하지 못했습니다.')}</div>
   `;
+}
+
+function renderRoadmap(roadmap) {
+  if (!roadmap) {
+    renderRoadmapError(new Error('로드맵 문서를 찾지 못했습니다.'));
+    return;
+  }
+
+  const summary = roadmap.summary || {};
+  const completed = summary.completed || 0;
+  const inProgress = summary.in_progress || 0;
+  const paused = summary.paused || 0;
+  const total = summary.total || 0;
+  const nextTask = roadmap.nextTask || {};
+  const recommendedOrder = Array.isArray(roadmap.recommendedOrder) ? roadmap.recommendedOrder : [];
+  const sections = Array.isArray(roadmap.sections) ? roadmap.sections : [];
+
+  elements.roadmapSummary.textContent = `${roadmap.dateLabel || '날짜 미상'} · 완료 ${completed}/${total} · 진행 ${inProgress} · 보류 ${paused}`;
+  elements.roadmapPanel.innerHTML = `
+    <div class="roadmap-hero">
+      <div class="roadmap-next">
+        <span class="roadmap-eyebrow">다음 개발</span>
+        <strong>${escapeHtml(nextTask.title || '다음 작업 없음')}</strong>
+        <p>${escapeHtml(nextTask.summary || '문서의 다음 작업 영역을 확인하세요.')}</p>
+      </div>
+      <div class="roadmap-stats" aria-label="로드맵 진행 현황">
+        ${renderRoadmapStat('완료', `${completed}/${total}`, '전체 작업 기준', 'done')}
+        ${renderRoadmapStat('진행', String(inProgress), '부분 완료 포함', 'active')}
+        ${renderRoadmapStat('보류', String(paused), '후속 검토', 'paused')}
+      </div>
+    </div>
+    ${
+      recommendedOrder.length
+        ? `<div class="roadmap-order" aria-label="추천 진행 순서">
+            ${recommendedOrder
+              .map((item, index) => `<span><b>${index + 1}</b>${escapeHtml(item)}</span>`)
+              .join('')}
+          </div>`
+        : ''
+    }
+    <div class="roadmap-section-list">
+      ${sections.map(renderRoadmapSection).join('')}
+    </div>
+  `;
+}
+
+function renderRoadmapError(error) {
+  elements.roadmapSummary.textContent = 'WBS 확인 실패';
+  elements.roadmapPanel.innerHTML = `
+    <div class="message show error">${escapeHtml(error.message || '로드맵을 확인하지 못했습니다.')}</div>
+  `;
+}
+
+function renderRoadmapStat(label, value, detail, type) {
+  return `
+    <div class="roadmap-stat ${escapeHtml(type || '')}">
+      <span>${escapeHtml(label)}</span>
+      <strong>${escapeHtml(value)}</strong>
+      <small>${escapeHtml(detail)}</small>
+    </div>
+  `;
+}
+
+function renderRoadmapSection(section) {
+  const summary = section.summary || {};
+  const total = summary.total || 0;
+  const completed = summary.completed || 0;
+  const inProgress = summary.in_progress || 0;
+  const progress = total ? Math.round(((completed + inProgress * 0.5) / total) * 100) : 0;
+  const tasks = Array.isArray(section.tasks) ? section.tasks : [];
+
+  return `
+    <section class="roadmap-section">
+      <div class="roadmap-section-head">
+        <div>
+          <span class="roadmap-section-id">${escapeHtml(section.id || '-')}</span>
+          <strong>${escapeHtml(section.title || '-')}</strong>
+          <p>${escapeHtml(section.goal || '')}</p>
+        </div>
+        <div class="roadmap-section-count">${completed}/${total}</div>
+      </div>
+      <div class="roadmap-progress" aria-label="진행률 ${progress}%">
+        <span style="width: ${progress}%"></span>
+      </div>
+      ${section.statusNote ? `<div class="roadmap-note">${escapeHtml(section.statusNote)}</div>` : ''}
+      <div class="roadmap-task-list">
+        ${tasks.map(renderRoadmapTask).join('')}
+      </div>
+    </section>
+  `;
+}
+
+function renderRoadmapTask(task) {
+  const statusClass = getRoadmapStatusClass(task.status);
+
+  return `
+    <div class="roadmap-task-row ${statusClass}">
+      <span class="roadmap-task-id">${escapeHtml(task.id || '-')}</span>
+      <div class="roadmap-task-main">
+        <strong>${escapeHtml(task.task || '-')}</strong>
+        <span>${escapeHtml(task.output || '-')}</span>
+      </div>
+      <span class="roadmap-task-priority">${escapeHtml(task.priority || '-')}</span>
+      <span class="roadmap-status-badge ${statusClass}">${escapeHtml(getRoadmapStatusLabel(task.status))}</span>
+      <span class="roadmap-task-estimate">${escapeHtml(task.estimate || '-')}</span>
+    </div>
+  `;
+}
+
+function getRoadmapStatusClass(status) {
+  if (status === 'completed') {
+    return 'completed';
+  }
+
+  if (status === 'in_progress') {
+    return 'in-progress';
+  }
+
+  if (status === 'paused') {
+    return 'paused';
+  }
+
+  return 'pending';
+}
+
+function getRoadmapStatusLabel(status) {
+  if (status === 'completed') {
+    return '완료';
+  }
+
+  if (status === 'in_progress') {
+    return '진행중';
+  }
+
+  if (status === 'paused') {
+    return '보류';
+  }
+
+  return '예정';
 }
 
 function renderServerMetric(label, value, detail = '') {
