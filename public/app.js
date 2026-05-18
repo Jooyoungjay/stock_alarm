@@ -2229,6 +2229,7 @@ function renderPortfolioSummary(items) {
       const maximumTotalReturnClass = getProfitClass(group.maximumTotalReturnAmount);
       const retracedProfitClass = group.retracedProfitAmount > 0 ? 'down' : 'flat';
       const totalReturnRetracedClass = group.totalReturnRetracedAmount > 0 ? 'down' : 'flat';
+      const dividendGrowthClass = getProfitClass(group.dividendGrowthAmount);
       item.className = `portfolio-summary-item ${profitClass}`;
       item.innerHTML = `
         <div class="portfolio-summary-head">
@@ -2280,6 +2281,16 @@ function renderPortfolioSummary(items) {
           <strong>${escapeHtml(group.expectedAnnualDividend === null ? '-' : formatMoney(group.expectedAnnualDividend, group.currency))}</strong>
           <span>배당수익률</span>
           <strong>${escapeHtml(formatPercent(group.dividendYieldPercent))}</strong>
+          ${
+            group.dividendGrowthPercent !== null
+              ? `
+                <span>배당 증감액</span>
+                <strong class="${dividendGrowthClass}">${escapeHtml(formatSignedMoney(group.dividendGrowthAmount, group.currency))}</strong>
+                <span>배당 성장률</span>
+                <strong class="${dividendGrowthClass}">${escapeHtml(formatSignedPercent(group.dividendGrowthPercent))}</strong>
+              `
+              : ''
+          }
         </div>
         ${renderDividendCashFlow(group)}
         ${group.pendingCount ? `<div class="portfolio-summary-note">${group.pendingCount}개 종목은 현재가 확인 후 평가금액에 반영됩니다.</div>` : ''}
@@ -2331,6 +2342,10 @@ function buildPortfolioSummaryGroups(stocks) {
         dividendInvestmentAmount: 0,
         expectedAnnualDividend: 0,
         dividendYieldPercent: null,
+        previousAnnualDividend: 0,
+        dividendGrowthAmount: 0,
+        dividendGrowthBaseAmount: 0,
+        dividendGrowthTrackedCount: 0,
         dividendCashFlow: Array(12).fill(0)
       };
 
@@ -2388,6 +2403,16 @@ function buildPortfolioSummaryGroups(stocks) {
       group.dividendInvestmentAmount += metrics.investmentAmount;
     }
 
+    if (metrics.dividendGrowth.available) {
+      const previousAnnualDividend =
+        metrics.quantity * metrics.dividendGrowth.previousAnnualDividendPerShare;
+      const currentAnnualDividend = metrics.quantity * metrics.dividendGrowth.annualDividendPerShare;
+      group.previousAnnualDividend += previousAnnualDividend;
+      group.dividendGrowthAmount += currentAnnualDividend - previousAnnualDividend;
+      group.dividendGrowthBaseAmount += previousAnnualDividend;
+      group.dividendGrowthTrackedCount += 1;
+    }
+
     if (metrics.dividendPaymentAmount !== null && metrics.dividendMonths.length) {
       for (const month of metrics.dividendMonths) {
         group.dividendCashFlow[month - 1] += metrics.dividendPaymentAmount;
@@ -2440,6 +2465,15 @@ function buildPortfolioSummaryGroups(stocks) {
         group.dividendInvestmentAmount > 0
           ? (group.expectedAnnualDividend / group.dividendInvestmentAmount) * 100
           : null,
+      previousAnnualDividend:
+        group.dividendGrowthTrackedCount > 0 ? group.previousAnnualDividend : null,
+      dividendGrowthAmount:
+        group.dividendGrowthTrackedCount > 0 ? group.dividendGrowthAmount : null,
+      dividendGrowthPercent:
+        group.dividendGrowthBaseAmount > 0
+          ? (group.dividendGrowthAmount / group.dividendGrowthBaseAmount) * 100
+          : null,
+      dividendGrowthTrackedCount: group.dividendGrowthTrackedCount,
       dividendCashFlow: group.dividendCashFlow
     }))
     .sort((left, right) => left.currencyLabel.localeCompare(right.currencyLabel, 'ko-KR'));
@@ -3302,6 +3336,7 @@ function renderHoldingSummary(stock) {
   const totalReturnClass = getProfitClass(metrics.totalReturnAmount);
   const maximumTotalReturnClass = getProfitClass(metrics.maximumTotalReturnAmount);
   const totalReturnRetracedClass = metrics.totalReturnRetracedAmount > 0 ? 'down' : 'flat';
+  const dividendGrowthClass = getProfitClass(metrics.dividendGrowth.changeAmount);
   const hasDividendReturn = metrics.expectedAnnualDividend !== null;
 
   return `
@@ -3365,6 +3400,15 @@ function renderHoldingSummary(stock) {
       }
       ${renderHoldingMetric('예상 연 배당금', metrics.expectedAnnualDividend === null ? '-' : formatMoney(metrics.expectedAnnualDividend, stock.currency))}
       ${renderHoldingMetric('배당수익률', formatPercent(metrics.dividendYieldPercent))}
+      ${
+        metrics.dividendGrowth.available
+          ? renderHoldingMetric(
+              '배당 성장률',
+              formatSignedPercent(metrics.dividendGrowth.changePercent),
+              dividendGrowthClass
+            )
+          : ''
+      }
       ${renderHoldingMetric('1회 예상 배당금', metrics.dividendPaymentAmount === null ? '-' : formatMoney(metrics.dividendPaymentAmount, stock.currency))}
       ${renderHoldingMetric('배당 지급월', formatDividendMonths(metrics.dividendMonths))}
       ${renderHoldingMetric('배당 갱신', formatDividendRefreshStatus(stock), stock.dividendLastError ? 'down' : '')}
@@ -3551,10 +3595,14 @@ function renderAveragingMetric(label, value, detail = '', valueClass = '') {
 
 function renderDividendEventSummary(stock) {
   const history = Array.isArray(stock.dividendHistory) ? stock.dividendHistory : [];
+  const dividendGrowth = calculateDividendGrowth(stock);
+  const dividendGrowthClass = getProfitClass(dividendGrowth.changeAmount);
+  const dividendCurrency = stock.dividendCurrency || stock.currency;
   const hasDividendEvent =
     stock.lastDividendValue ||
     stock.exDividendDate ||
     stock.dividendDate ||
+    dividendGrowth.available ||
     history.length;
 
   if (!hasDividendEvent) {
@@ -3564,10 +3612,28 @@ function renderDividendEventSummary(stock) {
   return `
     <div class="stock-dividend-panel">
       <div class="stock-dividend-grid">
-        ${renderHoldingMetric('최근 1주 배당', stock.lastDividendValue ? formatMoney(stock.lastDividendValue, stock.dividendCurrency || stock.currency) : '-')}
+        ${renderHoldingMetric('최근 1주 배당', stock.lastDividendValue ? formatMoney(stock.lastDividendValue, dividendCurrency) : '-')}
         ${renderHoldingMetric('배당락일', formatDateOnly(stock.exDividendDate))}
         ${renderHoldingMetric('지급일', formatDateOnly(stock.dividendDate))}
         ${renderHoldingMetric('배당 출처', stock.dividendProvider ? getProviderLabel(stock.dividendProvider) : stock.dividendDataSource ? getProviderLabel(stock.dividendDataSource) : '-')}
+        ${
+          dividendGrowth.available
+            ? renderHoldingMetric(
+                '배당 성장률',
+                formatSignedPercent(dividendGrowth.changePercent),
+                dividendGrowthClass
+              )
+            : ''
+        }
+        ${
+          dividendGrowth.available
+            ? renderHoldingMetric(
+                '주당 증감',
+                formatSignedMoney(dividendGrowth.changeAmount, dividendGrowth.currency || dividendCurrency),
+                dividendGrowthClass
+              )
+            : ''
+        }
       </div>
       ${
         history.length
@@ -3653,8 +3719,10 @@ function renderDividendHistoryItem(item, stock) {
   const changeParts = [];
 
   if (amountChanged) {
+    const growth = calculateDividendGrowthFromEntry(item, stock);
+    const growthText = growth.available ? ` (${formatSignedPercent(growth.changePercent)})` : '';
     changeParts.push(
-      `연 ${formatMoney(item.previousAnnualDividendPerShare, currency)} -> ${formatMoney(item.annualDividendPerShare, currency)}`
+      `연 ${formatMoney(item.previousAnnualDividendPerShare, currency)} -> ${formatMoney(item.annualDividendPerShare, currency)}${growthText}`
     );
   }
 
@@ -3996,12 +4064,115 @@ function formatDividendMonths(value) {
   return months.map((month) => `${month}월`).join(', ');
 }
 
+function calculateDividendGrowth(stock = {}) {
+  const history = Array.isArray(stock.dividendHistory) ? stock.dividendHistory : [];
+  const entry = findLatestDividendGrowthEntry(history);
+
+  if (!entry) {
+    return createEmptyDividendGrowth(stock, history.length);
+  }
+
+  return calculateDividendGrowthFromEntry(entry, stock, { preferStockValue: true });
+}
+
+function calculateDividendGrowthFromEntry(entry, stock = {}, options = {}) {
+  const history = Array.isArray(stock.dividendHistory) ? stock.dividendHistory : [];
+  const previousAnnualDividendPerShare = normalizePreviousDividend(entry?.previousAnnualDividendPerShare);
+  const annualDividendPerShare = resolveCurrentAnnualDividend(entry, stock, options);
+
+  if (previousAnnualDividendPerShare === null || annualDividendPerShare === null) {
+    return createEmptyDividendGrowth(stock, history.length);
+  }
+
+  const changeAmount = annualDividendPerShare - previousAnnualDividendPerShare;
+
+  if (Math.abs(changeAmount) < 0.000001) {
+    return createEmptyDividendGrowth(stock, history.length);
+  }
+
+  return {
+    available: true,
+    previousAnnualDividendPerShare,
+    annualDividendPerShare,
+    changeAmount,
+    changePercent: (changeAmount / previousAnnualDividendPerShare) * 100,
+    checkedAt: entry.checkedAt || stock.dividendUpdatedAt || stock.dividendLastCheckedAt || null,
+    provider: entry.provider || stock.dividendProvider || stock.dividendDataSource || '',
+    currency: entry.currency || stock.dividendCurrency || stock.currency || '',
+    historyCount: history.length
+  };
+}
+
+function findLatestDividendGrowthEntry(history = []) {
+  return (Array.isArray(history) ? history : []).find(hasAnnualDividendAmountChange) || null;
+}
+
+function hasAnnualDividendAmountChange(entry) {
+  const previousAnnualDividendPerShare = normalizePreviousDividend(entry?.previousAnnualDividendPerShare);
+  const annualDividendPerShare = normalizeCurrentDividend(entry?.annualDividendPerShare);
+
+  return (
+    previousAnnualDividendPerShare !== null &&
+    annualDividendPerShare !== null &&
+    Math.abs(annualDividendPerShare - previousAnnualDividendPerShare) >= 0.000001
+  );
+}
+
+function resolveCurrentAnnualDividend(entry, stock, options) {
+  if (options.preferStockValue) {
+    const stockValue = normalizeCurrentDividend(stock?.annualDividendPerShare);
+
+    if (stockValue !== null) {
+      return stockValue;
+    }
+  }
+
+  return normalizeCurrentDividend(entry?.annualDividendPerShare);
+}
+
+function normalizePreviousDividend(value) {
+  const number = normalizeNonNegativeDividend(value);
+  return number !== null && number > 0 ? number : null;
+}
+
+function normalizeCurrentDividend(value) {
+  if (value === undefined) {
+    return null;
+  }
+
+  if (value === null || value === '') {
+    return 0;
+  }
+
+  return normalizeNonNegativeDividend(value);
+}
+
+function normalizeNonNegativeDividend(value) {
+  const number = parseFiniteNumber(value);
+  return number !== null && number >= 0 ? number : null;
+}
+
+function createEmptyDividendGrowth(stock = {}, historyCount = 0) {
+  return {
+    available: false,
+    previousAnnualDividendPerShare: null,
+    annualDividendPerShare: normalizeCurrentDividend(stock.annualDividendPerShare),
+    changeAmount: null,
+    changePercent: null,
+    checkedAt: null,
+    provider: '',
+    currency: stock.dividendCurrency || stock.currency || '',
+    historyCount
+  };
+}
+
 function calculateHoldingMetrics(stock) {
   const quantity = parseFiniteNumber(stock.quantity);
   const purchasePrice = parseFiniteNumber(stock.purchasePrice);
   const lastPrice = parseFiniteNumber(stock.lastPrice);
   const annualDividendPerShare = parseFiniteNumber(stock.annualDividendPerShare);
   const dividendSchedule = getDividendSchedule(stock);
+  const dividendGrowth = calculateDividendGrowth(stock);
   const hasQuantity = quantity !== null && quantity > 0;
   const investmentAmount =
     hasQuantity && purchasePrice !== null && purchasePrice > 0 ? quantity * purchasePrice : null;
@@ -4084,7 +4255,8 @@ function calculateHoldingMetrics(stock) {
     dividendYieldPercent,
     dividendFrequency: dividendSchedule.frequency,
     dividendMonths: dividendSchedule.months,
-    dividendPaymentAmount
+    dividendPaymentAmount,
+    dividendGrowth
   };
 }
 

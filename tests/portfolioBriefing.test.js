@@ -79,6 +79,15 @@ test('buildDailyBriefing summarizes counts and portfolio metrics', () => {
         lastPrice: 94000,
         quantity: 10,
         annualDividendPerShare: 1200,
+        dividendHistory: [
+          {
+            checkedAt: '2026-05-13T07:00:00.000Z',
+            provider: 'manual',
+            currency: 'KRW',
+            previousAnnualDividendPerShare: 1000,
+            annualDividendPerShare: 1200
+          }
+        ],
         alertState: 'triggered'
       },
       {
@@ -103,12 +112,16 @@ test('buildDailyBriefing summarizes counts and portfolio metrics', () => {
   assert.equal(briefing.portfolio[0].expectedAnnualDividend, 12000);
   assert.equal(briefing.portfolio[0].totalReturnAmount, 82000);
   assert.ok(Math.abs(briefing.portfolio[0].totalReturnPercent - 6.0740740741) < 0.000001);
+  assert.equal(briefing.portfolio[0].previousAnnualDividend, 10000);
+  assert.equal(briefing.portfolio[0].dividendGrowthAmount, 2000);
+  assert.equal(briefing.portfolio[0].dividendGrowthPercent, 20);
 
   const message = formatDailyBriefingMessage(briefing);
   assert.match(message, /일일 브리핑/);
   assert.match(message, /위험도 순위/);
   assert.match(message, /두산퓨얼셀/);
   assert.match(message, /배당 포함 \+82,000 KRW \(\+6.07%\)/);
+  assert.match(message, /배당 성장 \+2,000 KRW \(\+20.00%\)/);
 });
 
 test('runDailyBriefing sends once per local day after scheduled time', async () => {

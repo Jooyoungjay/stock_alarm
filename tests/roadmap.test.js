@@ -31,10 +31,11 @@ test('parseRoadmapMarkdown extracts roadmap metadata and next task', async () =>
   assert.ok(roadmap.completedScope.some((item) => item.category === 'Expo 모바일 앱 초기 프로젝트'));
   assert.ok(roadmap.completedScope.some((item) => item.category === '모바일 종목 CRUD'));
   assert.ok(roadmap.completedScope.some((item) => item.category === '모바일 푸시 알림'));
+  assert.ok(roadmap.completedScope.some((item) => item.category === '배당 성장률'));
   assert.ok(roadmap.sections.length >= 9);
-  assert.equal(roadmap.recommendedOrder[0], '배당 성장률');
-  assert.equal(roadmap.recommendedOrder[1], '작업 상태 필드 정리');
-  assert.equal(roadmap.nextTask.title, '배당 성장률');
+  assert.equal(roadmap.recommendedOrder[0], '작업 상태 필드 정리');
+  assert.equal(roadmap.recommendedOrder[1], '앱 심사 준비');
+  assert.equal(roadmap.nextTask.title, '작업 상태 필드 정리');
   assert.ok(roadmap.summary.total > roadmap.summary.completed);
 });
 

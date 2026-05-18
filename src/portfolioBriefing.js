@@ -1,4 +1,5 @@
 import { buildAlertRule } from './alertEngine.js';
+import { calculateDividendGrowth } from './dividendGrowth.js';
 import { isTelegramConfigured, sendTelegramMessage } from './telegram.js';
 
 export const dailyBriefingMetaKey = 'lastDailyBriefingDate';
@@ -312,6 +313,7 @@ function buildPortfolioSummary(stocks) {
     const purchasePrice = normalizeFiniteNumber(stock.purchasePrice);
     const currentPrice = normalizeFiniteNumber(stock.lastPrice);
     const annualDividendPerShare = normalizeFiniteNumber(stock.annualDividendPerShare);
+    const dividendGrowth = calculateDividendGrowth(stock);
 
     if (quantity === null || quantity <= 0) {
       continue;
@@ -330,7 +332,11 @@ function buildPortfolioSummary(stocks) {
       totalReturnInvestmentAmount: 0,
       totalReturnTrackedCount: 0,
       expectedAnnualDividend: 0,
-      dividendInvestmentAmount: 0
+      dividendInvestmentAmount: 0,
+      previousAnnualDividend: 0,
+      dividendGrowthAmount: 0,
+      dividendGrowthBaseAmount: 0,
+      dividendGrowthTrackedCount: 0
     };
 
     group.stockCount += 1;
@@ -358,6 +364,15 @@ function buildPortfolioSummary(stocks) {
         group.expectedAnnualDividend += expectedAnnualDividend;
         group.dividendInvestmentAmount += investmentAmount;
       }
+
+      if (dividendGrowth.available) {
+        const previousAnnualDividend = quantity * dividendGrowth.previousAnnualDividendPerShare;
+        const currentAnnualDividend = quantity * dividendGrowth.annualDividendPerShare;
+        group.previousAnnualDividend += previousAnnualDividend;
+        group.dividendGrowthAmount += currentAnnualDividend - previousAnnualDividend;
+        group.dividendGrowthBaseAmount += previousAnnualDividend;
+        group.dividendGrowthTrackedCount += 1;
+      }
     }
 
     groups.set(key, group);
@@ -380,7 +395,16 @@ function buildPortfolioSummary(stocks) {
     dividendYieldPercent:
       group.dividendInvestmentAmount > 0
         ? (group.expectedAnnualDividend / group.dividendInvestmentAmount) * 100
-        : null
+        : null,
+    previousAnnualDividend:
+      group.dividendGrowthTrackedCount > 0 ? group.previousAnnualDividend : null,
+    dividendGrowthAmount:
+      group.dividendGrowthTrackedCount > 0 ? group.dividendGrowthAmount : null,
+    dividendGrowthPercent:
+      group.dividendGrowthBaseAmount > 0
+        ? (group.dividendGrowthAmount / group.dividendGrowthBaseAmount) * 100
+        : null,
+    dividendGrowthTrackedCount: group.dividendGrowthTrackedCount
   }));
 }
 
@@ -413,6 +437,12 @@ function formatPortfolioLine(group) {
   if (group.expectedAnnualDividend !== null) {
     parts.push(
       `예상 연 배당 ${formatMoney(group.expectedAnnualDividend, currency)} (${formatPercent(group.dividendYieldPercent)})`
+    );
+  }
+
+  if (group.dividendGrowthAmount !== null && group.dividendGrowthPercent !== null) {
+    parts.push(
+      `배당 성장 ${formatSignedMoney(group.dividendGrowthAmount, currency)} (${formatSignedPercent(group.dividendGrowthPercent)})`
     );
   }
 
