@@ -1497,13 +1497,14 @@ function renderRoadmap(roadmap) {
   const summary = roadmap.summary || {};
   const completed = summary.completed || 0;
   const inProgress = summary.in_progress || 0;
+  const pending = summary.pending || 0;
   const paused = summary.paused || 0;
   const total = summary.total || 0;
   const nextTask = roadmap.nextTask || {};
   const recommendedOrder = Array.isArray(roadmap.recommendedOrder) ? roadmap.recommendedOrder : [];
   const sections = Array.isArray(roadmap.sections) ? roadmap.sections : [];
 
-  elements.roadmapSummary.textContent = `${roadmap.dateLabel || '날짜 미상'} · 완료 ${completed}/${total} · 진행 ${inProgress} · 보류 ${paused}`;
+  elements.roadmapSummary.textContent = `${roadmap.dateLabel || '날짜 미상'} · 완료 ${completed}/${total} · 진행중 ${inProgress} · 예정 ${pending} · 보류 ${paused}`;
   elements.roadmapPanel.innerHTML = `
     <div class="roadmap-hero">
       <div class="roadmap-next">
@@ -1513,7 +1514,8 @@ function renderRoadmap(roadmap) {
       </div>
       <div class="roadmap-stats" aria-label="로드맵 진행 현황">
         ${renderRoadmapStat('완료', `${completed}/${total}`, '전체 작업 기준', 'done')}
-        ${renderRoadmapStat('진행', String(inProgress), '부분 완료 포함', 'active')}
+        ${renderRoadmapStat('진행중', String(inProgress), '부분 완료 포함', 'active')}
+        ${renderRoadmapStat('예정', String(pending), '착수 대기', 'pending')}
         ${renderRoadmapStat('보류', String(paused), '후속 검토', 'paused')}
       </div>
     </div>
@@ -1588,8 +1590,8 @@ function renderRoadmapTask(task) {
         <strong>${escapeHtml(task.task || '-')}</strong>
         <span>${escapeHtml(task.output || '-')}</span>
       </div>
-      <span class="roadmap-task-priority">${escapeHtml(task.priority || '-')}</span>
-      <span class="roadmap-status-badge ${statusClass}">${escapeHtml(getRoadmapStatusLabel(task.status))}</span>
+      <span class="roadmap-task-priority">${escapeHtml(task.priority ? `우선 ${task.priority}` : '우선 -')}</span>
+      <span class="roadmap-status-badge ${statusClass}">${escapeHtml(task.statusLabel || getRoadmapStatusLabel(task.status))}</span>
       <span class="roadmap-task-estimate">${escapeHtml(task.estimate || '-')}</span>
     </div>
   `;

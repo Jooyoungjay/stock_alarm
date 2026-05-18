@@ -30,7 +30,8 @@ export function parseRoadmapMarkdown(markdown) {
     sections,
     recommendedOrder,
     nextTask,
-    summary
+    summary,
+    statusLegend: getStatusLegend()
   };
 }
 
@@ -130,8 +131,10 @@ function normalizeWbsSection(section) {
 
 function normalizeWbsTask(row, statusHints) {
   const id = row.ID || '';
-  const priority = row['우선순위'] || '';
-  const status = getTaskStatus(id, priority, statusHints);
+  const rawPriority = row['우선순위'] || '';
+  const explicitStatus = row['상태'] || '';
+  const status = normalizeTaskStatus(explicitStatus) || getTaskStatus(id, rawPriority, statusHints);
+  const priority = normalizeTaskPriority(rawPriority, explicitStatus);
 
   return {
     id,
@@ -139,7 +142,8 @@ function normalizeWbsTask(row, statusHints) {
     output: row['산출물'] || '',
     priority,
     estimate: row['예상 작업량'] || '',
-    status
+    status,
+    statusLabel: getTaskStatusLabel(status)
   };
 }
 
@@ -180,11 +184,13 @@ function getStatusHints(text) {
 }
 
 function getTaskStatus(id, priority, statusHints) {
-  if (priority.includes('완료')) {
-    return 'completed';
+  const priorityStatus = normalizeTaskStatus(priority);
+
+  if (priorityStatus && priorityStatus !== 'pending') {
+    return priorityStatus;
   }
 
-  if (priority.includes('보류') || statusHints.paused.has(id)) {
+  if (statusHints.paused.has(id)) {
     return 'paused';
   }
 
@@ -197,6 +203,67 @@ function getTaskStatus(id, priority, statusHints) {
   }
 
   return 'pending';
+}
+
+function normalizeTaskPriority(priority, explicitStatus) {
+  if (!priority) {
+    return '';
+  }
+
+  if (!explicitStatus && normalizeTaskStatus(priority)) {
+    return '';
+  }
+
+  return priority;
+}
+
+function normalizeTaskStatus(value) {
+  const normalized = String(value || '')
+    .trim()
+    .toLowerCase()
+    .replace(/\s+/g, '_');
+
+  if (!normalized) {
+    return '';
+  }
+
+  if (['완료', 'done', 'complete', 'completed'].includes(normalized)) {
+    return 'completed';
+  }
+
+  if (['진행', '진행중', '진행_중', 'in_progress', 'progress', 'active'].includes(normalized)) {
+    return 'in_progress';
+  }
+
+  if (['보류', '대기', 'paused', 'blocked', 'hold'].includes(normalized)) {
+    return 'paused';
+  }
+
+  if (['예정', 'pending', 'todo', 'planned', 'plan'].includes(normalized)) {
+    return 'pending';
+  }
+
+  return '';
+}
+
+function getTaskStatusLabel(status) {
+  const labels = {
+    completed: '완료',
+    in_progress: '진행중',
+    paused: '보류',
+    pending: '예정'
+  };
+
+  return labels[status] || labels.pending;
+}
+
+function getStatusLegend() {
+  return [
+    { status: 'pending', label: '예정', description: '아직 착수하지 않은 작업' },
+    { status: 'in_progress', label: '진행중', description: '일부 구현 또는 진행 중인 작업' },
+    { status: 'completed', label: '완료', description: '개발, 문서, 테스트 반영 완료' },
+    { status: 'paused', label: '보류', description: '외부 조건이나 후속 결정 대기' }
+  ];
 }
 
 function parseFirstTable(lines) {

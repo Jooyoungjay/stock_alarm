@@ -32,24 +32,42 @@ test('parseRoadmapMarkdown extracts roadmap metadata and next task', async () =>
   assert.ok(roadmap.completedScope.some((item) => item.category === '모바일 종목 CRUD'));
   assert.ok(roadmap.completedScope.some((item) => item.category === '모바일 푸시 알림'));
   assert.ok(roadmap.completedScope.some((item) => item.category === '배당 성장률'));
+  assert.ok(roadmap.completedScope.some((item) => item.category === '작업 상태 필드 정리'));
   assert.ok(roadmap.sections.length >= 9);
-  assert.equal(roadmap.recommendedOrder[0], '작업 상태 필드 정리');
-  assert.equal(roadmap.recommendedOrder[1], '앱 심사 준비');
-  assert.equal(roadmap.nextTask.title, '작업 상태 필드 정리');
+  assert.equal(roadmap.recommendedOrder[0], '앱 심사 준비');
+  assert.equal(roadmap.recommendedOrder[1], '배당락일 전후 알림');
+  assert.equal(roadmap.nextTask.title, '앱 심사 준비');
+  assert.ok(roadmap.statusLegend.some((item) => item.status === 'pending' && item.label === '예정'));
+  assert.ok(roadmap.summary.pending > 0);
+  assert.ok(roadmap.summary.paused > 0);
   assert.ok(roadmap.summary.total > roadmap.summary.completed);
 });
 
-test('parseRoadmapMarkdown keeps task status hints from WBS notes', async () => {
+test('parseRoadmapMarkdown normalizes explicit WBS task statuses', async () => {
   const markdown = await fs.readFile(new URL('../docs/development-roadmap.md', import.meta.url), 'utf8');
   const roadmap = parseRoadmapMarkdown(markdown);
-  const dividendSection = roadmap.sections.find((section) => section.id === '2');
-  const completedDividendTask = dividendSection.tasks.find((task) => task.id === '2.4');
+  const roadmapSection = roadmap.sections.find((section) => section.id === '1');
+  const completedStatusTask = roadmapSection.tasks.find((task) => task.id === '1.4');
+  const matchingSection = roadmap.sections.find((section) => section.id === '3');
+  const pausedMatchingTask = matchingSection.tasks.find((task) => task.id === '3.4');
   const completedProviderTask = roadmap.sections
     .find((section) => section.id === '6')
     .tasks.find((task) => task.id === '6.6');
+  const pendingReviewTask = roadmap.sections
+    .find((section) => section.id === '9')
+    .tasks.find((task) => task.id === '9.4');
 
-  assert.equal(completedDividendTask.status, 'completed');
+  assert.equal(completedStatusTask.status, 'completed');
+  assert.equal(completedStatusTask.statusLabel, '완료');
+  assert.equal(completedStatusTask.priority, '중간');
+  assert.equal(pausedMatchingTask.status, 'paused');
   assert.equal(completedProviderTask.status, 'completed');
+  assert.equal(pendingReviewTask.status, 'pending');
+  assert.equal(pendingReviewTask.statusLabel, '예정');
+  assert.equal(
+    roadmap.sections.flatMap((section) => section.tasks).some((task) => task.priority === '완료'),
+    false
+  );
 });
 
 test('readRoadmap loads the default roadmap document from a root directory', async () => {
