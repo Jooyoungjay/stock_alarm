@@ -1,3 +1,5 @@
+import { buildAveragingPlan } from './averagingCalculator.js';
+
 const APP_MODES = Object.freeze({
   USER: 'user',
   ADMIN: 'admin'
@@ -2128,6 +2130,7 @@ function renderStocks() {
           </div>
         </div>
         ${renderHoldingSummary(stock)}
+        ${renderAveragingCalculator(stock)}
         ${renderDividendEventSummary(stock)}
         ${renderInvestmentPlanCard(stock)}
         <div class="stock-bottom">
@@ -2157,6 +2160,7 @@ function renderStocks() {
         actionButton('삭제', 'btn btn-danger btn-sm danger-button', () => deleteStock(stock.id))
       );
       row.querySelector('.stock-bottom').append(actions);
+      attachAveragingCalculator(row, stock);
 
       if (state.editingStockId === stock.id) {
         row.append(editStockForm(stock));
@@ -3364,6 +3368,183 @@ function renderHoldingSummary(stock) {
       ${renderHoldingMetric('1회 예상 배당금', metrics.dividendPaymentAmount === null ? '-' : formatMoney(metrics.dividendPaymentAmount, stock.currency))}
       ${renderHoldingMetric('배당 지급월', formatDividendMonths(metrics.dividendMonths))}
       ${renderHoldingMetric('배당 갱신', formatDividendRefreshStatus(stock), stock.dividendLastError ? 'down' : '')}
+    </div>
+  `;
+}
+
+function renderAveragingCalculator(stock) {
+  const quantity = parseFiniteNumber(stock.quantity);
+  const purchasePrice = parseFiniteNumber(stock.purchasePrice);
+
+  if (quantity === null || quantity <= 0 || purchasePrice === null || purchasePrice <= 0) {
+    return '';
+  }
+
+  const suggestedPrice = parseFiniteNumber(stock.lastPrice) ?? purchasePrice;
+
+  return `
+    <form class="averaging-calculator" data-average-form aria-label="추가매수 계산기">
+      <div class="averaging-calculator-head">
+        <div>
+          <span>Average Down</span>
+          <strong>추가매수 계산기</strong>
+        </div>
+        <button type="submit" class="btn btn-outline btn-sm secondary-button" data-average-apply disabled>보유 정보 반영</button>
+      </div>
+      <div class="averaging-input-grid">
+        <label>
+          <span>추가 매수가</span>
+          <input name="additionalPrice" type="text" inputmode="decimal" pattern="[0-9]*[.]?[0-9]*" value="${escapeHtml(suggestedPrice)}" />
+        </label>
+        <label>
+          <span>추가 수량</span>
+          <input name="additionalQuantity" type="text" inputmode="decimal" pattern="[0-9]*[.]?[0-9]*" placeholder="0" />
+        </label>
+        <label>
+          <span>목표 평단가</span>
+          <input name="targetAveragePrice" type="text" inputmode="decimal" pattern="[0-9]*[.]?[0-9]*" placeholder="선택" />
+        </label>
+      </div>
+      <div class="averaging-result" data-average-result></div>
+    </form>
+  `;
+}
+
+function attachAveragingCalculator(row, stock) {
+  const form = row.querySelector('[data-average-form]');
+
+  if (!form) {
+    return;
+  }
+
+  const result = form.querySelector('[data-average-result]');
+  const applyButton = form.querySelector('[data-average-apply]');
+  const inputs = [
+    form.elements.additionalPrice,
+    form.elements.additionalQuantity,
+    form.elements.targetAveragePrice
+  ].filter(Boolean);
+  const readPlan = () =>
+    buildAveragingPlan({
+      currentQuantity: stock.quantity,
+      currentAveragePrice: stock.purchasePrice,
+      additionalQuantity: form.elements.additionalQuantity.value,
+      additionalPrice: form.elements.additionalPrice.value,
+      targetAveragePrice: form.elements.targetAveragePrice.value,
+      currentPrice: stock.lastPrice,
+      highPrice: stock.highPrice,
+      alertType: getAlertType(stock),
+      thresholdPercent: stock.thresholdPercent,
+      targetPrice: stock.targetPrice
+    });
+  const update = () => {
+    const plan = readPlan();
+    result.innerHTML = renderAveragingResult(plan, stock);
+    applyButton.disabled = !plan.canApply;
+  };
+
+  inputs.forEach((input) => input.addEventListener('input', update));
+  form.addEventListener('submit', async (event) => {
+    event.preventDefault();
+
+    const plan = readPlan();
+
+    if (!plan.canApply) {
+      showMessage('추가 매수가와 추가 수량을 입력하세요.', true);
+      return;
+    }
+
+    const confirmed = window.confirm(
+      [
+        `${stock.displayName || stock.symbol} 보유 정보를 추가매수 결과로 바꿉니다.`,
+        '',
+        `새 평단가: ${formatMoney(plan.newAveragePrice, stock.currency)}`,
+        `새 보유 수량: ${formatQuantity(plan.newQuantity)}`,
+        '',
+        '실제 추가매수를 완료한 뒤에만 반영하세요.'
+      ].join('\n')
+    );
+
+    if (!confirmed) {
+      return;
+    }
+
+    await withBusy(applyButton, async () => {
+      await patchStock(stock.id, {
+        purchasePrice: plan.newAveragePrice,
+        quantity: plan.newQuantity
+      });
+      showMessage('추가매수 결과를 보유 정보에 반영했습니다.');
+    });
+  });
+  update();
+}
+
+function renderAveragingResult(plan, stock) {
+  if (!plan.validBase) {
+    return '<div class="averaging-empty">매수가와 보유 수량을 입력하면 계산됩니다.</div>';
+  }
+
+  if (!plan.canCalculate) {
+    return '<div class="averaging-empty">추가 매수가와 추가 수량을 입력하세요.</div>';
+  }
+
+  const averageChangeClass = getProfitClass(-Number(plan.averagePriceChange || 0));
+  const profitClass = getProfitClass(plan.newProfit);
+  const thresholdChangeClass = getProfitClass(-Number(plan.alertThresholdChange || 0));
+  const target = plan.requiredForTargetAverage;
+
+  return `
+    <div class="averaging-result-grid">
+      ${renderAveragingMetric('추가 매수금액', formatMoney(plan.additionalInvestment, stock.currency))}
+      ${renderAveragingMetric(
+        '새 평단가',
+        formatMoney(plan.newAveragePrice, stock.currency),
+        `${formatSignedMoney(plan.averagePriceChange, stock.currency)} · ${formatSignedPercent(plan.averagePriceChangePercent)}`,
+        averageChangeClass
+      )}
+      ${renderAveragingMetric('새 보유 수량', formatQuantity(plan.newQuantity))}
+      ${renderAveragingMetric('손익분기점', formatMoney(plan.breakEvenPrice, stock.currency))}
+      ${
+        plan.newProfit !== null
+          ? renderAveragingMetric(
+              '현재가 기준 손익',
+              formatSignedMoney(plan.newProfit, stock.currency),
+              formatSignedPercent(plan.newProfitPercent),
+              profitClass
+            )
+          : ''
+      }
+      ${
+        plan.alertThresholdAfter !== null
+          ? renderAveragingMetric(
+              '알림 기준 변화',
+              formatMoney(plan.alertThresholdAfter, stock.currency),
+              `${formatSignedMoney(plan.alertThresholdChange, stock.currency)} · ${getAlertTypeLabel(stock)}`,
+              thresholdChangeClass
+            )
+          : ''
+      }
+      ${
+        target
+          ? renderAveragingMetric(
+              '목표 평단 필요',
+              formatQuantity(target.quantity),
+              `${formatMoney(target.investmentAmount, stock.currency)} 추가`,
+              'flat'
+            )
+          : ''
+      }
+    </div>
+  `;
+}
+
+function renderAveragingMetric(label, value, detail = '', valueClass = '') {
+  return `
+    <div class="averaging-metric">
+      <span>${escapeHtml(label)}</span>
+      <strong class="${escapeHtml(valueClass)}">${escapeHtml(value)}</strong>
+      ${detail ? `<em>${escapeHtml(detail)}</em>` : ''}
     </div>
   `;
 }

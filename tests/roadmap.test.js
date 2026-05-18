@@ -26,12 +26,13 @@ test('parseRoadmapMarkdown extracts roadmap metadata and next task', async () =>
   assert.ok(roadmap.completedScope.some((item) => item.category === '매수일 선택 입력'));
   assert.ok(roadmap.completedScope.some((item) => item.category === '등록 편의성'));
   assert.ok(roadmap.completedScope.some((item) => item.category === '매수 이유/매도 조건 카드'));
+  assert.ok(roadmap.completedScope.some((item) => item.category === '추가매수 계산기'));
   assert.ok(roadmap.completedScope.some((item) => item.category === 'Expo 모바일 앱 초기 프로젝트'));
   assert.ok(roadmap.completedScope.some((item) => item.category === '모바일 종목 CRUD'));
   assert.ok(roadmap.sections.length >= 9);
-  assert.equal(roadmap.recommendedOrder[0], '추가매수 계산기');
-  assert.equal(roadmap.recommendedOrder[1], '텔레그램 배당 진단 명령');
-  assert.equal(roadmap.nextTask.title, '추가매수 계산기');
+  assert.equal(roadmap.recommendedOrder[0], '텔레그램 배당 진단 명령');
+  assert.equal(roadmap.recommendedOrder[1], '모바일 푸시 알림 연결');
+  assert.equal(roadmap.nextTask.title, '텔레그램 배당 진단 명령');
   assert.ok(roadmap.summary.total > roadmap.summary.completed);
 });
 
