@@ -297,6 +297,99 @@ test('handleTelegramMessage can send a risk briefing', async () => {
   assert.match(sent[0], /알림/);
 });
 
+test('handleTelegramMessage can report dividend diagnostics', async () => {
+  const store = await createStore();
+  const sent = [];
+  const options = {
+    sendTelegramMessage: async (_config, text) => {
+      sent.push(text);
+    }
+  };
+
+  const samsung = await store.addStock({
+    symbol: '005930',
+    displayName: '삼성전자',
+    purchasePrice: 70000,
+    quantity: 10,
+    annualDividendPerShare: 1200,
+    dividendFrequency: 'quarterly',
+    dividendMonths: '3,6,9,12'
+  });
+  await store.replaceStock({
+    ...samsung,
+    dividendProvider: 'publicdata',
+    dividendCurrency: 'KRW',
+    lastDividendValue: 300,
+    exDividendDate: '2026-03-31T00:00:00.000Z',
+    dividendDate: '2026-04-20T00:00:00.000Z',
+    dividendLastDiagnostic: {
+      checkedAt: '2026-05-12T00:00:00.000Z',
+      status: 'updated',
+      provider: 'publicdata',
+      sourceSymbol: '005930',
+      currency: 'KRW',
+      annualDividendPerShare: 1200,
+      previousAnnualDividendPerShare: 1100,
+      lastDividendValue: 300,
+      exDividendDate: '2026-03-31T00:00:00.000Z',
+      dividendDate: '2026-04-20T00:00:00.000Z',
+      attempts: [
+        {
+          provider: 'publicdata',
+          status: 'success',
+          annualDividendPerShare: 1200,
+          lastDividendValue: 300,
+          currency: 'KRW'
+        }
+      ]
+    }
+  });
+
+  const preferred = await store.addStock({
+    symbol: '33626L',
+    displayName: '두산퓨얼셀우',
+    purchasePrice: 10000,
+    annualDividendPerShare: 500
+  });
+  await store.replaceStock({
+    ...preferred,
+    dividendLastError: 'SERVICE_KEY_IS_NOT_REGISTERED_ERROR',
+    dividendLastDiagnostic: {
+      checkedAt: '2026-05-12T00:05:00.000Z',
+      status: 'error',
+      error: 'SERVICE_KEY_IS_NOT_REGISTERED_ERROR',
+      currency: 'KRW',
+      preservedAnnualDividendPerShare: 500,
+      attempts: [
+        {
+          provider: 'publicdata',
+          status: 'error',
+          error: 'SERVICE_KEY_IS_NOT_REGISTERED_ERROR'
+        },
+        {
+          provider: 'opendart',
+          status: 'error',
+          error: '배당 정보를 찾을 수 없습니다.'
+        }
+      ]
+    }
+  });
+
+  await handleTelegramMessage(store, config, message('/dividend-status'), options);
+  await handleTelegramMessage(store, config, message('/dividend-status 33626L'), options);
+
+  assert.match(sent[0], /배당 API 진단/);
+  assert.match(sent[0], /업데이트 1개/);
+  assert.match(sent[0], /실패 1개/);
+  assert.match(sent[0], /삼성전자/);
+  assert.match(sent[0], /두산퓨얼셀우/);
+  assert.match(sent[0], /공공데이터 실패/);
+  assert.match(sent[1], /배당 API 진단: 두산퓨얼셀우/);
+  assert.match(sent[1], /500 KRW 유지/);
+  assert.match(sent[1], /Provider 시도/);
+  assert.match(sent[1], /OpenDART: 실패/);
+});
+
 test('pollTelegramCommands stores the next Telegram update offset', async () => {
   const store = await createStore();
   const sent = [];

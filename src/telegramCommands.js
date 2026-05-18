@@ -16,6 +16,7 @@ const helpMessage = [
   '/list - 감시 종목 목록',
   '/brief - 위험도 순위와 일일 브리핑',
   '/check - 지금 바로 전체 확인',
+  '/dividend-status [종목코드] - 배당 API 진단 상태',
   '/pause <종목코드> - 알림 끄기',
   '/resume <종목코드> - 알림 켜기',
   '/edit <종목코드> <항목> <값> - 알림 조건 수정',
@@ -192,6 +193,12 @@ async function executeCommand(store, config, command, options) {
       return deleteBackupFromCommand(store, config, command, options);
     case 'check':
       return runManualCheck(store, config, options);
+    case 'dividend-status':
+    case 'dividendstatus':
+    case 'dividend-diagnostics':
+    case 'dividenddiagnostics':
+    case 'dividend-diagnosis':
+      return formatDividendStatusFromCommand(store, command);
     default:
       return `지원하지 않는 명령어입니다: /${command.name}\n\n${helpMessage}`;
   }
@@ -204,6 +211,288 @@ function formatBriefingFromCommand(stocks, config) {
   });
 
   return formatDailyBriefingMessage(briefing);
+}
+
+async function formatDividendStatusFromCommand(store, command) {
+  if (command.args[0]) {
+    const stock = await findStock(store, command.args[0]);
+    return formatDividendDiagnosticDetail(stock);
+  }
+
+  return formatDividendDiagnosticSummary(await store.listStocks());
+}
+
+function formatDividendDiagnosticSummary(stocks) {
+  if (!stocks.length) {
+    return '등록된 감시 종목이 없습니다.';
+  }
+
+  const rows = stocks.map((stock) => ({
+    stock,
+    diagnostic: stock.dividendLastDiagnostic
+  }));
+  const rowsWithDiagnostics = rows
+    .filter((row) => row.diagnostic)
+    .sort((left, right) => getDividendDiagnosticTime(right.diagnostic) - getDividendDiagnosticTime(left.diagnostic));
+  const counts = countDividendDiagnostics(rowsWithDiagnostics);
+  const latestCheckedAt = rowsWithDiagnostics[0]?.diagnostic?.checkedAt || '';
+  const pendingCount = stocks.length - rowsWithDiagnostics.length;
+  const lines = [
+    '배당 API 진단',
+    `전체: ${stocks.length}개 · 진단: ${rowsWithDiagnostics.length}개 · 대기: ${pendingCount}개`,
+    `결과: 업데이트 ${counts.updated}개 · 확인 ${counts.checked}개 · 실패 ${counts.error}개 · 건너뜀 ${counts.skipped}개`,
+    latestCheckedAt ? `최근 확인: ${formatDate(latestCheckedAt)}` : ''
+  ].filter(Boolean);
+
+  if (!rowsWithDiagnostics.length) {
+    return [
+      ...lines,
+      '',
+      '아직 배당 API 갱신 이력이 없습니다.',
+      '웹앱의 배당 새로고침을 실행하거나 자동 갱신을 기다린 뒤 다시 확인하세요.'
+    ].join('\n');
+  }
+
+  lines.push('');
+  lines.push(
+    ...rowsWithDiagnostics.slice(0, 5).map((row, index) => formatDividendDiagnosticSummaryLine(row, index))
+  );
+
+  if (rowsWithDiagnostics.length > 5) {
+    lines.push(`외 ${rowsWithDiagnostics.length - 5}개는 /dividend-status <종목코드>로 상세 확인하세요.`);
+  }
+
+  return lines.join('\n');
+}
+
+function countDividendDiagnostics(rows) {
+  return rows.reduce(
+    (counts, row) => {
+      const status = row.diagnostic?.status;
+
+      if (status === 'updated') {
+        counts.updated += 1;
+      } else if (status === 'checked') {
+        counts.checked += 1;
+      } else if (status === 'error') {
+        counts.error += 1;
+      } else if (status === 'skipped') {
+        counts.skipped += 1;
+      }
+
+      return counts;
+    },
+    {
+      updated: 0,
+      checked: 0,
+      error: 0,
+      skipped: 0
+    }
+  );
+}
+
+function formatDividendDiagnosticSummaryLine(row, index) {
+  const { stock, diagnostic } = row;
+  const attempts = Array.isArray(diagnostic.attempts) ? diagnostic.attempts : [];
+  const lines = [
+    `${index + 1}. ${stock.displayName || stock.symbol} (${stock.symbol}) ${formatDividendDiagnosticStatus(diagnostic.status)}`,
+    `   적용값: ${formatDividendAppliedValue(stock, diagnostic)} · 출처: ${formatProviderLabel(diagnostic.provider)} · ${formatDate(diagnostic.checkedAt)}`,
+    attempts.length ? `   시도: ${formatDividendAttemptSummary(attempts)}` : '',
+    diagnostic.error ? `   실패: ${diagnostic.error}` : '',
+    diagnostic.reason ? `   사유: ${formatDividendDiagnosticReason(diagnostic.reason)}` : ''
+  ];
+
+  return lines.filter(Boolean).join('\n');
+}
+
+function formatDividendDiagnosticDetail(stock) {
+  const diagnostic = stock.dividendLastDiagnostic;
+  const lines = [
+    `배당 API 진단: ${stock.displayName || stock.symbol} (${stock.symbol})`,
+    stock.annualDividendPerShare
+      ? `현재 주당 연 배당금: ${formatNumber(stock.annualDividendPerShare)}${formatCurrencySuffix(stock.dividendCurrency || stock.currency)}`
+      : '현재 주당 연 배당금: -',
+    formatDividendScheduleLine(stock),
+    formatDividendEventLine(stock),
+    formatDividendHistoryLine(stock)
+  ].filter(Boolean);
+
+  if (!diagnostic) {
+    return [
+      ...lines,
+      '',
+      '아직 배당 API 갱신 이력이 없습니다.',
+      '웹앱의 배당 새로고침을 실행하거나 자동 갱신을 기다린 뒤 다시 확인하세요.'
+    ].join('\n');
+  }
+
+  const attempts = Array.isArray(diagnostic.attempts) ? diagnostic.attempts : [];
+  lines.push('');
+  lines.push(`상태: ${formatDividendDiagnosticStatus(diagnostic.status)}`);
+  lines.push(`확인 시각: ${formatDate(diagnostic.checkedAt)}`);
+  lines.push(`적용값: ${formatDividendAppliedValue(stock, diagnostic)}`);
+  lines.push(`출처: ${formatDividendDiagnosticSource(diagnostic)}`);
+
+  if (diagnostic.lastDividendValue) {
+    lines.push(
+      `최근 1주 배당: ${formatNumber(diagnostic.lastDividendValue)}${formatCurrencySuffix(diagnostic.currency || stock.dividendCurrency || stock.currency)}`
+    );
+  }
+
+  if (diagnostic.exDividendDate) {
+    lines.push(`배당락일: ${formatDateOnly(diagnostic.exDividendDate)}`);
+  }
+
+  if (diagnostic.dividendDate) {
+    lines.push(`지급일: ${formatDateOnly(diagnostic.dividendDate)}`);
+  }
+
+  if (diagnostic.error) {
+    lines.push(`실패 사유: ${diagnostic.error}`);
+  }
+
+  if (diagnostic.reason) {
+    lines.push(`처리 사유: ${formatDividendDiagnosticReason(diagnostic.reason)}`);
+  }
+
+  if (attempts.length) {
+    lines.push('');
+    lines.push('Provider 시도:');
+    lines.push(...attempts.map((attempt, index) => `${index + 1}. ${formatDividendAttemptLine(attempt, stock)}`));
+  }
+
+  return lines.join('\n');
+}
+
+function formatDividendDiagnosticStatus(status) {
+  const labels = {
+    updated: '업데이트',
+    checked: '확인',
+    error: '실패',
+    skipped: '건너뜀'
+  };
+
+  return labels[status] || '대기';
+}
+
+function formatDividendDiagnosticReason(reason) {
+  const labels = {
+    inactive: '알림 꺼짐',
+    amount: '배당금 변경',
+    lastDividend: '최근 1주 배당 변경',
+    exDate: '배당락일 변경',
+    payDate: '지급일 변경'
+  };
+
+  return String(reason || '')
+    .split(',')
+    .map((item) => item.trim())
+    .filter(Boolean)
+    .map((item) => labels[item] || item)
+    .join(', ');
+}
+
+function formatDividendAppliedValue(stock, diagnostic) {
+  const currency = diagnostic.currency || stock.dividendCurrency || stock.currency || '';
+
+  if (hasPositiveNumber(diagnostic.annualDividendPerShare)) {
+    return `${formatNumber(diagnostic.annualDividendPerShare)}${formatCurrencySuffix(currency)}`;
+  }
+
+  if (hasPositiveNumber(diagnostic.preservedAnnualDividendPerShare)) {
+    return `${formatNumber(diagnostic.preservedAnnualDividendPerShare)}${formatCurrencySuffix(currency)} 유지`;
+  }
+
+  if (hasPositiveNumber(stock.annualDividendPerShare)) {
+    return `${formatNumber(stock.annualDividendPerShare)}${formatCurrencySuffix(currency)} 기존값`;
+  }
+
+  return '-';
+}
+
+function formatDividendDiagnosticSource(diagnostic) {
+  const parts = [formatProviderLabel(diagnostic.provider)];
+
+  if (diagnostic.sourceSymbol) {
+    parts.push(diagnostic.sourceSymbol);
+  }
+
+  return parts.filter((part) => part && part !== '-').join(' · ') || '-';
+}
+
+function formatDividendAttemptSummary(attempts) {
+  const summary = attempts
+    .slice(0, 4)
+    .map((attempt) => `${formatProviderLabel(attempt.provider)} ${attempt.status === 'success' ? '성공' : '실패'}`);
+
+  if (attempts.length > 4) {
+    summary.push(`외 ${attempts.length - 4}개`);
+  }
+
+  return summary.join(' · ');
+}
+
+function formatDividendAttemptLine(attempt, stock) {
+  const provider = formatProviderLabel(attempt.provider);
+  const status = attempt.status === 'success' ? '성공' : '실패';
+  const detail = attempt.status === 'success'
+    ? formatDividendAttemptValue(attempt, stock)
+    : attempt.error || '실패 사유 없음';
+
+  return `${provider}: ${status} · ${detail}`;
+}
+
+function formatDividendAttemptValue(attempt, stock) {
+  const currency = attempt.currency || stock.dividendCurrency || stock.currency || '';
+  const parts = [];
+
+  if (hasPositiveNumber(attempt.annualDividendPerShare)) {
+    parts.push(`연 ${formatNumber(attempt.annualDividendPerShare)}${formatCurrencySuffix(currency)}`);
+  }
+
+  if (hasPositiveNumber(attempt.lastDividendValue)) {
+    parts.push(`최근 ${formatNumber(attempt.lastDividendValue)}${formatCurrencySuffix(currency)}`);
+  }
+
+  if (attempt.exDividendDate) {
+    parts.push(`배당락 ${formatDateOnly(attempt.exDividendDate)}`);
+  }
+
+  if (attempt.dividendDate) {
+    parts.push(`지급 ${formatDateOnly(attempt.dividendDate)}`);
+  }
+
+  return parts.join(' · ') || '값 없음';
+}
+
+function formatProviderLabel(provider) {
+  const normalized = String(provider || '').trim().toLowerCase();
+  const labels = {
+    public: '공공데이터',
+    publicdata: '공공데이터',
+    opendart: 'OpenDART',
+    'open-dart': 'OpenDART',
+    alphavantage: 'Alpha Vantage',
+    'alpha-vantage': 'Alpha Vantage',
+    yahoo: 'Yahoo',
+    manual: '수동'
+  };
+
+  return labels[normalized] || provider || '-';
+}
+
+function formatCurrencySuffix(currency) {
+  return currency ? ` ${currency}` : '';
+}
+
+function hasPositiveNumber(value) {
+  const number = Number(value);
+  return Number.isFinite(number) && number > 0;
+}
+
+function getDividendDiagnosticTime(diagnostic) {
+  const time = new Date(diagnostic?.checkedAt || 0).getTime();
+  return Number.isFinite(time) ? time : 0;
 }
 
 async function createBackupFromCommand(store, config, options) {
