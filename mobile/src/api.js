@@ -87,6 +87,35 @@ export function getMobileSnapshot({ baseUrl, session, fetchImpl } = {}) {
   });
 }
 
+export function createMobileStock({ baseUrl, session, stock, fetchImpl } = {}) {
+  return requestJson('/api/mobile/stocks', {
+    baseUrl,
+    method: 'POST',
+    body: stock,
+    session,
+    fetchImpl
+  });
+}
+
+export function updateMobileStock({ baseUrl, session, stockId, patch, fetchImpl } = {}) {
+  return requestJson(`/api/mobile/stocks/${encodeURIComponent(stockId)}`, {
+    baseUrl,
+    method: 'PATCH',
+    body: patch,
+    session,
+    fetchImpl
+  });
+}
+
+export function deleteMobileStock({ baseUrl, session, stockId, fetchImpl } = {}) {
+  return requestJson(`/api/mobile/stocks/${encodeURIComponent(stockId)}`, {
+    baseUrl,
+    method: 'DELETE',
+    session,
+    fetchImpl
+  });
+}
+
 async function parseJsonResponse(response) {
   if (typeof response.json === 'function') {
     try {

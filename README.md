@@ -112,6 +112,7 @@ stop-local.bat
 - 계정 없는 모바일 앱용 익명 기기 API 기초
 - 기기별 종목 격리와 푸시 토큰 저장
 - Expo SDK 55 기반 모바일 앱 초기 프로젝트와 서버 연결 화면
+- 모바일 앱 내 종목 등록, 편집, 알림 ON/OFF, 삭제
 - 로컬 JSON 파일 기반 데이터 저장, 스키마 버전, 데이터 모델 요약 API
 - 안전한 로컬 서버 종료 스크립트
 
@@ -953,7 +954,7 @@ x-device-secret: <deviceSecret>
 
 ## Expo 모바일 앱 초기 프로젝트
 
-모바일 앱은 `mobile/` 디렉터리에 분리했습니다. 현재는 Expo SDK 55 기준의 초기 앱이며, 로컬 Stock Alarm 서버 주소를 입력하고 익명 기기를 연결한 뒤 내 종목 목록을 조회하는 단계입니다.
+모바일 앱은 `mobile/` 디렉터리에 분리했습니다. 현재는 Expo SDK 55 기준의 초기 앱이며, 로컬 Stock Alarm 서버 주소를 입력하고 익명 기기를 연결한 뒤 내 종목을 등록, 편집, 삭제할 수 있는 단계입니다.
 
 Expo SDK 55는 Node.js `20.19.0` 이상이 필요합니다. 현재 PC의 Node가 그보다 낮으면 기존 로컬 서버는 계속 실행할 수 있지만, 모바일 앱의 `npm install` 또는 `npm start` 전에 Node를 업그레이드해야 합니다.
 
@@ -990,8 +991,11 @@ npm run local:phone
 - `POST /api/devices`로 익명 기기 등록
 - `expo-secure-store`로 `deviceId`, `deviceSecret` 저장
 - `GET /api/mobile/stocks`로 내 기기의 종목과 알림 목록 조회
+- `POST /api/mobile/stocks`로 내 기기의 종목 등록
+- `PATCH /api/mobile/stocks/<stockId>`로 알림 기준, 매수가, 수량, 투자 계획, 알림 ON/OFF 수정
+- `DELETE /api/mobile/stocks/<stockId>`로 내 기기의 종목 삭제
 
-다음 모바일 단계는 앱 안에서 종목 등록, 편집, 삭제까지 연결하는 것입니다.
+다음 모바일 단계는 Expo/FCM/APNs 푸시 토큰 등록과 테스트입니다. 다만 실제 앱 푸시는 배포 계정과 기기 권한 테스트가 필요하므로, 로컬 MVP 사용성 관점에서는 추가매수 계산기를 먼저 진행할 수 있습니다.
 
 ## Railway 배포 준비
 
@@ -1162,10 +1166,10 @@ Invoke-RestMethod http://127.0.0.1:3001/api/health
 - 배당: 배당 API provider 진단, 국내 종목 매칭 보정, 배당락일/지급일/변경 이력, 배당 캘린더
 - 시세: provider 진단, 시세 출처/데이터 성격 표시, 공공데이터포털 일봉 provider 실험, NXT/공식 API 검토
 - 운영/관리: 사용자/관리자 화면 분리, 관리자 보호, 백업/복구/삭제, 데이터 모델 정리, 저장소 계약, JSON -> DB 이전 설계
-- 모바일: Expo SDK 55 초기 앱, 서버 연결, 익명 기기 저장, 모바일 종목 조회 화면
+- 모바일: Expo SDK 55 초기 앱, 서버 연결, 익명 기기 저장, 모바일 종목 조회/등록/편집/삭제 화면
 
 우선순위가 높은 순서:
 
-1. 모바일 익명 기기 API 연동 고도화
-2. 추가매수 계산기
-3. 텔레그램 배당 진단 명령
+1. 추가매수 계산기
+2. 텔레그램 배당 진단 명령
+3. 모바일 푸시 알림 연결
