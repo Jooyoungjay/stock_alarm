@@ -117,6 +117,72 @@ test('JsonStore creates automatic backups for stock mutations when enabled', asy
   assert.ok(reasons.includes('after-delete-stock'));
 });
 
+test('backup functions can export and restore through store snapshots', async () => {
+  const dataDir = await createDataDir();
+  let snapshot = {
+    stocks: [{ symbol: 'OLD' }],
+    alerts: [],
+    meta: { schemaVersion: 1 }
+  };
+
+  const backup = await createBackup(dataDir, {
+    reason: 'db-snapshot',
+    maxBackups: 10,
+    readSnapshot: async () => snapshot
+  });
+
+  snapshot = {
+    stocks: [{ symbol: 'NEW' }],
+    alerts: [],
+    meta: { schemaVersion: 1 }
+  };
+
+  const result = await restoreBackup(dataDir, backup.name, {
+    maxBackups: 10,
+    readSnapshot: async () => snapshot,
+    applySnapshot: async (data) => {
+      snapshot = data;
+    }
+  });
+  const backups = await listBackups(dataDir, { limit: 20 });
+
+  assert.equal(result.restored, true);
+  assert.equal(snapshot.stocks[0].symbol, 'OLD');
+  assert.equal(result.safetyBackup.created, true);
+  assert.ok(backups.some((item) => item.reason === 'before-restore'));
+});
+
+test('JsonStore exposes backup list restore and delete methods for the storage contract', async () => {
+  const dataDir = await createDataDir();
+  const store = new JsonStore(dataDir, {
+    defaultAlertCooldownMinutes: 30,
+    backups: {
+      enabled: true,
+      maxBackups: 10
+    }
+  });
+
+  await store.addStock({
+    symbol: 'AAPL',
+    displayName: 'Apple',
+    purchasePrice: 100,
+    thresholdPercent: 5
+  });
+  const backup = await store.createBackup('contract-restore');
+  const stock = (await store.listStocks())[0];
+  await store.updateStock(stock.id, { displayName: 'Changed' });
+
+  const result = await store.restoreBackup(backup.name);
+  const restoredStocks = await store.listStocks();
+  const backups = await store.listBackups({ limit: 20 });
+  const deleteResult = await store.deleteBackup(backup.name);
+
+  assert.equal(result.restored, true);
+  assert.equal(restoredStocks[0].displayName, 'Apple');
+  assert.ok(backups.some((item) => item.name === backup.name));
+  assert.equal(deleteResult.deleted, true);
+});
+
 test('restoreBackup restores a validated backup and creates a safety backup first', async () => {
   const dataDir = await createDataDir();
   await fs.writeFile(

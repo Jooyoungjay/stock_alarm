@@ -22,7 +22,12 @@ export const STORE_CONTRACT_METHODS = Object.freeze([
   'getQuoteProviderStats',
   'recordQuoteProviderAttempt',
   'appendAlert',
-  'createBackup'
+  'createBackup',
+  'listBackups',
+  'restoreBackup',
+  'deleteBackup',
+  'exportBackupSnapshot',
+  'importBackupSnapshot'
 ]);
 
 export function normalizeStorageEngine(value) {

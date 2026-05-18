@@ -1,7 +1,12 @@
 import fs from 'node:fs/promises';
 import path from 'node:path';
 import { createHash, randomBytes, randomUUID } from 'node:crypto';
-import { createBackup } from './backups.js';
+import {
+  createBackup as createFileBackup,
+  deleteBackup as deleteFileBackup,
+  listBackups as listFileBackups,
+  restoreBackup as restoreFileBackup
+} from './backups.js';
 import { buildDataModelInfo, normalizeStoreEnvelope, touchStoreEnvelope } from './dataModel.js';
 import { STORAGE_ENGINES } from './storageContract.js';
 import { normalizeSymbolInput } from './symbols.js';
@@ -1199,10 +1204,42 @@ export class JsonStore {
     }
 
     await this.ready;
-    return createBackup(this.dataDir, {
+    return createFileBackup(this.dataDir, {
       reason,
-      maxBackups: this.backups.maxBackups
+      maxBackups: this.backups.maxBackups,
+      readSnapshot: () => this.exportBackupSnapshot()
     });
+  }
+
+  async listBackups(options = {}) {
+    await this.ready;
+    return listFileBackups(this.dataDir, options);
+  }
+
+  async restoreBackup(target, options = {}) {
+    await this.ready;
+    return restoreFileBackup(this.dataDir, target, {
+      ...options,
+      maxBackups: options.maxBackups ?? this.backups.maxBackups,
+      readSnapshot: () => this.exportBackupSnapshot(),
+      applySnapshot: (snapshot) => this.importBackupSnapshot(snapshot)
+    });
+  }
+
+  async deleteBackup(target) {
+    await this.ready;
+    return deleteFileBackup(this.dataDir, target);
+  }
+
+  async exportBackupSnapshot() {
+    return this.read();
+  }
+
+  async importBackupSnapshot(snapshot) {
+    await this.ready;
+    const data = normalizeStoreEnvelope(snapshot);
+    await writeJson(this.filePath, data);
+    return data;
   }
 }
 

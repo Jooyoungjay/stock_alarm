@@ -18,6 +18,7 @@
 - 저장소 계약: `src/storageContract.js`
 - 저장소 생성: `src/storageFactory.js`
 - 백업 위치: `data/backups/`
+- 백업 방식: 저장소 스냅샷을 JSON 백업 파일로 export/import하는 공통 계약
 
 현재 JSON 최상위 구조:
 
@@ -164,6 +165,18 @@
 - `getQuoteProviderStats()`
 - `recordQuoteProviderAttempt(attempt)`
 - `createBackup(reason)`
+- `listBackups(options)`
+- `restoreBackup(target, options)`
+- `deleteBackup(target)`
+- `exportBackupSnapshot()`
+- `importBackupSnapshot(snapshot)`
+
+백업/복구 계약:
+
+- 서버와 텔레그램 명령은 `store.createBackup`, `store.listBackups`, `store.restoreBackup`, `store.deleteBackup`만 호출합니다.
+- `JsonStore`는 현재 데이터를 스냅샷으로 내보낸 뒤 `data/backups/`에 JSON 파일로 저장합니다.
+- 향후 `PostgresStore`도 같은 스냅샷 구조를 export/import하면 관리자 화면, 텔레그램 명령, 안전 백업 흐름을 바꾸지 않고 사용할 수 있습니다.
+- 복구 전에는 현재 저장소 상태를 `before-restore` 백업으로 먼저 남깁니다.
 
 ## 이전 절차
 
@@ -197,10 +210,10 @@
 
 ## 롤백 전략
 
-- DB 전환 직전 JSON 백업을 보관합니다.
+- DB 전환 직전 저장소 스냅샷 백업을 보관합니다.
 - DB 전환 후 장애가 있으면 `.env` 저장소 설정을 JSON으로 되돌립니다.
 - 롤백 시 DB에 새로 쌓인 알림 이력은 별도 export 후 필요할 때 수동 병합합니다.
-- 백업 복구는 기존 `data/backups/` 흐름을 유지합니다.
+- 백업 복구는 기존 `data/backups/` 흐름을 유지하되, 저장소별 import 메서드를 통해 적용합니다.
 
 ## 사용자/관리자 화면 분리와의 관계
 
@@ -215,8 +228,7 @@ DB 이전은 화면 분리와 직접 연결됩니다. 사용자 화면은 종목
 
 ## 다음 구현 작업
 
-1. 사용자/관리자 라우팅 분리 구현
-2. `PostgresStore` 골격 추가
-3. JSON -> Postgres dry-run 마이그레이션 스크립트 추가
-4. 관리자 API 보호 방식 적용
-5. DB 백업/복구 전략 구현
+1. `PostgresStore` 골격 추가
+2. JSON -> Postgres dry-run 마이그레이션 스크립트 추가
+3. 실제 Postgres 연결 전 통합 테스트 데이터셋 준비
+4. 저장소별 백업 스냅샷 export/import 검증 자동화

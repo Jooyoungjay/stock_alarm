@@ -37,6 +37,11 @@ test('createStore returns a contract-compliant JsonStore for the default engine'
   assert.equal(store.dataDir, dataDir);
   assert.equal(store.backups.enabled, true);
   assert.equal(store.backups.maxBackups, 5);
+  assert.equal(typeof store.listBackups, 'function');
+  assert.equal(typeof store.restoreBackup, 'function');
+  assert.equal(typeof store.deleteBackup, 'function');
+  assert.equal(typeof store.exportBackupSnapshot, 'function');
+  assert.equal(typeof store.importBackupSnapshot, 'function');
   assert.deepEqual(getStoreContractSnapshot(store).missingMethods, []);
 });
 

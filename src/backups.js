@@ -11,32 +11,24 @@ export function getBackupDir(dataDir) {
 export async function createBackup(dataDir, options = {}) {
   const reason = sanitizeReason(options.reason || 'manual');
   const maxBackups = normalizeBackupLimit(options.maxBackups);
-  const sourcePath = path.join(dataDir, 'store.json');
   const backupDir = getBackupDir(dataDir);
   const createdAt = new Date();
   const name = `store-${formatBackupTimestamp(createdAt)}-${reason}-${randomUUID().slice(0, 8)}.json`;
   const backupPath = path.join(backupDir, name);
+  const content = await readBackupContent(dataDir, options);
 
-  let content;
-
-  try {
-    content = stripBom(await fs.readFile(sourcePath, 'utf8'));
-  } catch (error) {
-    if (error.code === 'ENOENT') {
-      return {
-        created: false,
-        reason: 'store_missing'
-      };
-    }
-
-    throw error;
+  if (content === null) {
+    return {
+      created: false,
+      reason: 'store_missing'
+    };
   }
 
-  JSON.parse(content);
+  validateStoreContent(content);
   await fs.mkdir(backupDir, { recursive: true });
 
   const tempPath = `${backupPath}.tmp`;
-  await fs.writeFile(tempPath, content, 'utf8');
+  await fs.writeFile(tempPath, ensureTrailingNewline(content), 'utf8');
   await fs.rename(tempPath, backupPath);
   await pruneBackups(dataDir, { maxBackups });
 
@@ -99,22 +91,26 @@ export async function restoreBackup(dataDir, target, options = {}) {
   const maxBackups = normalizeBackupLimit(options.maxBackups);
   const backup = await resolveBackup(dataDir, target);
   const content = stripBom(await fs.readFile(backup.path, 'utf8'));
-
-  validateStoreContent(content);
+  const data = validateStoreContent(content);
 
   const safetyBackup =
     options.safetyBackup === false
       ? null
       : await createBackup(dataDir, {
           reason: 'before-restore',
-          maxBackups
+          maxBackups,
+          readSnapshot: options.readSnapshot
         });
 
-  const storePath = path.join(dataDir, 'store.json');
-  const tempPath = `${storePath}.restore.tmp`;
+  if (typeof options.applySnapshot === 'function') {
+    await options.applySnapshot(data);
+  } else {
+    const storePath = path.join(dataDir, 'store.json');
+    const tempPath = `${storePath}.restore.tmp`;
 
-  await fs.writeFile(tempPath, ensureTrailingNewline(content), 'utf8');
-  await fs.rename(tempPath, storePath);
+    await fs.writeFile(tempPath, ensureTrailingNewline(content), 'utf8');
+    await fs.rename(tempPath, storePath);
+  }
 
   return {
     restored: true,
@@ -216,6 +212,33 @@ export async function pruneBackups(dataDir, options = {}) {
   return {
     removed: staleBackups.length
   };
+}
+
+async function readBackupContent(dataDir, options) {
+  if (typeof options.readSnapshot === 'function') {
+    return serializeBackupSnapshot(await options.readSnapshot());
+  }
+
+  if (options.snapshot !== undefined) {
+    return serializeBackupSnapshot(options.snapshot);
+  }
+
+  const sourcePath = path.join(dataDir, 'store.json');
+
+  try {
+    return stripBom(await fs.readFile(sourcePath, 'utf8'));
+  } catch (error) {
+    if (error.code === 'ENOENT') {
+      return null;
+    }
+
+    throw error;
+  }
+}
+
+function serializeBackupSnapshot(snapshot) {
+  const data = validateStoreContent(JSON.stringify(snapshot ?? {}));
+  return JSON.stringify(data, null, 2);
 }
 
 function validateStoreContent(content) {

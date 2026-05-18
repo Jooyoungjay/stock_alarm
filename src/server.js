@@ -3,7 +3,6 @@ import fs from 'node:fs/promises';
 import path from 'node:path';
 import { getAdminAuthStatus, isAdminApiPath, isAdminRequestAuthorized } from './adminAuth.js';
 import { buildAccessUrls } from './accessUrls.js';
-import { createBackup, deleteBackup, listBackups, restoreBackup } from './backups.js';
 import { config } from './config.js';
 import { buildDividendCalendar } from './dividendCalendar.js';
 import { lastDividendEventAlertMetaKey, runDividendEventAlertCheck } from './dividendEventAlerts.js';
@@ -60,10 +59,7 @@ const startedAt = new Date().toISOString();
 let runtimeInfo = null;
 let isShuttingDown = false;
 
-createBackup(config.dataDir, {
-  reason: 'server-start',
-  maxBackups: config.backupRetention
-}).catch((error) => {
+store.createBackup('server-start').catch((error) => {
   console.error('Startup backup failed:', error);
 });
 
@@ -742,7 +738,7 @@ async function handleApi(request, response, url) {
 
   if (request.method === 'GET' && url.pathname === '/api/backups') {
     const limit = Number(url.searchParams.get('limit') || config.backupRetention);
-    const backups = await listBackups(config.dataDir, {
+    const backups = await store.listBackups({
       limit: Number.isFinite(limit) ? limit : config.backupRetention
     });
 
@@ -761,11 +757,8 @@ async function handleApi(request, response, url) {
   }
 
   if (request.method === 'POST' && url.pathname === '/api/backups') {
-    const backup = await createBackup(config.dataDir, {
-      reason: 'manual-web',
-      maxBackups: config.backupRetention
-    });
-    const backups = await listBackups(config.dataDir, { limit: config.backupRetention });
+    const backup = await store.createBackup('manual-web');
+    const backups = await store.listBackups({ limit: config.backupRetention });
 
     sendJson(response, 200, {
       backup: serializeBackup(backup),
@@ -776,10 +769,10 @@ async function handleApi(request, response, url) {
 
   if (request.method === 'POST' && url.pathname === '/api/backups/restore') {
     const body = await readJsonBody(request);
-    const result = await restoreBackup(config.dataDir, body.target || body.name || body.index, {
+    const result = await store.restoreBackup(body.target || body.name || body.index, {
       maxBackups: config.backupRetention
     });
-    const backups = await listBackups(config.dataDir, { limit: config.backupRetention });
+    const backups = await store.listBackups({ limit: config.backupRetention });
 
     sendJson(response, 200, {
       restored: true,
@@ -791,8 +784,8 @@ async function handleApi(request, response, url) {
   }
 
   if (request.method === 'DELETE' && segments[0] === 'api' && segments[1] === 'backups' && segments[2]) {
-    const result = await deleteBackup(config.dataDir, decodeURIComponent(segments[2]));
-    const backups = await listBackups(config.dataDir, { limit: config.backupRetention });
+    const result = await store.deleteBackup(decodeURIComponent(segments[2]));
+    const backups = await store.listBackups({ limit: config.backupRetention });
 
     sendJson(response, 200, {
       deleted: true,

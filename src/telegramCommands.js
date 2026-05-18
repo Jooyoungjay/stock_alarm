@@ -520,10 +520,12 @@ async function createBackupFromCommand(store, config, options) {
   ].join('\n');
 }
 
-async function listBackupsFromCommand(_store, config, command, options) {
+async function listBackupsFromCommand(store, config, command, options) {
   const backupLister = options.listBackups || listBackups;
   const limit = normalizeListLimit(command.args[0] || 5);
-  const backups = await backupLister(config.dataDir, { limit });
+  const backups = options.listBackups
+    ? await backupLister(config.dataDir, { limit })
+    : await store.listBackups({ limit });
 
   if (!backups.length) {
     return '백업 파일이 없습니다.';
@@ -538,12 +540,16 @@ async function listBackupsFromCommand(_store, config, command, options) {
   ].join('\n');
 }
 
-async function restoreBackupFromCommand(_store, config, command, options) {
+async function restoreBackupFromCommand(store, config, command, options) {
   const target = command.args[0];
   const backupRestorer = options.restoreBackup || restoreBackup;
-  const result = await backupRestorer(config.dataDir, target, {
-    maxBackups: config.backupRetention
-  });
+  const result = options.restoreBackup
+    ? await backupRestorer(config.dataDir, target, {
+        maxBackups: config.backupRetention
+      })
+    : await store.restoreBackup(target, {
+        maxBackups: config.backupRetention
+      });
 
   return [
     '백업을 복구했습니다.',
@@ -555,10 +561,12 @@ async function restoreBackupFromCommand(_store, config, command, options) {
     .join('\n');
 }
 
-async function deleteBackupFromCommand(_store, config, command, options) {
+async function deleteBackupFromCommand(store, config, command, options) {
   const target = command.args[0];
   const backupDeleter = options.deleteBackup || deleteBackup;
-  const result = await backupDeleter(config.dataDir, target);
+  const result = options.deleteBackup
+    ? await backupDeleter(config.dataDir, target)
+    : await store.deleteBackup(target);
 
   return [
     '백업을 삭제했습니다.',
