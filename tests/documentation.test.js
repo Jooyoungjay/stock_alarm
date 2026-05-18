@@ -31,3 +31,36 @@ test('user and admin page split guide keeps product and admin scopes separate', 
   assert.match(markdown, /ADMIN_TOKEN/);
   assert.match(markdown, /x-admin-token/);
 });
+
+test('app review documents cover privacy, store metadata, and review blockers', async () => {
+  const reviewMarkdown = await fs.readFile(
+    new URL('../docs/app-store-review-prep.md', import.meta.url),
+    'utf8'
+  );
+  const privacyMarkdown = await fs.readFile(
+    new URL('../docs/privacy-policy-ko.md', import.meta.url),
+    'utf8'
+  );
+  const listing = JSON.parse(
+    await fs.readFile(new URL('../mobile/store-listing.ko.json', import.meta.url), 'utf8')
+  );
+
+  assert.match(reviewMarkdown, /App Store Review Guidelines/);
+  assert.match(reviewMarkdown, /Google Play Data safety/);
+  assert.match(reviewMarkdown, /HTTPS 데모 서버/);
+  assert.match(reviewMarkdown, /투자 자문/);
+  assert.match(reviewMarkdown, /데이터 삭제/);
+
+  assert.match(privacyMarkdown, /개인정보 처리방침 초안/);
+  assert.match(privacyMarkdown, /익명 기기 ID/);
+  assert.match(privacyMarkdown, /Expo Push Token/);
+  assert.match(privacyMarkdown, /deviceSecret 원문 대신 해시/);
+  assert.match(privacyMarkdown, /투자 자문 또는 매매 권유/);
+
+  assert.equal(listing.locale, 'ko-KR');
+  assert.equal(listing.appName, 'Stock Alarm');
+  assert.equal(listing.category, 'FINANCE');
+  assert.equal(listing.dataSafety.accountCreation, 'notRequired');
+  assert.ok(listing.dataSafety.dataCollected.some((item) => item.type === 'Device identifiers'));
+  assert.ok(listing.reviewNotes.some((item) => item.includes('HTTPS 서버')));
+});

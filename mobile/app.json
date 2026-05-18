@@ -3,6 +3,7 @@
     "name": "Stock Alarm",
     "slug": "stock-alarm",
     "version": "0.1.0",
+    "description": "보유 종목의 매도 기준, 배당 일정, 가격 알림을 계정 없이 관리하는 주식 알림 앱입니다.",
     "orientation": "portrait",
     "scheme": "stockalarm",
     "userInterfaceStyle": "automatic",
@@ -41,7 +42,16 @@
       ]
     ],
     "extra": {
-      "defaultApiBaseUrl": "http://127.0.0.1:3001"
+      "defaultApiBaseUrl": "http://127.0.0.1:3001",
+      "storeReview": {
+        "accountModel": "anonymous-device",
+        "supportEmail": "jumanz2@naver.com",
+        "privacyPolicyDocument": "../docs/privacy-policy-ko.md",
+        "reviewPrepDocument": "../docs/app-store-review-prep.md",
+        "listingMetadata": "./store-listing.ko.json",
+        "pushNotificationPurpose": "사용자가 등록한 종목의 가격 조건 도달과 배당 일정 알림 전송",
+        "financialAdviceDisclaimer": "투자 자문 또는 매매 중개 기능 없이 사용자가 입력한 기준에 따른 알림만 제공합니다."
+      }
     }
   }
 }

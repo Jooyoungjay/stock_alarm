@@ -209,6 +209,7 @@ test('mobile portfolio summary counts active, warning, and triggered stocks', ()
 test('Expo mobile scaffold declares SDK 55 and app store identifiers', async () => {
   const packageJson = JSON.parse(await fs.readFile(new URL('../mobile/package.json', import.meta.url), 'utf8'));
   const appJson = JSON.parse(await fs.readFile(new URL('../mobile/app.json', import.meta.url), 'utf8'));
+  const listing = JSON.parse(await fs.readFile(new URL('../mobile/store-listing.ko.json', import.meta.url), 'utf8'));
   const appSource = await fs.readFile(new URL('../mobile/App.js', import.meta.url), 'utf8');
 
   assert.equal(packageJson.dependencies.expo, '~55.0.0');
@@ -217,6 +218,12 @@ test('Expo mobile scaffold declares SDK 55 and app store identifiers', async () 
   assert.equal(packageJson.dependencies['expo-constants'], '~55.0.16');
   assert.equal(appJson.expo.ios.bundleIdentifier, 'com.jooyoungjay.stockalarm');
   assert.equal(appJson.expo.android.package, 'com.jooyoungjay.stockalarm');
+  assert.equal(appJson.expo.extra.storeReview.accountModel, 'anonymous-device');
+  assert.equal(appJson.expo.extra.storeReview.supportEmail, 'jumanz2@naver.com');
+  assert.equal(appJson.expo.extra.storeReview.privacyPolicyDocument, '../docs/privacy-policy-ko.md');
+  assert.match(appJson.expo.description, /계정 없이/);
+  assert.equal(listing.privacyPolicyUrl.includes('TBD'), true);
+  assert.ok(listing.permissions.some((permission) => permission.name === 'Push notifications'));
   assert.ok(appJson.expo.plugins.some((plugin) => Array.isArray(plugin) && plugin[0] === 'expo-notifications'));
   assert.match(appSource, /createDevice/);
   assert.match(appSource, /getMobileSnapshot/);

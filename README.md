@@ -116,6 +116,7 @@ stop-local.bat
 - 기기별 종목 격리와 푸시 토큰 저장, 가격 알림 발생 시 모바일 푸시 전송
 - Expo SDK 55 기반 모바일 앱 초기 프로젝트와 서버 연결 화면
 - 모바일 앱 내 종목 등록, 편집, 알림 ON/OFF, 삭제, 푸시 토큰 등록과 테스트
+- 앱스토어/플레이스토어 심사용 개인정보 처리방침 초안, 스토어 메타데이터, 제출 체크리스트
 - 로컬 JSON 파일 기반 데이터 저장, 스키마 버전, 데이터 모델 요약 API
 - 안전한 로컬 서버 종료 스크립트
 
@@ -164,6 +165,7 @@ stock_alarm/
 │  ├─ App.js
 │  ├─ app.json
 │  ├─ package.json
+│  ├─ store-listing.ko.json
 │  ├─ assets/
 │  └─ src/
 │     ├─ api.js
@@ -203,6 +205,8 @@ stock_alarm/
 │  ├─ user-admin-page-split.md     # 사용자/관리자 화면 분리 전략
 │  ├─ market-data-api-candidates.md # 공식/유료 시세 API 후보 검토
 │  ├─ nxt-market-data-review.md    # NXT 시세 API 검토
+│  ├─ app-store-review-prep.md     # 앱 심사 준비 체크리스트
+│  ├─ privacy-policy-ko.md         # 개인정보 처리방침 초안
 │  └─ railway-deploy.md            # Railway 배포 가이드
 ├─ tests/                   # Node.js 테스트
 ├─ data/                    # 로컬 실행 데이터, Git 제외
@@ -1049,6 +1053,14 @@ npm run local:phone
 
 가격 알림이 발생하면 텔레그램 전송과 별도로 해당 종목의 `deviceId`에 저장된 Expo Push 토큰으로 모바일 푸시를 보냅니다. 실제 휴대폰 푸시는 기기 권한, Expo Push 토큰, 네트워크 접속이 모두 맞아야 하며 시뮬레이터/Expo Go 환경에서는 제한될 수 있습니다.
 
+앱 심사 준비 문서:
+
+- [앱 심사 준비 체크리스트](docs/app-store-review-prep.md)
+- [개인정보 처리방침 초안](docs/privacy-policy-ko.md)
+- [한국어 스토어 등록 정보 초안](mobile/store-listing.ko.json)
+
+현재 심사 준비 문서는 제출 전 확인용입니다. 실제 App Store와 Play Store 제출 전에는 개인정보 처리방침을 HTTPS 공개 URL로 게시하고, 리뷰어가 접근할 수 있는 HTTPS 데모 서버 또는 내부 테스트 환경을 제공해야 합니다.
+
 ## Railway 배포 준비
 
 현재 개발 방향은 로컬 PC 실행을 우선합니다. 다만 24시간 서버 운영이 필요해질 때를 대비해 Railway 설정 파일은 유지합니다.
@@ -1122,6 +1134,7 @@ node --check scripts/local-server.js
 - 종목 검색
 - 모바일 익명 기기 API 저장소
 - 모바일 Expo Push 전송 헬퍼와 알림 경로 연결
+- 앱 심사 준비 문서와 스토어 메타데이터 초안
 
 ## 문제 해결
 
@@ -1220,10 +1233,10 @@ Invoke-RestMethod http://127.0.0.1:3001/api/health
 - 배당: 배당 API provider 진단, 텔레그램 배당 진단 명령, 국내 종목 매칭 보정, 배당락일/지급일/변경 이력, 배당 성장률, 배당 캘린더
 - 시세: provider 진단, 시세 출처/데이터 성격 표시, 공공데이터포털 일봉 provider 실험, NXT/공식 API 검토
 - 운영/관리: 사용자/관리자 화면 분리, 관리자 보호, 백업/복구/삭제, 데이터 모델 정리, 저장소 계약, JSON -> DB 이전 설계, WBS 상태 표준화
-- 모바일: Expo SDK 55 초기 앱, 서버 연결, 익명 기기 저장, 모바일 종목 조회/등록/편집/삭제, Expo Push 토큰 등록과 알림 전송
+- 모바일: Expo SDK 55 초기 앱, 서버 연결, 익명 기기 저장, 모바일 종목 조회/등록/편집/삭제, Expo Push 토큰 등록과 알림 전송, 앱 심사 준비 문서와 스토어 메타데이터 초안
 
 우선순위가 높은 순서:
 
-1. 앱 심사 준비
-2. 배당락일 전후 알림
-3. 배당 캘린더 고도화
+1. 배당락일 전후 알림
+2. 배당 캘린더 고도화
+3. 백업/복구 DB 대응
