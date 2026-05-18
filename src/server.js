@@ -491,6 +491,21 @@ async function handleApi(request, response, url) {
     return;
   }
 
+  if (request.method === 'GET' && url.pathname === '/api/mobile/ping') {
+    sendJson(response, 200, {
+      ok: true,
+      appName: APP_NAME,
+      appDisplayName: APP_DISPLAY_NAME,
+      pid: process.pid,
+      host: config.host,
+      port: activePort,
+      startedAt,
+      serverTime: new Date().toISOString(),
+      mobileApi: true
+    });
+    return;
+  }
+
   if (request.method === 'POST' && url.pathname === '/api/devices') {
     const body = await readJsonBody(request);
     const result = await store.createDevice(body);

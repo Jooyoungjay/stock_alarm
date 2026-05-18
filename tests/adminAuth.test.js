@@ -53,4 +53,5 @@ test('admin api path detection protects operational routes only', () => {
   assert.equal(isAdminApiPath('GET', '/api/stocks'), false);
   assert.equal(isAdminApiPath('GET', '/api/quote-preview'), false);
   assert.equal(isAdminApiPath('POST', '/api/devices'), false);
+  assert.equal(isAdminApiPath('GET', '/api/mobile/ping'), false);
 });

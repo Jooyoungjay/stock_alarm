@@ -111,6 +111,7 @@ stop-local.bat
 - 같은 Wi-Fi 휴대폰 접속용 주소와 QR 코드 표시
 - 계정 없는 모바일 앱용 익명 기기 API 기초
 - 기기별 종목 격리와 푸시 토큰 저장
+- Expo SDK 55 기반 모바일 앱 초기 프로젝트와 서버 연결 화면
 - 로컬 JSON 파일 기반 데이터 저장, 스키마 버전, 데이터 모델 요약 API
 - 안전한 로컬 서버 종료 스크립트
 
@@ -132,6 +133,12 @@ stock_alarm/
 │  ├─ manifest.webmanifest
 │  ├─ sw.js
 │  └─ icons/
+├─ mobile/                  # Expo 모바일 앱 초기 프로젝트
+│  ├─ App.js
+│  ├─ app.json
+│  ├─ package.json
+│  ├─ assets/
+│  └─ src/
 ├─ src/
 │  ├─ server.js             # HTTP 서버와 API
 │  ├─ alertEngine.js        # 알림 기준 계산, 상태 추적, 알림 전송 흐름
@@ -335,6 +342,8 @@ npm run stop
 npm run local:start
 npm run local:phone
 npm run local:status
+npm run mobile:install
+npm run mobile:start
 ```
 
 가장 단순한 실행:
@@ -932,6 +941,7 @@ x-device-secret: <deviceSecret>
 
 | API | 설명 |
 |---|---|
+| `GET /api/mobile/ping` | 모바일 앱 서버 연결 확인 |
 | `GET /api/mobile/me` | 내 익명 기기 정보 확인 |
 | `POST /api/mobile/push-token` | Expo/FCM/APNs 푸시 토큰 저장 |
 | `GET /api/mobile/stocks` | 내 기기의 종목과 알림 목록 조회 |
@@ -940,6 +950,48 @@ x-device-secret: <deviceSecret>
 | `DELETE /api/mobile/stocks/<stockId>` | 내 기기의 종목 삭제 |
 
 다른 기기의 `stockId`를 알아도 `deviceSecret`이 맞지 않으면 수정/삭제할 수 없습니다. 현재는 JSON 저장소 기반으로 동작하지만, 이 구조는 나중에 Postgres의 `devices`, `stocks`, `alerts`, `push_tokens` 테이블로 옮기기 쉽도록 맞춰둔 단계입니다.
+
+## Expo 모바일 앱 초기 프로젝트
+
+모바일 앱은 `mobile/` 디렉터리에 분리했습니다. 현재는 Expo SDK 55 기준의 초기 앱이며, 로컬 Stock Alarm 서버 주소를 입력하고 익명 기기를 연결한 뒤 내 종목 목록을 조회하는 단계입니다.
+
+Expo SDK 55는 Node.js `20.19.0` 이상이 필요합니다. 현재 PC의 Node가 그보다 낮으면 기존 로컬 서버는 계속 실행할 수 있지만, 모바일 앱의 `npm install` 또는 `npm start` 전에 Node를 업그레이드해야 합니다.
+
+처음 한 번 설치:
+
+```powershell
+npm run mobile:install
+```
+
+실행:
+
+```powershell
+npm run mobile:start
+```
+
+모바일 앱을 실제 휴대폰에서 테스트하려면 루트 서버를 휴대폰 접속 모드로 실행합니다.
+
+```powershell
+npm run local:phone
+```
+
+앱의 서버 주소 입력칸에는 실행 로그나 `status-local.bat`에 표시된 LAN 주소를 넣습니다.
+
+| 환경 | 서버 주소 예시 |
+|---|---|
+| iOS 시뮬레이터 | `http://127.0.0.1:3001` |
+| Android 에뮬레이터 | `http://10.0.2.2:3001` |
+| 실제 휴대폰 | `npm run local:phone`에 표시된 `http://192.168.x.x:<포트>` 주소 |
+
+현재 모바일 앱 범위:
+
+- 서버 상태 확인
+- `GET /api/mobile/ping`으로 모바일 서버 연결 확인
+- `POST /api/devices`로 익명 기기 등록
+- `expo-secure-store`로 `deviceId`, `deviceSecret` 저장
+- `GET /api/mobile/stocks`로 내 기기의 종목과 알림 목록 조회
+
+다음 모바일 단계는 앱 안에서 종목 등록, 편집, 삭제까지 연결하는 것입니다.
 
 ## Railway 배포 준비
 
@@ -1110,9 +1162,10 @@ Invoke-RestMethod http://127.0.0.1:3001/api/health
 - 배당: 배당 API provider 진단, 국내 종목 매칭 보정, 배당락일/지급일/변경 이력, 배당 캘린더
 - 시세: provider 진단, 시세 출처/데이터 성격 표시, 공공데이터포털 일봉 provider 실험, NXT/공식 API 검토
 - 운영/관리: 사용자/관리자 화면 분리, 관리자 보호, 백업/복구/삭제, 데이터 모델 정리, 저장소 계약, JSON -> DB 이전 설계
+- 모바일: Expo SDK 55 초기 앱, 서버 연결, 익명 기기 저장, 모바일 종목 조회 화면
 
 우선순위가 높은 순서:
 
-1. Expo 모바일 앱 초기 프로젝트 생성
+1. 모바일 익명 기기 API 연동 고도화
 2. 추가매수 계산기
 3. 텔레그램 배당 진단 명령

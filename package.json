@@ -13,6 +13,8 @@
     "local:status": "node scripts/local-server.js status",
     "check:railway": "node scripts/check-railway-config.js",
     "check:publicdata-price": "node scripts/check-publicdata-price.js",
+    "mobile:install": "npm --prefix mobile install",
+    "mobile:start": "npm --prefix mobile start",
     "test": "node --test"
   },
   "engines": {
