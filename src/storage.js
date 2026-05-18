@@ -136,6 +136,13 @@ function normalizeStock(input, defaults) {
     quoteLicenseType: '',
     quoteSourceNote: '',
     quoteRegularMarketTime: null,
+    investmentReason: String(input.investmentReason || '').trim(),
+    investmentTargetPrice: normalizeOptionalPositiveNumber(
+      input.investmentTargetPrice,
+      '투자 목표가는 0보다 큰 숫자여야 합니다.'
+    ),
+    sellCondition: String(input.sellCondition || '').trim(),
+    reviewDate: normalizeOptionalReviewDate(input.reviewDate),
     notes: String(input.notes || '').trim(),
     createdAt: now,
     updatedAt: now
@@ -177,6 +184,25 @@ function applyStockPatch(stock, patch) {
 
   if (patch.notes !== undefined) {
     next.notes = String(patch.notes || '').trim();
+  }
+
+  if (patch.investmentReason !== undefined) {
+    next.investmentReason = String(patch.investmentReason || '').trim();
+  }
+
+  if (patch.investmentTargetPrice !== undefined) {
+    next.investmentTargetPrice = normalizeOptionalPositiveNumber(
+      patch.investmentTargetPrice,
+      '투자 목표가는 0보다 큰 숫자여야 합니다.'
+    );
+  }
+
+  if (patch.sellCondition !== undefined) {
+    next.sellCondition = String(patch.sellCondition || '').trim();
+  }
+
+  if (patch.reviewDate !== undefined) {
+    next.reviewDate = normalizeOptionalReviewDate(patch.reviewDate);
   }
 
   if (patch.purchasePrice !== undefined) {
@@ -376,6 +402,11 @@ function normalizeStoredStock(stock) {
     quoteLicenseType: stock.quoteLicenseType || '',
     quoteSourceNote: stock.quoteSourceNote || '',
     quoteRegularMarketTime: normalizeIsoDateTime(stock.quoteRegularMarketTime) || null,
+    investmentReason: String(stock.investmentReason || '').trim(),
+    investmentTargetPrice: normalizeOptionalStoredPositiveNumber(stock.investmentTargetPrice),
+    sellCondition: String(stock.sellCondition || '').trim(),
+    reviewDate: normalizeStoredOptionalDate(stock.reviewDate),
+    notes: String(stock.notes || '').trim(),
     alertState: normalizeAlertState(stock.alertState),
     alertStartedAt: stock.alertStartedAt || null,
     alertRecoveredAt: stock.alertRecoveredAt || null,
@@ -427,6 +458,12 @@ function normalizeOptionalStoredNumber(value) {
 
   const number = Number(value);
   return Number.isFinite(number) ? number : null;
+}
+
+function normalizeOptionalStoredPositiveNumber(value) {
+  const number = normalizeOptionalStoredNumber(value);
+
+  return number !== null && number > 0 ? number : null;
 }
 
 function normalizeDividendDiagnostic(value) {
@@ -789,6 +826,22 @@ function normalizeOptionalPositiveNumber(value, errorMessage) {
 }
 
 function normalizeOptionalDate(value) {
+  return normalizeOptionalDateField(value, '구매일 형식이 올바르지 않습니다.');
+}
+
+function normalizeOptionalReviewDate(value) {
+  return normalizeOptionalDateField(value, '점검일 형식이 올바르지 않습니다.');
+}
+
+function normalizeStoredOptionalDate(value) {
+  try {
+    return normalizeOptionalDateField(value, '날짜 형식이 올바르지 않습니다.');
+  } catch {
+    return '';
+  }
+}
+
+function normalizeOptionalDateField(value, errorMessage) {
   if (value === undefined || value === null || value === '') {
     return '';
   }
@@ -797,13 +850,13 @@ function normalizeOptionalDate(value) {
   const match = raw.match(/^(\d{4})-(\d{2})-(\d{2})$/);
 
   if (!match) {
-    throw new Error('구매일 형식이 올바르지 않습니다.');
+    throw new Error(errorMessage);
   }
 
   const parsed = new Date(`${raw}T00:00:00.000Z`);
 
   if (!Number.isFinite(parsed.getTime()) || parsed.toISOString().slice(0, 10) !== raw) {
-    throw new Error('구매일 형식이 올바르지 않습니다.');
+    throw new Error(errorMessage);
   }
 
   return raw;

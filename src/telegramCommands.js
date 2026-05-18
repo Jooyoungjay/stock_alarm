@@ -42,6 +42,10 @@ const helpMessage = [
   '/edit 336260 dividendfreq quarterly',
   '/edit 336260 dividendmonths 3,6,9,12',
   '/edit 336260 name 두산퓨얼셀',
+  '/edit 336260 reason 수소 밸류체인 성장',
+  '/edit 336260 goal 120000',
+  '/edit 336260 sell 분기 적자 확대 시 매도',
+  '/edit 336260 review 2026-08-15',
   '',
   '기준값: high=최고가 대비 하락률, profit=이익금 반납률, loss=매수가 대비 손절률, target=직접 기준가'
 ].join('\n');
@@ -537,8 +541,40 @@ export function parseEditArgs(args) {
           notes: value
         }
       };
+    case 'reason':
+      return {
+        query,
+        label: '매수 이유',
+        patch: {
+          investmentReason: value
+        }
+      };
+    case 'planTarget':
+      return {
+        query,
+        label: '투자 목표가',
+        patch: {
+          investmentTargetPrice: firstValue || ''
+        }
+      };
+    case 'sellCondition':
+      return {
+        query,
+        label: '매도 조건',
+        patch: {
+          sellCondition: value
+        }
+      };
+    case 'reviewDate':
+      return {
+        query,
+        label: '실적 체크일',
+        patch: {
+          reviewDate: firstValue || ''
+        }
+      };
     default:
-      throw new Error('수정 항목은 high, profit, loss, target, cooldown, name, price, qty, dividend, dividendfreq, dividendmonths, date, notes 중 하나로 입력하세요.');
+      throw new Error('수정 항목은 high, profit, loss, target, cooldown, name, price, qty, dividend, dividendfreq, dividendmonths, date, notes, reason, goal, sell, review 중 하나로 입력하세요.');
   }
 }
 
@@ -786,6 +822,22 @@ function normalizeEditField(value) {
 
   if (['note', 'notes', 'memo', '메모'].includes(token)) {
     return 'notes';
+  }
+
+  if (['reason', 'thesis', 'buyreason', 'investmentreason', '매수이유', '투자이유'].includes(token)) {
+    return 'reason';
+  }
+
+  if (['goal', 'plantarget', 'investmenttarget', 'investmenttargetprice', '목표가', '투자목표가'].includes(token)) {
+    return 'planTarget';
+  }
+
+  if (['sell', 'sellcondition', 'exit', 'exitcondition', '매도조건', '매도기준'].includes(token)) {
+    return 'sellCondition';
+  }
+
+  if (['review', 'reviewdate', 'checkdate', '실적체크일', '점검일', '체크일'].includes(token)) {
+    return 'reviewDate';
   }
 
   return token;
@@ -1227,7 +1279,11 @@ function getShortUsage(commandName) {
       '/edit 336260 loss 5',
       '/edit 336260 target 93000',
       '/edit 336260 cooldown 60',
-      '/edit 336260 name 두산퓨얼셀'
+      '/edit 336260 name 두산퓨얼셀',
+      '/edit 336260 reason 수소 밸류체인 성장',
+      '/edit 336260 goal 120000',
+      '/edit 336260 sell 분기 적자 확대 시 매도',
+      '/edit 336260 review 2026-08-15'
     ].join('\n');
   }
 

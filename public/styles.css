@@ -1706,6 +1706,68 @@ select:focus {
   gap: 8px;
 }
 
+.investment-plan-panel {
+  display: grid;
+  gap: 8px;
+  padding: 10px;
+  border: 1px solid rgba(26, 158, 110, 0.22);
+  border-radius: var(--radius-sm);
+  background: rgba(13, 17, 23, 0.34);
+}
+
+.investment-plan-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.investment-plan-head span {
+  color: var(--accent);
+  font-size: 10px;
+  font-weight: 900;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.investment-plan-head strong {
+  color: var(--text);
+  font-size: 13px;
+  font-weight: 900;
+}
+
+.investment-plan-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+  gap: 8px;
+}
+
+.investment-plan-item {
+  display: grid;
+  gap: 3px;
+  min-width: 0;
+}
+
+.investment-plan-item span {
+  color: var(--muted);
+  font-size: 10px;
+  font-weight: 800;
+}
+
+.investment-plan-item strong {
+  overflow-wrap: anywhere;
+  color: var(--text);
+  font-size: 13px;
+  font-weight: 800;
+}
+
+.investment-plan-item em {
+  color: var(--dim);
+  font-size: 11px;
+  font-style: normal;
+  font-weight: 700;
+}
+
 .dividend-history-list {
   display: grid;
   gap: 6px;

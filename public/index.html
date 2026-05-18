@@ -228,13 +228,52 @@
                 </label>
               </div>
 
+              <div class="form-row">
+                <label class="form-group">
+                  <span class="form-label">투자 목표가</span>
+                  <input
+                    class="form-input"
+                    name="investmentTargetPrice"
+                    type="text"
+                    inputmode="decimal"
+                    pattern="[0-9]*[.]?[0-9]*"
+                    placeholder="120000"
+                  />
+                </label>
+
+                <label class="form-group">
+                  <span class="form-label">실적 체크일</span>
+                  <input class="form-input" name="reviewDate" type="date" />
+                </label>
+              </div>
+
               <label class="form-group">
-                <span class="form-label">메모</span>
+                <span class="form-label">매수 이유</span>
+                <textarea
+                  class="form-textarea"
+                  name="investmentReason"
+                  rows="2"
+                  placeholder="이 종목을 보유하는 핵심 이유"
+                ></textarea>
+              </label>
+
+              <label class="form-group">
+                <span class="form-label">매도 조건</span>
+                <textarea
+                  class="form-textarea"
+                  name="sellCondition"
+                  rows="2"
+                  placeholder="어떤 조건이면 팔지"
+                ></textarea>
+              </label>
+
+              <label class="form-group">
+                <span class="form-label">기타 메모</span>
                 <textarea
                   class="form-textarea"
                   name="notes"
-                  rows="3"
-                  placeholder="매수 이유 또는 목표가"
+                  rows="2"
+                  placeholder="추가 메모"
                 ></textarea>
               </label>
             </section>

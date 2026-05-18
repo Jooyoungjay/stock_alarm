@@ -626,6 +626,9 @@ function normalizeStockPayload(payload) {
     normalized.alertType === 'target_price' && normalized.targetPrice
       ? Number(normalized.targetPrice)
       : null;
+  normalized.investmentTargetPrice = normalized.investmentTargetPrice
+    ? Number(normalized.investmentTargetPrice)
+    : null;
   normalized.alertCooldownMinutes = Number(normalized.alertCooldownMinutes);
 
   if (normalized.thresholdPercent === undefined || normalized.thresholdPercent === '') {
@@ -737,7 +740,12 @@ function validateRegistrationStep(step) {
       elements.form.elements.alertType,
       elements.form.elements.targetPrice,
       elements.form.elements.thresholdPercent,
-      elements.form.elements.alertCooldownMinutes
+      elements.form.elements.alertCooldownMinutes,
+      elements.form.elements.investmentTargetPrice,
+      elements.form.elements.reviewDate,
+      elements.form.elements.investmentReason,
+      elements.form.elements.sellCondition,
+      elements.form.elements.notes
     ]
   };
   const controls = controlsByStep[step] || [];
@@ -1319,6 +1327,10 @@ function renderRegistrationSummary() {
   const thresholdPercent = parseFiniteNumber(form.elements.thresholdPercent.value);
   const targetPrice = parseFiniteNumber(form.elements.targetPrice.value);
   const cooldown = parseFiniteNumber(form.elements.alertCooldownMinutes.value);
+  const investmentTargetPrice = parseFiniteNumber(form.elements.investmentTargetPrice.value);
+  const investmentReason = form.elements.investmentReason.value.trim();
+  const sellCondition = form.elements.sellCondition.value.trim();
+  const reviewDate = form.elements.reviewDate.value;
   const notes = form.elements.notes.value.trim();
   const alertDetail =
     alertType === 'target_price'
@@ -1348,6 +1360,12 @@ function renderRegistrationSummary() {
       : dividendSchedule.frequency
         ? formatDividendMonths(dividendSchedule.months)
         : '선택 입력';
+  const planSummary = [
+    investmentReason ? '매수 이유 입력' : '',
+    investmentTargetPrice ? `목표 ${formatMoney(investmentTargetPrice)}` : '',
+    sellCondition ? '매도 조건 입력' : '',
+    reviewDate ? `점검 ${formatDateOnly(reviewDate)}` : ''
+  ].filter(Boolean);
 
   elements.registrationSummary.innerHTML = `
     <div class="registration-summary-grid">
@@ -1357,7 +1375,8 @@ function renderRegistrationSummary() {
       ${renderSummaryItem('배당', annualDividendPerShare ? `주당 ${formatMoney(annualDividendPerShare)}` : '-', expectedAnnualDividend ? `연 ${formatMoney(expectedAnnualDividend)} · ${formatPercent(dividendYield)}` : '선택 입력')}
       ${renderSummaryItem('배당 일정', getDividendFrequencyLabel(dividendFrequency), dividendScheduleDetail)}
       ${renderSummaryItem('알림 기준', getAlertTypeLabel({ alertType }), alertDetail)}
-      ${renderSummaryItem('반복 알림', cooldown ? `${cooldown}분마다` : '-', notes || '메모 없음')}
+      ${renderSummaryItem('투자 계획', planSummary.length ? planSummary.join(' · ') : '-', notes || '선택 입력')}
+      ${renderSummaryItem('반복 알림', cooldown ? `${cooldown}분마다` : '-', '기준가 이하 반복 알림')}
     </div>
   `;
 }
@@ -2110,6 +2129,7 @@ function renderStocks() {
         </div>
         ${renderHoldingSummary(stock)}
         ${renderDividendEventSummary(stock)}
+        ${renderInvestmentPlanCard(stock)}
         <div class="stock-bottom">
           <div class="status-block">
             <span class="status-badge ${getStockStatusClass(stock)}"><span class="dot"></span>${getStockStatusLabel(stock)}</span>
@@ -2714,8 +2734,24 @@ function editStockForm(stock) {
       <span>반복 분</span>
       <input name="alertCooldownMinutes" type="text" inputmode="numeric" pattern="[0-9]*" value="${escapeHtml(stock.alertCooldownMinutes)}" required />
     </label>
+    <label>
+      <span>투자 목표가</span>
+      <input name="investmentTargetPrice" type="text" inputmode="decimal" pattern="[0-9]*[.]?[0-9]*" value="${escapeHtml(stock.investmentTargetPrice || '')}" />
+    </label>
+    <label>
+      <span>실적 체크일</span>
+      <input name="reviewDate" type="date" value="${escapeHtml(stock.reviewDate || '')}" />
+    </label>
     <label class="edit-notes">
-      <span>메모</span>
+      <span>매수 이유</span>
+      <textarea name="investmentReason" rows="2">${escapeHtml(stock.investmentReason || '')}</textarea>
+    </label>
+    <label class="edit-notes">
+      <span>매도 조건</span>
+      <textarea name="sellCondition" rows="2">${escapeHtml(stock.sellCondition || '')}</textarea>
+    </label>
+    <label class="edit-notes">
+      <span>기타 메모</span>
       <textarea name="notes" rows="2">${escapeHtml(stock.notes || '')}</textarea>
     </label>
     <div class="edit-actions">
@@ -3359,6 +3395,71 @@ function renderDividendEventSummary(stock) {
       }
     </div>
   `;
+}
+
+function renderInvestmentPlanCard(stock) {
+  const reason = String(stock.investmentReason || '').trim();
+  const sellCondition = String(stock.sellCondition || '').trim();
+  const reviewDate = String(stock.reviewDate || '').trim();
+  const notes = String(stock.notes || '').trim();
+  const targetPrice = parseFiniteNumber(stock.investmentTargetPrice);
+  const items = [
+    reason ? renderInvestmentPlanItem('매수 이유', reason) : '',
+    targetPrice !== null ? renderInvestmentPlanItem('투자 목표가', formatMoney(targetPrice, stock.currency)) : '',
+    sellCondition ? renderInvestmentPlanItem('매도 조건', sellCondition) : '',
+    reviewDate ? renderInvestmentPlanItem('실적 체크일', formatReviewDateStatus(reviewDate), formatDateOnly(reviewDate)) : '',
+    notes ? renderInvestmentPlanItem('기타 메모', notes) : ''
+  ].filter(Boolean);
+
+  if (!items.length) {
+    return '';
+  }
+
+  return `
+    <section class="investment-plan-panel" aria-label="매수 이유와 매도 조건">
+      <div class="investment-plan-head">
+        <span>Investment Plan</span>
+        <strong>매수 이유 / 매도 조건</strong>
+      </div>
+      <div class="investment-plan-grid">
+        ${items.join('')}
+      </div>
+    </section>
+  `;
+}
+
+function renderInvestmentPlanItem(label, value, detail = '') {
+  return `
+    <div class="investment-plan-item">
+      <span>${escapeHtml(label)}</span>
+      <strong>${escapeHtml(value)}</strong>
+      ${detail ? `<em>${escapeHtml(detail)}</em>` : ''}
+    </div>
+  `;
+}
+
+function formatReviewDateStatus(value) {
+  if (!value) {
+    return '-';
+  }
+
+  const today = getTodayInputValue();
+  const date = String(value).slice(0, 10);
+
+  if (date < today) {
+    return '점검 지남';
+  }
+
+  if (date === today) {
+    return '오늘 점검';
+  }
+
+  const diffDays = Math.round(
+    (new Date(`${date}T00:00:00`).getTime() - new Date(`${today}T00:00:00`).getTime()) /
+      86400000
+  );
+
+  return diffDays <= 7 ? `${diffDays}일 뒤 점검` : '점검 예정';
 }
 
 function renderDividendHistoryItem(item, stock) {

@@ -133,6 +133,49 @@ test('JsonStore stores and updates optional stock quantity', async () => {
   );
 });
 
+test('JsonStore stores and updates investment plan fields', async () => {
+  const store = await createStore();
+  const stock = await store.addStock(
+    stockInput({
+      investmentReason: '수소 밸류체인 성장',
+      investmentTargetPrice: 120000,
+      sellCondition: '분기 적자가 확대되면 재검토',
+      reviewDate: '2026-08-15',
+      notes: '실적 발표 확인'
+    })
+  );
+
+  assert.equal(stock.investmentReason, '수소 밸류체인 성장');
+  assert.equal(stock.investmentTargetPrice, 120000);
+  assert.equal(stock.sellCondition, '분기 적자가 확대되면 재검토');
+  assert.equal(stock.reviewDate, '2026-08-15');
+  assert.equal(stock.notes, '실적 발표 확인');
+
+  const updated = await store.updateStock(stock.id, {
+    investmentReason: '',
+    investmentTargetPrice: '',
+    sellCondition: '목표가 도달 또는 thesis 훼손',
+    reviewDate: '',
+    notes: ''
+  });
+
+  assert.equal(updated.investmentReason, '');
+  assert.equal(updated.investmentTargetPrice, null);
+  assert.equal(updated.sellCondition, '목표가 도달 또는 thesis 훼손');
+  assert.equal(updated.reviewDate, '');
+  assert.equal(updated.notes, '');
+
+  await assert.rejects(
+    () => store.updateStock(stock.id, { investmentTargetPrice: 0 }),
+    /투자 목표가/
+  );
+
+  await assert.rejects(
+    () => store.updateStock(stock.id, { reviewDate: '2026-99-99' }),
+    /점검일/
+  );
+});
+
 test('JsonStore records quote provider success and failure stats', async () => {
   const store = await createStore();
 

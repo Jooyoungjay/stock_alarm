@@ -154,6 +154,38 @@ test('parseEditArgs supports alert rule and metadata edits', () => {
       dividendMonths: '3,6,9,12'
     }
   });
+
+  assert.deepEqual(parseEditArgs(['336260', 'reason', '수소', '밸류체인', '성장']), {
+    query: '336260',
+    label: '매수 이유',
+    patch: {
+      investmentReason: '수소 밸류체인 성장'
+    }
+  });
+
+  assert.deepEqual(parseEditArgs(['336260', 'goal', '120000']), {
+    query: '336260',
+    label: '투자 목표가',
+    patch: {
+      investmentTargetPrice: '120000'
+    }
+  });
+
+  assert.deepEqual(parseEditArgs(['336260', 'sell', '분기', '적자', '확대']), {
+    query: '336260',
+    label: '매도 조건',
+    patch: {
+      sellCondition: '분기 적자 확대'
+    }
+  });
+
+  assert.deepEqual(parseEditArgs(['336260', 'review', '2026-08-15']), {
+    query: '336260',
+    label: '실적 체크일',
+    patch: {
+      reviewDate: '2026-08-15'
+    }
+  });
 });
 
 test('handleTelegramMessage can add, pause, resume, and delete a stock', async () => {
