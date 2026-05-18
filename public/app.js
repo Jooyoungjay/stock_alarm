@@ -1400,7 +1400,7 @@ function renderStatus(data) {
   elements.telegramStatus.className = `status-chip ${data.telegramConfigured ? 'connected' : 'warn'}`;
   elements.quoteStatus.textContent = `시세 ${formatProviderList(data.quoteProviders)}`;
   elements.quoteStatus.className = 'status-chip pipeline';
-  elements.pollStatus.textContent = `시세 ${data.pollIntervalSeconds || 60}초 · 배당 ${formatInterval(data.dividendRefreshIntervalSeconds || 86400)} · 브리핑 ${formatDailyBriefingSetting(data)}`;
+  elements.pollStatus.textContent = `시세 ${data.pollIntervalSeconds || 60}초 · 배당 ${formatInterval(data.dividendRefreshIntervalSeconds || 86400)} · 배당알림 ${formatDividendEventAlertSetting(data)}`;
   elements.pollStatus.className = 'status-chip timer';
 }
 
@@ -1420,6 +1420,7 @@ function renderServerStatus(health) {
       ${renderServerMetric('시세', formatProviderList(health.quoteProviders), `${health.pollIntervalSeconds || 60}초 주기`)}
       ${renderServerMetric('일봉', formatProviderList(health.historicalQuoteProviders || health.quoteProviders), '최고가 계산용')}
       ${renderServerMetric('배당', formatProviderList(health.dividendProviders), `${formatInterval(health.dividendRefreshIntervalSeconds || 86400)} 주기`)}
+      ${renderServerMetric('배당 알림', formatDividendEventAlertSetting(health), getLastDividendEventAlertDetail(health.lastDividendEventAlert))}
       ${renderServerMetric('브리핑', formatDailyBriefingSetting(health), getLastDailyBriefingDetail(health.lastDailyBriefing))}
       ${renderServerMetric('명령', formatDate(health.lastTelegramCommandPoll?.checkedAt), `${health.telegramCommandPollSeconds || 5}초 주기`)}
       ${renderServerMetric('마지막 확인', formatDate(health.lastCheck?.checkedAt), getLastCheckDetail(health.lastCheck))}
@@ -1712,6 +1713,31 @@ function formatDailyBriefingSetting(data) {
   }
 
   return data.dailyBriefingTime || '16:10';
+}
+
+function formatDividendEventAlertSetting(data) {
+  if (!data?.dividendEventAlertEnabled) {
+    return '꺼짐';
+  }
+
+  return formatInterval(data.dividendEventAlertCheckIntervalSeconds || 3600);
+}
+
+function getLastDividendEventAlertDetail(lastAlert) {
+  if (!lastAlert) {
+    return '아직 확인 전';
+  }
+
+  if (lastAlert.skipped) {
+    return lastAlert.reason || '건너뜀';
+  }
+
+  if (lastAlert.error) {
+    return lastAlert.error;
+  }
+
+  const summary = lastAlert.summary || {};
+  return `대상 ${summary.due || 0}개 · 전송 ${summary.sent || 0}개 · 중복 ${summary.alreadySent || 0}개`;
 }
 
 function getLastDailyBriefingDetail(lastBriefing) {
@@ -2915,6 +2941,7 @@ function renderAlerts() {
     ...state.alerts.map((alert) => {
       const row = document.createElement('article');
       row.className = 'alert-row';
+      const isDividendEventAlert = alert.alertType === 'dividend_event';
       row.innerHTML = `
         <div class="metric">
           <span class="metric-label">종목</span>
@@ -2922,9 +2949,10 @@ function renderAlerts() {
         </div>
         <div class="metric">
           <span class="metric-label">${escapeHtml(alert.metricLabel || '하락률')}</span>
-          <span class="metric-value down">${formatAlertMetricPercent(alert.drawdownPercent, alert.alertType !== 'profit_retracement')}</span>
-          ${alert.alertRepeatCount ? `<span class="metric-detail">${Number(alert.alertRepeatCount)}회차</span>` : ''}
-          ${renderAlertProfitDetail(alert)}
+          <span class="metric-value down">${isDividendEventAlert ? escapeHtml(alert.dividendEventOffsetLabel || '-') : formatAlertMetricPercent(alert.drawdownPercent, alert.alertType !== 'profit_retracement')}</span>
+          ${isDividendEventAlert ? renderDividendEventAlertDetail(alert) : ''}
+          ${!isDividendEventAlert && alert.alertRepeatCount ? `<span class="metric-detail">${Number(alert.alertRepeatCount)}회차</span>` : ''}
+          ${!isDividendEventAlert ? renderAlertProfitDetail(alert) : ''}
         </div>
         <div class="metric">
           <span class="metric-label">전송</span>
@@ -2938,6 +2966,17 @@ function renderAlerts() {
       return row;
     })
   );
+}
+
+function renderDividendEventAlertDetail(alert) {
+  const parts = [
+    alert.dividendEventDate ? formatDateOnly(alert.dividendEventDate) : '',
+    alert.expectedDividendAmount !== null && alert.expectedDividendAmount !== undefined
+      ? `예상 ${formatMoney(alert.expectedDividendAmount, alert.currency)}`
+      : ''
+  ].filter(Boolean);
+
+  return parts.length ? `<span class="metric-detail">${escapeHtml(parts.join(' · '))}</span>` : '';
 }
 
 function renderAlertProfitDetail(alert) {

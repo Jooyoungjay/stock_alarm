@@ -132,6 +132,10 @@
 | `current_profit_amount` | numeric null |
 | `retraced_profit_amount` | numeric null |
 | `retraced_profit_percent` | numeric null |
+| `dividend_event_type` | text null |
+| `dividend_event_date` | date null |
+| `dividend_event_offset_days` | integer null |
+| `expected_dividend_amount` | numeric null |
 | `sent` | boolean |
 | `message` | text |
 | `created_at` | timestamptz |

@@ -65,6 +65,10 @@ export function isAdminApiPath(method, pathname) {
     return true;
   }
 
+  if (pathname === '/api/dividend-alerts/check' && method === 'POST') {
+    return true;
+  }
+
   if (pathname === '/api/briefing/send' && method === 'POST') {
     return true;
   }

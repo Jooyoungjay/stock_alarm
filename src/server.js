@@ -6,6 +6,7 @@ import { buildAccessUrls } from './accessUrls.js';
 import { createBackup, deleteBackup, listBackups, restoreBackup } from './backups.js';
 import { config } from './config.js';
 import { buildDividendCalendar } from './dividendCalendar.js';
+import { lastDividendEventAlertMetaKey, runDividendEventAlertCheck } from './dividendEventAlerts.js';
 import { runDividendRefresh } from './dividendRefresh.js';
 import {
   buildDailyBriefing,
@@ -45,10 +46,12 @@ const store = createStore(config, {
 
 let lastCheck = null;
 let lastDividendRefresh = null;
+let lastDividendEventAlert = null;
 let lastDailyBriefing = null;
 let lastTelegramCommandPoll = null;
 let isChecking = false;
 let isRefreshingDividends = false;
+let isCheckingDividendEvents = false;
 let isSendingDailyBriefing = false;
 let isPollingTelegramCommands = false;
 let activePort = config.port;
@@ -211,6 +214,26 @@ async function runDividendRefreshOnce() {
   }
 }
 
+async function runDividendEventAlertOnce(options = {}) {
+  if (isCheckingDividendEvents) {
+    return {
+      checkedAt: new Date().toISOString(),
+      results: [],
+      skipped: true,
+      reason: 'dividend_event_alert_already_running'
+    };
+  }
+
+  isCheckingDividendEvents = true;
+
+  try {
+    lastDividendEventAlert = await runDividendEventAlertCheck(store, config, options);
+    return lastDividendEventAlert;
+  } finally {
+    isCheckingDividendEvents = false;
+  }
+}
+
 async function runDailyBriefingOnce(options = {}) {
   if (isSendingDailyBriefing) {
     return {
@@ -228,6 +251,18 @@ async function runDailyBriefingOnce(options = {}) {
   } finally {
     isSendingDailyBriefing = false;
   }
+}
+
+async function getLastDividendEventAlertSnapshot() {
+  if (lastDividendEventAlert) {
+    return lastDividendEventAlert;
+  }
+
+  if (typeof store.getMetaValue !== 'function') {
+    return null;
+  }
+
+  return store.getMetaValue(lastDividendEventAlertMetaKey, null);
 }
 
 async function getLastDividendRefreshSnapshot() {
@@ -352,11 +387,13 @@ async function handleApi(request, response, url) {
   if (request.method === 'GET' && url.pathname === '/api/health') {
     const [
       dividendRefreshSnapshot,
+      dividendEventAlertSnapshot,
       dailyBriefingSnapshot,
       quoteProviderStats,
       dataModelInfo
     ] = await Promise.all([
       getLastDividendRefreshSnapshot(),
+      getLastDividendEventAlertSnapshot(),
       getLastDailyBriefingSnapshot(),
       store.getQuoteProviderStats(),
       store.getDataModelInfo()
@@ -383,6 +420,10 @@ async function handleApi(request, response, url) {
       dividendProviders: config.dividendProviders,
       pollIntervalSeconds: config.pollIntervalSeconds,
       dividendRefreshIntervalSeconds: config.dividendRefreshIntervalSeconds,
+      dividendEventAlertEnabled: config.dividendEventAlertEnabled,
+      dividendEventAlertCheckIntervalSeconds: config.dividendEventAlertCheckIntervalSeconds,
+      dividendEventAlertExDateOffsets: config.dividendEventAlertExDateOffsets,
+      dividendEventAlertPaymentDateOffsets: config.dividendEventAlertPaymentDateOffsets,
       dailyBriefingEnabled: config.dailyBriefingEnabled,
       dailyBriefingTime: normalizeBriefingTime(config.dailyBriefingTime),
       dailyBriefingCheckIntervalSeconds: config.dailyBriefingCheckIntervalSeconds,
@@ -391,6 +432,7 @@ async function handleApi(request, response, url) {
       telegramCommandPollSeconds: config.telegramCommandPollSeconds,
       lastTelegramCommandPoll,
       lastDividendRefresh: dividendRefreshSnapshot,
+      lastDividendEventAlert: dividendEventAlertSnapshot,
       lastDailyBriefing: dailyBriefingSnapshot,
       quoteProviderStats,
       dataSchemaVersion: dataModelInfo.schemaVersion,
@@ -418,12 +460,14 @@ async function handleApi(request, response, url) {
       stocks,
       alerts,
       dividendRefreshSnapshot,
+      dividendEventAlertSnapshot,
       dailyBriefingSnapshot,
       quoteProviderStats
     ] = await Promise.all([
       store.listStocks(),
       store.listAlerts(30),
       canReadAdminDetails ? getLastDividendRefreshSnapshot() : Promise.resolve(null),
+      canReadAdminDetails ? getLastDividendEventAlertSnapshot() : Promise.resolve(null),
       getLastDailyBriefingSnapshot(),
       canReadAdminDetails ? store.getQuoteProviderStats() : Promise.resolve(null)
     ]);
@@ -443,12 +487,17 @@ async function handleApi(request, response, url) {
       dividendProviders: config.dividendProviders,
       pollIntervalSeconds: config.pollIntervalSeconds,
       dividendRefreshIntervalSeconds: config.dividendRefreshIntervalSeconds,
+      dividendEventAlertEnabled: config.dividendEventAlertEnabled,
+      dividendEventAlertCheckIntervalSeconds: config.dividendEventAlertCheckIntervalSeconds,
+      dividendEventAlertExDateOffsets: config.dividendEventAlertExDateOffsets,
+      dividendEventAlertPaymentDateOffsets: config.dividendEventAlertPaymentDateOffsets,
       dailyBriefingEnabled: config.dailyBriefingEnabled,
       dailyBriefingTime: normalizeBriefingTime(config.dailyBriefingTime),
       lastDailyBriefing: dailyBriefingSnapshot,
       telegramCommandPollSeconds: config.telegramCommandPollSeconds,
       lastTelegramCommandPoll,
       lastDividendRefresh: dividendRefreshSnapshot,
+      lastDividendEventAlert: dividendEventAlertSnapshot,
       quoteProviderStats,
       lastCheck
     });
@@ -766,6 +815,12 @@ async function handleApi(request, response, url) {
     return;
   }
 
+  if (request.method === 'POST' && url.pathname === '/api/dividend-alerts/check') {
+    const result = await runDividendEventAlertOnce({ force: true });
+    sendJson(response, 200, result);
+    return;
+  }
+
   if (request.method === 'GET' && url.pathname === '/api/briefing') {
     const stocks = await store.listStocks();
     const briefing = buildDailyBriefing(stocks, {
@@ -884,6 +939,9 @@ function listen(port, remainingAttempts = 20) {
     console.log(`Polling every ${config.pollIntervalSeconds} seconds`);
     console.log(`Refreshing dividends every ${config.dividendRefreshIntervalSeconds} seconds`);
     console.log(
+      `Dividend event alerts ${config.dividendEventAlertEnabled ? `every ${config.dividendEventAlertCheckIntervalSeconds} seconds` : 'disabled'}`
+    );
+    console.log(
       `Daily briefing ${config.dailyBriefingEnabled ? `at ${normalizeBriefingTime(config.dailyBriefingTime)}` : 'disabled'}`
     );
   });
@@ -906,6 +964,16 @@ const dividendRefreshInterval = setInterval(() => {
     console.error('Scheduled dividend refresh failed:', error);
   });
 }, config.dividendRefreshIntervalSeconds * 1000);
+
+const dividendEventAlertInterval = setInterval(() => {
+  runDividendEventAlertOnce().catch((error) => {
+    lastDividendEventAlert = {
+      checkedAt: new Date().toISOString(),
+      error: error.message
+    };
+    console.error('Scheduled dividend event alert check failed:', error);
+  });
+}, config.dividendEventAlertCheckIntervalSeconds * 1000);
 
 const dailyBriefingInterval = setInterval(() => {
   runDailyBriefingOnce().catch((error) => {
@@ -935,6 +1003,14 @@ runTelegramCommandPollOnce().catch((error) => {
   console.error('Initial Telegram command poll failed:', error);
 });
 
+runDividendEventAlertOnce().catch((error) => {
+  lastDividendEventAlert = {
+    checkedAt: new Date().toISOString(),
+    error: error.message
+  };
+  console.error('Initial dividend event alert check failed:', error);
+});
+
 async function closeServer() {
   if (!server) {
     return;
@@ -953,6 +1029,7 @@ async function shutdown() {
   isShuttingDown = true;
   clearInterval(interval);
   clearInterval(dividendRefreshInterval);
+  clearInterval(dividendEventAlertInterval);
   clearInterval(dailyBriefingInterval);
   clearInterval(telegramCommandInterval);
 

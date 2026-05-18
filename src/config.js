@@ -91,6 +91,23 @@ function toBoolean(value, fallback) {
   return fallback;
 }
 
+function toIntegerList(value, fallback, options = {}) {
+  const rawItems = Array.isArray(value)
+    ? value
+    : String(value ?? '')
+        .split(/[\s,]+/)
+        .map((item) => item.trim())
+        .filter(Boolean);
+  const min = options.min ?? Number.NEGATIVE_INFINITY;
+  const max = options.max ?? Number.POSITIVE_INFINITY;
+  const values = rawItems
+    .map((item) => Number(item))
+    .filter((item) => Number.isInteger(item) && item >= min && item <= max);
+  const unique = [...new Set(values)];
+
+  return unique.length ? unique : fallback;
+}
+
 loadEnvironment();
 
 const isRailwayRuntime = Boolean(
@@ -130,6 +147,22 @@ export const config = {
     { min: 0.1, max: 100 }
   ),
   dailyBriefingTopLimit: toNumber(process.env.DAILY_BRIEFING_TOP_LIMIT, 5, { min: 1, max: 20 }),
+  dividendEventAlertEnabled: toBoolean(process.env.DIVIDEND_EVENT_ALERT_ENABLED, true),
+  dividendEventAlertCheckIntervalSeconds: toNumber(
+    process.env.DIVIDEND_EVENT_ALERT_CHECK_INTERVAL_SECONDS,
+    3600,
+    { min: 60 }
+  ),
+  dividendEventAlertExDateOffsets: toIntegerList(
+    process.env.DIVIDEND_EVENT_ALERT_EX_DATE_OFFSETS,
+    [3, 1, 0, -1],
+    { min: -30, max: 365 }
+  ),
+  dividendEventAlertPaymentDateOffsets: toIntegerList(
+    process.env.DIVIDEND_EVENT_ALERT_PAYMENT_DATE_OFFSETS,
+    [1, 0],
+    { min: -30, max: 365 }
+  ),
   backupRetention: toNumber(process.env.BACKUP_RETENTION, 30, { min: 1 }),
   defaultAlertCooldownMinutes: toNumber(process.env.DEFAULT_ALERT_COOLDOWN_MINUTES, 30, {
     min: 1

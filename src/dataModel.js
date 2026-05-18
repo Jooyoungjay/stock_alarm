@@ -75,6 +75,11 @@ const entities = [
       { name: 'metricPercent', type: 'number | null', required: false },
       { name: 'maximumProfitAmount', type: 'number | null', required: false },
       { name: 'retracedProfitAmount', type: 'number | null', required: false },
+      { name: 'dividendEventType', type: 'ex_dividend | payment | empty', required: false },
+      { name: 'dividendEventDate', type: 'date | empty', required: false },
+      { name: 'dividendEventOffsetDays', type: 'integer | null', required: false },
+      { name: 'expectedDividendAmount', type: 'number | null', required: false },
+      { name: 'deliveryStatus', type: 'sent | failed | not_configured | none', required: false },
       { name: 'sent', type: 'boolean', required: false },
       { name: 'createdAt', type: 'datetime', required: true }
     ]
