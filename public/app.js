@@ -27,6 +27,7 @@ const state = {
   loading: false,
   registrationModalOpen: false,
   registrationStep: 1,
+  dividendCalendarFilter: 'all',
   watchFilter: 'all',
   watchSort: 'risk',
   editingStockId: null
@@ -278,6 +279,17 @@ elements.refreshDividendsButton.addEventListener('click', async () => {
     showMessage(`배당 정보 ${counts.checked}개 확인, ${counts.updated}개 업데이트했습니다.`);
     await Promise.all([loadData(), loadHealth()]);
   });
+});
+
+elements.dividendCalendarPanel?.addEventListener('click', (event) => {
+  const button = event.target.closest('[data-dividend-calendar-filter]');
+
+  if (!button) {
+    return;
+  }
+
+  state.dividendCalendarFilter = button.dataset.dividendCalendarFilter || 'all';
+  renderDividendCalendar(state.dividendCalendar);
 });
 
 elements.sendBriefingButton.addEventListener('click', async () => {
@@ -2543,6 +2555,7 @@ function renderDividendCalendar(calendar) {
 
   const months = Array.isArray(calendar?.months) ? calendar.months : [];
   const summary = calendar?.summary || {};
+  const selectedFilter = normalizeDividendCalendarFilter(state.dividendCalendarFilter);
 
   if (!months.length || !summary.stocksWithDividends) {
     elements.dividendCalendarPanel.innerHTML =
@@ -2552,6 +2565,10 @@ function renderDividendCalendar(calendar) {
 
   const annualTotals = formatCurrencyTotals(summary.annualDividendTotals || []);
   const eventCount = Number(summary.eventCount || 0);
+  const visibleMonths = months.map((month) => filterDividendCalendarMonth(month, selectedFilter));
+  const viewSummary = summarizeDividendCalendarMonths(visibleMonths);
+  const viewTotals = formatCurrencyTotals(viewSummary.totals || []);
+  const filterLabel = getDividendCalendarFilterLabel(selectedFilter);
 
   elements.dividendCalendarPanel.innerHTML = `
     <div class="dividend-calendar-head">
@@ -2565,8 +2582,26 @@ function renderDividendCalendar(calendar) {
         <strong>${escapeHtml(annualTotals || '-')}</strong>
       </div>
     </div>
+    <div class="dividend-calendar-toolbar">
+      ${renderDividendCalendarFilters(summary, selectedFilter)}
+      <div class="dividend-calendar-current-total">
+        <span>${escapeHtml(filterLabel)} 월별 합계</span>
+        <strong>${escapeHtml(viewTotals || '-')}</strong>
+      </div>
+    </div>
+    <div class="dividend-calendar-summary-grid" aria-label="배당 캘린더 요약">
+      ${renderDividendCalendarSummaryItem('표시 일정', `${viewSummary.eventCount}건`, filterLabel)}
+      ${renderDividendCalendarSummaryItem('확정 지급', formatCurrencyTotals(viewSummary.confirmedTotals) || `${viewSummary.confirmedEventCount}건`, '지급일 확인')}
+      ${renderDividendCalendarSummaryItem('예상 지급', formatCurrencyTotals(viewSummary.estimatedTotals) || `${viewSummary.estimatedEventCount}건`, '지급월 기준')}
+      ${renderDividendCalendarSummaryItem('배당락', `${viewSummary.exDividendEventCount}건`, '배당락일 확인')}
+    </div>
+    ${
+      eventCount && !viewSummary.eventCount
+        ? `<div class="portfolio-summary-note">${escapeHtml(filterLabel)} 조건에 맞는 배당 일정이 없습니다.</div>`
+        : ''
+    }
     <div class="dividend-calendar-months">
-      ${months.map(renderDividendCalendarMonth).join('')}
+      ${visibleMonths.map(renderDividendCalendarMonth).join('')}
     </div>
     ${
       summary.pendingScheduleCount
@@ -2579,18 +2614,22 @@ function renderDividendCalendar(calendar) {
 function renderDividendCalendarMonth(month) {
   const events = Array.isArray(month.events) ? month.events : [];
   const totals = formatCurrencyTotals(month.totals || []);
+  const eventCounts = month.eventCounts || {};
+  const totalCount = Number(eventCounts.total || events.length || 0);
+  const monthSummary = totals ? `${totals} · ${totalCount}건` : totalCount ? `${totalCount}건` : '일정 없음';
 
   return `
     <section class="dividend-calendar-month">
       <div class="dividend-calendar-month-head">
         <strong>${escapeHtml(month.label || `${month.month}월`)}</strong>
-        <span>${escapeHtml(totals || '일정 없음')}</span>
+        <span>${escapeHtml(monthSummary)}</span>
       </div>
+      ${events.length ? renderDividendCalendarMonthTotals(month) : ''}
       <div class="dividend-calendar-events">
         ${
           events.length
             ? events.map(renderDividendCalendarEvent).join('')
-            : '<div class="dividend-calendar-empty">예상 배당 없음</div>'
+            : '<div class="dividend-calendar-empty">조건에 맞는 일정 없음</div>'
         }
       </div>
     </section>
@@ -2612,12 +2651,13 @@ function renderDividendCalendarEvent(event) {
     : event.dividendDataSource
       ? getProviderLabel(event.dividendDataSource)
       : event.frequencyLabel || '예상';
+  const typeText = getDividendCalendarEventTypeLabel(event);
 
   return `
     <div class="dividend-calendar-event ${eventClass}">
       <div>
         <strong>${escapeHtml(event.displayName || event.symbol)}</strong>
-        <span>${escapeHtml(event.symbol)} · ${escapeHtml(dateText)}</span>
+        <span>${escapeHtml(event.symbol)} · ${escapeHtml(dateText)} · ${escapeHtml(typeText)}</span>
       </div>
       <div>
         <strong>${escapeHtml(amount)}</strong>
@@ -2641,6 +2681,239 @@ function getDividendCalendarEventClass(event) {
   }
 
   return 'estimated';
+}
+
+function renderDividendCalendarFilters(summary, selectedFilter) {
+  const filters = [
+    ['all', '전체', Number(summary.eventCount || 0)],
+    ['confirmed', '확정', Number(summary.confirmedEventCount || 0)],
+    ['estimated', '예상', Number(summary.estimatedEventCount || 0)],
+    ['ex_dividend', '배당락', Number(summary.exDividendEventCount || 0)]
+  ];
+
+  return `
+    <div class="dividend-calendar-filters" role="group" aria-label="배당 일정 필터">
+      ${filters
+        .map(([value, label, count]) => {
+          const active = value === selectedFilter ? ' active' : '';
+
+          return `
+            <button type="button" class="dividend-calendar-filter${active}" data-dividend-calendar-filter="${escapeHtml(value)}">
+              <span>${escapeHtml(label)}</span>
+              <strong>${escapeHtml(count)}</strong>
+            </button>
+          `;
+        })
+        .join('')}
+    </div>
+  `;
+}
+
+function renderDividendCalendarSummaryItem(label, value, detail) {
+  return `
+    <div class="dividend-calendar-summary-item">
+      <span>${escapeHtml(label)}</span>
+      <strong>${escapeHtml(value || '-')}</strong>
+      <em>${escapeHtml(detail || '')}</em>
+    </div>
+  `;
+}
+
+function renderDividendCalendarMonthTotals(month) {
+  const eventCounts = month.eventCounts || {};
+  const confirmedTotals = formatCurrencyTotals(month.confirmedTotals || []);
+  const estimatedTotals = formatCurrencyTotals(month.estimatedTotals || []);
+
+  return `
+    <div class="dividend-calendar-month-totals" aria-label="월별 배당 요약">
+      ${renderDividendCalendarTotalChip('확정', confirmedTotals || `${Number(eventCounts.confirmed || 0)}건`)}
+      ${renderDividendCalendarTotalChip('예상', estimatedTotals || `${Number(eventCounts.estimated || 0)}건`)}
+      ${renderDividendCalendarTotalChip('배당락', `${Number(eventCounts.exDividend || 0)}건`)}
+    </div>
+  `;
+}
+
+function renderDividendCalendarTotalChip(label, value) {
+  return `
+    <span class="dividend-calendar-total-chip">
+      <span>${escapeHtml(label)}</span>
+      <strong>${escapeHtml(value || '-')}</strong>
+    </span>
+  `;
+}
+
+function filterDividendCalendarMonth(month, selectedFilter) {
+  const events = (Array.isArray(month.events) ? month.events : []).filter((event) =>
+    matchesDividendCalendarFilter(event, selectedFilter)
+  );
+
+  return {
+    ...month,
+    events,
+    ...summarizeDividendCalendarEvents(events)
+  };
+}
+
+function summarizeDividendCalendarMonths(months) {
+  const events = [];
+
+  for (const month of months) {
+    events.push(...(Array.isArray(month.events) ? month.events : []));
+  }
+
+  return summarizeDividendCalendarEvents(events);
+}
+
+function summarizeDividendCalendarEvents(events) {
+  const totals = new Map();
+  const confirmedTotals = new Map();
+  const estimatedTotals = new Map();
+  const paymentTotals = new Map();
+  const eventCounts = createDividendCalendarEventCounts();
+
+  for (const event of events) {
+    incrementDividendCalendarEventCounts(eventCounts, event);
+
+    if (event.amount === null || event.amount === undefined) {
+      continue;
+    }
+
+    addDividendCalendarCurrencyAmount(totals, event.currency, event.amount);
+
+    if (isConfirmedDividendCalendarEvent(event)) {
+      addDividendCalendarCurrencyAmount(confirmedTotals, event.currency, event.amount);
+    }
+
+    if (event.type === 'estimated') {
+      addDividendCalendarCurrencyAmount(estimatedTotals, event.currency, event.amount);
+    }
+
+    if (isDividendCalendarPaymentEvent(event)) {
+      addDividendCalendarCurrencyAmount(paymentTotals, event.currency, event.amount);
+    }
+  }
+
+  return {
+    totals: mapDividendCalendarCurrencyTotals(totals),
+    confirmedTotals: mapDividendCalendarCurrencyTotals(confirmedTotals),
+    estimatedTotals: mapDividendCalendarCurrencyTotals(estimatedTotals),
+    paymentTotals: mapDividendCalendarCurrencyTotals(paymentTotals),
+    eventCounts,
+    eventCount: eventCounts.total,
+    confirmedEventCount: eventCounts.confirmed,
+    estimatedEventCount: eventCounts.estimated,
+    paymentEventCount: eventCounts.payment,
+    exDividendEventCount: eventCounts.exDividend
+  };
+}
+
+function createDividendCalendarEventCounts() {
+  return {
+    total: 0,
+    confirmed: 0,
+    estimated: 0,
+    payment: 0,
+    exDividend: 0,
+    amounted: 0
+  };
+}
+
+function incrementDividendCalendarEventCounts(target, event) {
+  target.total += 1;
+
+  if (isConfirmedDividendCalendarEvent(event)) {
+    target.confirmed += 1;
+  }
+
+  if (event.type === 'estimated') {
+    target.estimated += 1;
+  }
+
+  if (isDividendCalendarPaymentEvent(event)) {
+    target.payment += 1;
+  }
+
+  if (event.exDividendDate || event.type === 'ex_dividend') {
+    target.exDividend += 1;
+  }
+
+  if (event.amount !== null && event.amount !== undefined) {
+    target.amounted += 1;
+  }
+}
+
+function matchesDividendCalendarFilter(event, selectedFilter) {
+  const filter = normalizeDividendCalendarFilter(selectedFilter);
+
+  if (filter === 'confirmed') {
+    return isConfirmedDividendCalendarEvent(event);
+  }
+
+  if (filter === 'estimated') {
+    return event.type === 'estimated';
+  }
+
+  if (filter === 'ex_dividend') {
+    return Boolean(event.exDividendDate || event.type === 'ex_dividend');
+  }
+
+  return true;
+}
+
+function normalizeDividendCalendarFilter(value) {
+  return ['all', 'confirmed', 'estimated', 'ex_dividend'].includes(value) ? value : 'all';
+}
+
+function getDividendCalendarFilterLabel(value) {
+  const labels = {
+    all: '전체',
+    confirmed: '확정',
+    estimated: '예상',
+    ex_dividend: '배당락'
+  };
+
+  return labels[normalizeDividendCalendarFilter(value)];
+}
+
+function getDividendCalendarEventTypeLabel(event) {
+  if (event.type === 'confirmed') {
+    return '확정';
+  }
+
+  if (event.type === 'payment') {
+    return '지급일';
+  }
+
+  if (event.type === 'ex_dividend') {
+    return '배당락';
+  }
+
+  return '예상';
+}
+
+function isConfirmedDividendCalendarEvent(event) {
+  return event.type === 'confirmed' || event.type === 'payment' || event.certainty === 'confirmed';
+}
+
+function isDividendCalendarPaymentEvent(event) {
+  return event.eventKind === 'payment' || ['confirmed', 'estimated', 'payment'].includes(event.type);
+}
+
+function addDividendCalendarCurrencyAmount(map, currency, amount) {
+  const value = Number(amount);
+
+  if (!Number.isFinite(value)) {
+    return;
+  }
+
+  const key = currency || '';
+  map.set(key, (map.get(key) || 0) + value);
+}
+
+function mapDividendCalendarCurrencyTotals(map) {
+  return [...map.entries()]
+    .map(([currency, amount]) => ({ currency, amount }))
+    .sort((left, right) => String(left.currency).localeCompare(String(right.currency), 'ko-KR'));
 }
 
 function formatCurrencyTotals(totals) {

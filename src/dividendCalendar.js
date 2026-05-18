@@ -11,15 +11,25 @@ export function buildDividendCalendar(stocks = [], options = {}) {
   const today = normalizeDate(options.today) || new Date();
   const monthsAhead = normalizeMonthsAhead(options.monthsAhead);
   const months = buildUpcomingMonths(today, monthsAhead);
-  const monthMap = new Map(months.map((month) => [month.key, { ...month, totals: [], events: [] }]));
+  const monthMap = new Map(months.map(createDividendCalendarMonth));
   const summary = {
     monthsAhead,
     eventCount: 0,
+    confirmedEventCount: 0,
+    estimatedEventCount: 0,
+    paymentEventCount: 0,
+    exDividendEventCount: 0,
     stocksWithDividends: 0,
     pendingScheduleCount: 0,
-    annualDividendTotals: []
+    annualDividendTotals: [],
+    confirmedDividendTotals: [],
+    estimatedDividendTotals: [],
+    paymentDividendTotals: []
   };
   const annualTotals = new Map();
+  const confirmedTotals = new Map();
+  const estimatedTotals = new Map();
+  const paymentTotals = new Map();
 
   for (const stock of stocks) {
     const dividend = buildStockDividendSummary(stock);
@@ -44,22 +54,50 @@ export function buildDividendCalendar(stocks = [], options = {}) {
   }
 
   for (const month of monthMap.values()) {
-    const totals = new Map();
+    const monthTotals = new Map();
+    const monthConfirmedTotals = new Map();
+    const monthEstimatedTotals = new Map();
+    const monthPaymentTotals = new Map();
+    const eventCounts = createDividendEventCounts();
 
     month.events.sort(compareDividendEvents);
 
     for (const event of month.events) {
       summary.eventCount += 1;
+      incrementDividendEventCounts(eventCounts, event);
+      incrementDividendSummary(summary, event);
 
-      if (event.amount !== null) {
-        addCurrencyAmount(totals, event.currency, event.amount);
+      if (event.amount !== null && event.amount !== undefined) {
+        addCurrencyAmount(monthTotals, event.currency, event.amount);
+
+        if (isConfirmedDividendEvent(event)) {
+          addCurrencyAmount(monthConfirmedTotals, event.currency, event.amount);
+          addCurrencyAmount(confirmedTotals, event.currency, event.amount);
+        }
+
+        if (event.type === 'estimated') {
+          addCurrencyAmount(monthEstimatedTotals, event.currency, event.amount);
+          addCurrencyAmount(estimatedTotals, event.currency, event.amount);
+        }
+
+        if (isDividendPaymentEvent(event)) {
+          addCurrencyAmount(monthPaymentTotals, event.currency, event.amount);
+          addCurrencyAmount(paymentTotals, event.currency, event.amount);
+        }
       }
     }
 
-    month.totals = mapCurrencyTotals(totals);
+    month.totals = mapCurrencyTotals(monthTotals);
+    month.confirmedTotals = mapCurrencyTotals(monthConfirmedTotals);
+    month.estimatedTotals = mapCurrencyTotals(monthEstimatedTotals);
+    month.paymentTotals = mapCurrencyTotals(monthPaymentTotals);
+    month.eventCounts = eventCounts;
   }
 
   summary.annualDividendTotals = mapCurrencyTotals(annualTotals);
+  summary.confirmedDividendTotals = mapCurrencyTotals(confirmedTotals);
+  summary.estimatedDividendTotals = mapCurrencyTotals(estimatedTotals);
+  summary.paymentDividendTotals = mapCurrencyTotals(paymentTotals);
 
   return {
     months: [...monthMap.values()],
@@ -148,6 +186,8 @@ function addDatedDividendEvent(monthMap, stock, dividend, scheduledEvents, type,
     if (type === 'payment') {
       scheduled.paymentDate = toDateKey(date);
       scheduled.type = 'confirmed';
+      scheduled.certainty = 'confirmed';
+      scheduled.eventKind = 'payment';
       scheduled.amount = dividend.datedPaymentAmount ?? scheduled.amount;
       scheduled.amountSource = dividend.lastDividendValue !== null ? 'last_dividend' : 'estimated';
     } else {
@@ -171,6 +211,10 @@ function addDatedDividendEvent(monthMap, stock, dividend, scheduledEvents, type,
 }
 
 function buildDividendEvent(stock, dividend, event) {
+  const type = event.type || 'estimated';
+  const eventKind = type === 'ex_dividend' ? 'ex_dividend' : 'payment';
+  const certainty = type === 'estimated' ? 'estimated' : type === 'ex_dividend' ? 'event_only' : 'confirmed';
+
   return {
     stockId: stock.id || '',
     symbol: stock.symbol || '',
@@ -178,9 +222,11 @@ function buildDividendEvent(stock, dividend, event) {
     monthKey: event.monthKey,
     year: event.year,
     month: event.month,
-    type: event.type,
+    type,
+    eventKind,
+    certainty,
     amount: normalizeNullableNumber(event.amount),
-    amountSource: event.amountSource || (event.type === 'payment' ? 'last_dividend' : 'estimated'),
+    amountSource: event.amountSource || (isConfirmedDividendEvent({ type }) ? 'last_dividend' : 'estimated'),
     currency: dividend.currency,
     frequency: dividend.frequency,
     frequencyLabel: dividend.frequencyLabel,
@@ -191,6 +237,82 @@ function buildDividendEvent(stock, dividend, event) {
     annualDividendPerShare: dividend.annualDividendPerShare,
     lastDividendValue: dividend.lastDividendValue
   };
+}
+
+function createDividendCalendarMonth(month) {
+  return [
+    month.key,
+    {
+      ...month,
+      totals: [],
+      confirmedTotals: [],
+      estimatedTotals: [],
+      paymentTotals: [],
+      eventCounts: createDividendEventCounts(),
+      events: []
+    }
+  ];
+}
+
+function createDividendEventCounts() {
+  return {
+    total: 0,
+    confirmed: 0,
+    estimated: 0,
+    payment: 0,
+    exDividend: 0,
+    amounted: 0
+  };
+}
+
+function incrementDividendEventCounts(target, event) {
+  target.total += 1;
+
+  if (isConfirmedDividendEvent(event)) {
+    target.confirmed += 1;
+  }
+
+  if (event.type === 'estimated') {
+    target.estimated += 1;
+  }
+
+  if (isDividendPaymentEvent(event)) {
+    target.payment += 1;
+  }
+
+  if (event.exDividendDate || event.type === 'ex_dividend') {
+    target.exDividend += 1;
+  }
+
+  if (event.amount !== null && event.amount !== undefined) {
+    target.amounted += 1;
+  }
+}
+
+function incrementDividendSummary(summary, event) {
+  if (isConfirmedDividendEvent(event)) {
+    summary.confirmedEventCount += 1;
+  }
+
+  if (event.type === 'estimated') {
+    summary.estimatedEventCount += 1;
+  }
+
+  if (isDividendPaymentEvent(event)) {
+    summary.paymentEventCount += 1;
+  }
+
+  if (event.exDividendDate || event.type === 'ex_dividend') {
+    summary.exDividendEventCount += 1;
+  }
+}
+
+function isConfirmedDividendEvent(event) {
+  return event.type === 'confirmed' || event.type === 'payment' || event.certainty === 'confirmed';
+}
+
+function isDividendPaymentEvent(event) {
+  return event.eventKind === 'payment' || ['confirmed', 'estimated', 'payment'].includes(event.type);
 }
 
 function buildUpcomingMonths(today, monthsAhead) {

@@ -34,11 +34,12 @@ test('parseRoadmapMarkdown extracts roadmap metadata and next task', async () =>
   assert.ok(roadmap.completedScope.some((item) => item.category === '앱 심사 준비'));
   assert.ok(roadmap.completedScope.some((item) => item.category === '배당 이벤트 알림'));
   assert.ok(roadmap.completedScope.some((item) => item.category === '배당 성장률'));
+  assert.ok(roadmap.completedScope.some((item) => item.category === '배당 캘린더'));
   assert.ok(roadmap.completedScope.some((item) => item.category === '작업 상태 필드 정리'));
   assert.ok(roadmap.sections.length >= 9);
-  assert.equal(roadmap.recommendedOrder[0], '배당 캘린더 고도화');
-  assert.equal(roadmap.recommendedOrder[1], '백업/복구 DB 대응');
-  assert.equal(roadmap.nextTask.title, '배당 캘린더 고도화');
+  assert.equal(roadmap.recommendedOrder[0], '백업/복구 DB 대응');
+  assert.equal(roadmap.recommendedOrder[1], '실패 종목 재시도 UX');
+  assert.equal(roadmap.nextTask.title, '백업/복구 DB 대응');
   assert.ok(roadmap.statusLegend.some((item) => item.status === 'pending' && item.label === '예정'));
   assert.ok(roadmap.summary.pending > 0);
   assert.ok(roadmap.summary.paused > 0);
@@ -58,6 +59,9 @@ test('parseRoadmapMarkdown normalizes explicit WBS task statuses', async () => {
   const completedDividendAlertTask = roadmap.sections
     .find((section) => section.id === '5')
     .tasks.find((task) => task.id === '5.5');
+  const completedDividendCalendarTask = roadmap.sections
+    .find((section) => section.id === '5')
+    .tasks.find((task) => task.id === '5.6');
   const completedReviewTask = roadmap.sections
     .find((section) => section.id === '9')
     .tasks.find((task) => task.id === '9.4');
@@ -67,6 +71,7 @@ test('parseRoadmapMarkdown normalizes explicit WBS task statuses', async () => {
   assert.equal(completedStatusTask.priority, '중간');
   assert.equal(pausedMatchingTask.status, 'paused');
   assert.equal(completedDividendAlertTask.status, 'completed');
+  assert.equal(completedDividendCalendarTask.status, 'completed');
   assert.equal(completedProviderTask.status, 'completed');
   assert.equal(completedReviewTask.status, 'completed');
   assert.equal(completedReviewTask.statusLabel, '완료');
