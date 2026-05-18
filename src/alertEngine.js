@@ -885,6 +885,7 @@ export async function runAlertCheck(store, config, options = {}) {
       const quote = await quoteFetcher(stock.symbol, {
         timeoutMs: config.quoteTimeoutMs,
         providers: config.quoteProviders,
+        dataGoKrServiceKey: config.dataGoKrServiceKey,
         alphaVantageApiKey: config.alphaVantageApiKey,
         onProviderAttempt: (attempt) =>
           recordQuoteProviderAttempt(store, {
@@ -907,6 +908,63 @@ export async function runAlertCheck(store, config, options = {}) {
   return {
     checkedAt: now.toISOString(),
     results
+  };
+}
+
+export async function runStockQuoteRetry(store, config, stockId, options = {}) {
+  const quoteFetcher = options.fetchQuote || fetchQuote;
+  const now = options.now || new Date();
+  const stocks = await store.listStocks();
+  const stock = stocks.find((item) => item.id === stockId);
+
+  if (!stock) {
+    throw new Error('종목을 찾을 수 없습니다.');
+  }
+
+  if (!stock.active) {
+    return {
+      checkedAt: now.toISOString(),
+      retry: true,
+      results: [
+        {
+          stockId: stock.id,
+          symbol: stock.symbol,
+          status: 'skipped',
+          reason: 'inactive'
+        }
+      ]
+    };
+  }
+
+  let result;
+
+  try {
+    const quote = await quoteFetcher(stock.symbol, {
+      timeoutMs: config.quoteTimeoutMs,
+      providers: config.quoteProviders,
+      dataGoKrServiceKey: config.dataGoKrServiceKey,
+      alphaVantageApiKey: config.alphaVantageApiKey,
+      onProviderAttempt: (attempt) =>
+        recordQuoteProviderAttempt(store, {
+          ...attempt,
+          stockId: stock.id,
+          source: 'stock_retry'
+        })
+    });
+
+    result = await processStockQuote(store, config, stock, quote, {
+      now,
+      sendTelegramMessage: options.sendTelegramMessage,
+      sendPushNotification: options.sendPushNotification
+    });
+  } catch (error) {
+    result = await markStockError(store, stock, error, now);
+  }
+
+  return {
+    checkedAt: now.toISOString(),
+    retry: true,
+    results: [result]
   };
 }
 

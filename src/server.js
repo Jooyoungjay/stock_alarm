@@ -6,7 +6,7 @@ import { buildAccessUrls } from './accessUrls.js';
 import { config } from './config.js';
 import { buildDividendCalendar } from './dividendCalendar.js';
 import { lastDividendEventAlertMetaKey, runDividendEventAlertCheck } from './dividendEventAlerts.js';
-import { runDividendRefresh } from './dividendRefresh.js';
+import { runDividendRefresh, runSingleDividendRefresh } from './dividendRefresh.js';
 import {
   buildDailyBriefing,
   formatDailyBriefingMessage,
@@ -20,7 +20,8 @@ import {
   buildRegistrationPreview,
   initializeHighFromPurchaseDate,
   runAlertCheck,
-  runManualQuoteCheck
+  runManualQuoteCheck,
+  runStockQuoteRetry
 } from './alertEngine.js';
 import { fetchHistoricalHighSince, fetchQuote } from './priceProvider.js';
 import { sendPushNotificationToDevice } from './pushNotifications.js';
@@ -706,6 +707,20 @@ async function handleApi(request, response, url) {
       const body = await readJsonBody(request);
       const result = await runManualQuoteCheck(store, config, id, body);
       lastCheck = result;
+      sendJson(response, 200, result);
+      return;
+    }
+
+    if (request.method === 'POST' && segments[3] === 'retry-quote') {
+      const result = await runStockQuoteRetry(store, config, id);
+      lastCheck = result;
+      sendJson(response, 200, result);
+      return;
+    }
+
+    if (request.method === 'POST' && segments[3] === 'retry-dividend') {
+      const result = await runSingleDividendRefresh(store, config, id);
+      lastDividendRefresh = result;
       sendJson(response, 200, result);
       return;
     }

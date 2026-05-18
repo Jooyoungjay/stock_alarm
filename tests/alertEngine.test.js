@@ -11,7 +11,8 @@ import {
   evaluateStock,
   initializeHighFromPurchaseDate,
   runAlertCheck,
-  runManualQuoteCheck
+  runManualQuoteCheck,
+  runStockQuoteRetry
 } from '../src/alertEngine.js';
 
 const baseStock = {
@@ -743,6 +744,89 @@ test('runAlertCheck records quote provider attempts when the fetcher reports the
   assert.equal(attempts[0].provider, 'stooq');
   assert.equal(attempts[0].stockId, 'stock-1');
   assert.equal(attempts[0].source, 'alert_check');
+});
+
+test('runStockQuoteRetry checks one failed stock and clears the quote error', async () => {
+  const store = createMemoryStore({
+    ...baseStock,
+    highPrice: 100,
+    highPriceAt: '2026-05-11T00:01:00.000Z',
+    lastCheckStatus: 'error',
+    lastError: '이전 조회 실패',
+    lastErrorAt: '2026-05-11T00:40:00.000Z'
+  });
+  const attempts = [];
+  store.recordQuoteProviderAttempt = async (attempt) => {
+    attempts.push(attempt);
+  };
+
+  const result = await runStockQuoteRetry(
+    store,
+    {
+      telegramBotToken: 'token',
+      telegramChatId: 'chat',
+      quoteTimeoutMs: 10000,
+      quoteProviders: 'stooq'
+    },
+    'stock-1',
+    {
+      now: date('2026-05-11T00:48:00Z'),
+      fetchQuote: async (symbol, options) => {
+        assert.equal(symbol, 'AAPL');
+        await options.onProviderAttempt({
+          type: 'quote',
+          provider: 'stooq',
+          symbol: 'AAPL',
+          status: 'success',
+          startedAt: '2026-05-11T00:48:00.000Z',
+          finishedAt: '2026-05-11T00:48:00.030Z',
+          durationMs: 30
+        });
+
+        return {
+          symbol: 'AAPL',
+          price: 99,
+          currency: 'USD',
+          provider: 'stooq'
+        };
+      }
+    }
+  );
+
+  assert.equal(result.retry, true);
+  assert.equal(result.results[0].status, 'checked');
+  assert.equal(store.stocks[0].lastCheckStatus, 'checked');
+  assert.equal(store.stocks[0].lastError, '');
+  assert.equal(store.stocks[0].lastErrorAt, null);
+  assert.equal(attempts.length, 1);
+  assert.equal(attempts[0].source, 'stock_retry');
+});
+
+test('runStockQuoteRetry persists retry errors on the target stock', async () => {
+  const store = createMemoryStore(baseStock);
+
+  const result = await runStockQuoteRetry(
+    store,
+    {
+      telegramBotToken: 'token',
+      telegramChatId: 'chat',
+      quoteTimeoutMs: 10000
+    },
+    'stock-1',
+    {
+      now: date('2026-05-11T00:49:00Z'),
+      fetchQuote: async () => {
+        throw new Error('가격 정보를 찾을 수 없습니다: AAPL');
+      }
+    }
+  );
+
+  assert.equal(result.retry, true);
+  assert.equal(result.results[0].status, 'error');
+  assert.equal(result.results[0].error, '가격 정보를 찾을 수 없습니다: AAPL');
+  assert.equal(store.stocks[0].lastCheckStatus, 'error');
+  assert.equal(store.stocks[0].lastError, '가격 정보를 찾을 수 없습니다: AAPL');
+  assert.equal(store.stocks[0].lastErrorAt, '2026-05-11T00:49:00.000Z');
 });
 
 function date(value) {

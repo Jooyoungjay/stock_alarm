@@ -9,150 +9,7 @@ export async function runDividendRefresh(store, config, options = {}) {
   const results = [];
 
   for (const stock of stocks) {
-    if (!stock.active) {
-      const diagnostic = createDividendDiagnostic({
-        checkedAt,
-        status: 'skipped',
-        reason: 'inactive',
-        stock
-      });
-      results.push({
-        stockId: stock.id,
-        symbol: stock.symbol,
-        status: 'skipped',
-        reason: 'inactive',
-        diagnostic
-      });
-      continue;
-    }
-
-    try {
-      const info = await dividendFetcher(stock.symbol, {
-        timeoutMs: config.quoteTimeoutMs,
-        providers: config.dividendProviders,
-        dataGoKrServiceKey: config.dataGoKrServiceKey,
-        openDartApiKey: config.openDartApiKey,
-        alphaVantageApiKey: config.alphaVantageApiKey,
-        companyName: getDividendCompanyName(stock),
-        companyNameCandidates: getDividendCompanyNameCandidates(stock),
-        displayName: stock.displayName || '',
-        now
-      });
-      const nextValue = normalizePositiveNumber(info.annualDividendPerShare);
-
-      if (nextValue === null) {
-        const error = new Error('배당 정보에 주당 연 배당금이 없습니다.');
-        error.attempts = info.attempts;
-        throw error;
-      }
-
-      const previousValue = normalizePositiveNumber(stock.annualDividendPerShare);
-      const previousLastDividendValue = normalizePositiveNumber(stock.lastDividendValue);
-      const nextLastDividendValue = normalizePositiveNumber(info.lastDividendValue);
-      const nextExDividendDate = info.exDividendDate || '';
-      const nextDividendDate = info.dividendDate || '';
-      const change = getDividendChange(stock, {
-        annualDividendPerShare: nextValue,
-        lastDividendValue: nextLastDividendValue,
-        exDividendDate: nextExDividendDate,
-        dividendDate: nextDividendDate
-      });
-      const changed = change.changed;
-      const diagnostic = createDividendDiagnostic({
-        checkedAt,
-        status: changed ? 'updated' : 'checked',
-        stock,
-        annualDividendPerShare: nextValue,
-        previousAnnualDividendPerShare: previousValue,
-        lastDividendValue: nextLastDividendValue,
-        previousLastDividendValue,
-        exDividendDate: nextExDividendDate,
-        previousExDividendDate: stock.exDividendDate || '',
-        dividendDate: nextDividendDate,
-        previousDividendDate: stock.dividendDate || '',
-        provider: info.provider || '',
-        sourceSymbol: info.sourceSymbol || info.symbol || stock.symbol,
-        currency: info.currency || stock.dividendCurrency || stock.currency || '',
-        attempts: info.attempts
-      });
-      const updatedStock = {
-        ...stock,
-        annualDividendPerShare: nextValue,
-        dividendDataSource: info.provider || 'api',
-        dividendProvider: info.provider || '',
-        dividendSourceSymbol: info.sourceSymbol || info.symbol || stock.symbol,
-        dividendCurrency: info.currency || stock.dividendCurrency || stock.currency || '',
-        dividendYieldPercent: normalizePositiveNumber(info.dividendYieldPercent),
-        lastDividendValue: nextLastDividendValue,
-        exDividendDate: nextExDividendDate,
-        dividendDate: nextDividendDate,
-        dividendUpdatedAt: changed ? checkedAt : stock.dividendUpdatedAt || checkedAt,
-        dividendLastCheckedAt: checkedAt,
-        dividendLastError: '',
-        dividendLastErrorAt: null,
-        dividendLastDiagnostic: diagnostic,
-        dividendHistory: changed
-          ? appendDividendHistory(stock.dividendHistory, {
-              checkedAt,
-              reason: change.reason,
-              provider: info.provider || '',
-              sourceSymbol: info.sourceSymbol || info.symbol || stock.symbol,
-              currency: info.currency || stock.dividendCurrency || stock.currency || '',
-              previousAnnualDividendPerShare: previousValue,
-              annualDividendPerShare: nextValue,
-              previousLastDividendValue,
-              lastDividendValue: nextLastDividendValue,
-              previousExDividendDate: stock.exDividendDate || '',
-              exDividendDate: nextExDividendDate,
-              previousDividendDate: stock.dividendDate || '',
-              dividendDate: nextDividendDate
-            })
-          : stock.dividendHistory || [],
-        updatedAt: checkedAt
-      };
-
-      await store.replaceStock(updatedStock);
-      results.push({
-        stockId: stock.id,
-        symbol: stock.symbol,
-        status: changed ? 'updated' : 'checked',
-        annualDividendPerShare: nextValue,
-        previousAnnualDividendPerShare: previousValue,
-        provider: info.provider || '',
-        sourceSymbol: info.sourceSymbol || '',
-        lastDividendValue: nextLastDividendValue,
-        exDividendDate: nextExDividendDate,
-        dividendDate: nextDividendDate,
-        attempts: diagnostic.attempts,
-        diagnostic
-      });
-    } catch (error) {
-      const message = error.message || '배당 정보 조회 중 오류가 발생했습니다.';
-      const diagnostic = createDividendDiagnostic({
-        checkedAt,
-        status: 'error',
-        stock,
-        error: message,
-        attempts: error.attempts
-      });
-
-      await store.replaceStock({
-        ...stock,
-        dividendLastCheckedAt: checkedAt,
-        dividendLastError: message,
-        dividendLastErrorAt: checkedAt,
-        dividendLastDiagnostic: diagnostic,
-        updatedAt: checkedAt
-      });
-      results.push({
-        stockId: stock.id,
-        symbol: stock.symbol,
-        status: 'error',
-        error: message,
-        attempts: diagnostic.attempts,
-        diagnostic
-      });
-    }
+    results.push(await refreshDividendForStock(store, config, stock, { dividendFetcher, now, checkedAt }));
   }
 
   const summary = summarizeDividendResults(results);
@@ -167,6 +24,178 @@ export async function runDividendRefresh(store, config, options = {}) {
   }
 
   return refreshResult;
+}
+
+export async function runSingleDividendRefresh(store, config, stockId, options = {}) {
+  const dividendFetcher = options.fetchDividendInfo || fetchDividendInfo;
+  const now = options.now || new Date();
+  const checkedAt = now.toISOString();
+  const stocks = await store.listStocks();
+  const stock = stocks.find((item) => item.id === stockId);
+
+  if (!stock) {
+    throw new Error('종목을 찾을 수 없습니다.');
+  }
+
+  const result = await refreshDividendForStock(store, config, stock, { dividendFetcher, now, checkedAt });
+
+  return {
+    checkedAt,
+    retry: true,
+    summary: summarizeDividendResults([result]),
+    results: [result]
+  };
+}
+
+async function refreshDividendForStock(store, config, stock, context) {
+  const { dividendFetcher, now, checkedAt } = context;
+
+  if (!stock.active) {
+    const diagnostic = createDividendDiagnostic({
+      checkedAt,
+      status: 'skipped',
+      reason: 'inactive',
+      stock
+    });
+
+    return {
+      stockId: stock.id,
+      symbol: stock.symbol,
+      status: 'skipped',
+      reason: 'inactive',
+      diagnostic
+    };
+  }
+
+  try {
+    const info = await dividendFetcher(stock.symbol, {
+      timeoutMs: config.quoteTimeoutMs,
+      providers: config.dividendProviders,
+      dataGoKrServiceKey: config.dataGoKrServiceKey,
+      openDartApiKey: config.openDartApiKey,
+      alphaVantageApiKey: config.alphaVantageApiKey,
+      companyName: getDividendCompanyName(stock),
+      companyNameCandidates: getDividendCompanyNameCandidates(stock),
+      displayName: stock.displayName || '',
+      now
+    });
+    const nextValue = normalizePositiveNumber(info.annualDividendPerShare);
+
+    if (nextValue === null) {
+      const error = new Error('배당 정보에 주당 연 배당금이 없습니다.');
+      error.attempts = info.attempts;
+      throw error;
+    }
+
+    const previousValue = normalizePositiveNumber(stock.annualDividendPerShare);
+    const previousLastDividendValue = normalizePositiveNumber(stock.lastDividendValue);
+    const nextLastDividendValue = normalizePositiveNumber(info.lastDividendValue);
+    const nextExDividendDate = info.exDividendDate || '';
+    const nextDividendDate = info.dividendDate || '';
+    const change = getDividendChange(stock, {
+      annualDividendPerShare: nextValue,
+      lastDividendValue: nextLastDividendValue,
+      exDividendDate: nextExDividendDate,
+      dividendDate: nextDividendDate
+    });
+    const changed = change.changed;
+    const diagnostic = createDividendDiagnostic({
+      checkedAt,
+      status: changed ? 'updated' : 'checked',
+      stock,
+      annualDividendPerShare: nextValue,
+      previousAnnualDividendPerShare: previousValue,
+      lastDividendValue: nextLastDividendValue,
+      previousLastDividendValue,
+      exDividendDate: nextExDividendDate,
+      previousExDividendDate: stock.exDividendDate || '',
+      dividendDate: nextDividendDate,
+      previousDividendDate: stock.dividendDate || '',
+      provider: info.provider || '',
+      sourceSymbol: info.sourceSymbol || info.symbol || stock.symbol,
+      currency: info.currency || stock.dividendCurrency || stock.currency || '',
+      attempts: info.attempts
+    });
+    const updatedStock = {
+      ...stock,
+      annualDividendPerShare: nextValue,
+      dividendDataSource: info.provider || 'api',
+      dividendProvider: info.provider || '',
+      dividendSourceSymbol: info.sourceSymbol || info.symbol || stock.symbol,
+      dividendCurrency: info.currency || stock.dividendCurrency || stock.currency || '',
+      dividendYieldPercent: normalizePositiveNumber(info.dividendYieldPercent),
+      lastDividendValue: nextLastDividendValue,
+      exDividendDate: nextExDividendDate,
+      dividendDate: nextDividendDate,
+      dividendUpdatedAt: changed ? checkedAt : stock.dividendUpdatedAt || checkedAt,
+      dividendLastCheckedAt: checkedAt,
+      dividendLastError: '',
+      dividendLastErrorAt: null,
+      dividendLastDiagnostic: diagnostic,
+      dividendHistory: changed
+        ? appendDividendHistory(stock.dividendHistory, {
+            checkedAt,
+            reason: change.reason,
+            provider: info.provider || '',
+            sourceSymbol: info.sourceSymbol || info.symbol || stock.symbol,
+            currency: info.currency || stock.dividendCurrency || stock.currency || '',
+            previousAnnualDividendPerShare: previousValue,
+            annualDividendPerShare: nextValue,
+            previousLastDividendValue,
+            lastDividendValue: nextLastDividendValue,
+            previousExDividendDate: stock.exDividendDate || '',
+            exDividendDate: nextExDividendDate,
+            previousDividendDate: stock.dividendDate || '',
+            dividendDate: nextDividendDate
+          })
+        : stock.dividendHistory || [],
+      updatedAt: checkedAt
+    };
+
+    await store.replaceStock(updatedStock);
+
+    return {
+      stockId: stock.id,
+      symbol: stock.symbol,
+      status: changed ? 'updated' : 'checked',
+      annualDividendPerShare: nextValue,
+      previousAnnualDividendPerShare: previousValue,
+      provider: info.provider || '',
+      sourceSymbol: info.sourceSymbol || '',
+      lastDividendValue: nextLastDividendValue,
+      exDividendDate: nextExDividendDate,
+      dividendDate: nextDividendDate,
+      attempts: diagnostic.attempts,
+      diagnostic
+    };
+  } catch (error) {
+    const message = error.message || '배당 정보 조회 중 오류가 발생했습니다.';
+    const diagnostic = createDividendDiagnostic({
+      checkedAt,
+      status: 'error',
+      stock,
+      error: message,
+      attempts: error.attempts
+    });
+
+    await store.replaceStock({
+      ...stock,
+      dividendLastCheckedAt: checkedAt,
+      dividendLastError: message,
+      dividendLastErrorAt: checkedAt,
+      dividendLastDiagnostic: diagnostic,
+      updatedAt: checkedAt
+    });
+
+    return {
+      stockId: stock.id,
+      symbol: stock.symbol,
+      status: 'error',
+      error: message,
+      attempts: diagnostic.attempts,
+      diagnostic
+    };
+  }
 }
 
 function normalizePositiveNumber(value) {

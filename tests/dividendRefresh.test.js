@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { runDividendRefresh } from '../src/dividendRefresh.js';
+import { runDividendRefresh, runSingleDividendRefresh } from '../src/dividendRefresh.js';
 
 const baseStock = {
   id: 'stock-1',
@@ -175,6 +175,101 @@ test('runDividendRefresh preserves existing dividend value when provider fails',
   assert.equal(store.stocks[0].dividendLastDiagnostic.attempts[0].provider, 'yahoo');
 });
 
+test('runSingleDividendRefresh retries only the target stock and clears previous dividend errors', async () => {
+  const store = createMemoryStore([
+    {
+      ...baseStock,
+      dividendLastError: '이전 배당 조회 실패',
+      dividendLastErrorAt: '2026-05-12T00:00:00.000Z'
+    },
+    {
+      ...baseStock,
+      id: 'stock-2',
+      symbol: 'MSFT',
+      displayName: 'Microsoft',
+      annualDividendPerShare: 1
+    }
+  ]);
+  const fetchedSymbols = [];
+
+  const result = await runSingleDividendRefresh(
+    store,
+    {
+      quoteTimeoutMs: 1000,
+      dividendProviders: 'yahoo'
+    },
+    'stock-1',
+    {
+      now: new Date('2026-05-12T01:00:00.000Z'),
+      fetchDividendInfo: async (symbol) => {
+        fetchedSymbols.push(symbol);
+
+        return {
+          annualDividendPerShare: 3,
+          dividendYieldPercent: 2.5,
+          lastDividendValue: 0.75,
+          exDividendDate: '2026-05-11T00:00:00.000Z',
+          dividendDate: '2026-05-25T00:00:00.000Z',
+          currency: 'USD',
+          provider: 'yahoo',
+          sourceSymbol: symbol,
+          attempts: [
+            {
+              provider: 'yahoo',
+              status: 'success',
+              annualDividendPerShare: 3,
+              currency: 'USD',
+              sourceSymbol: symbol
+            }
+          ]
+        };
+      }
+    }
+  );
+
+  assert.equal(result.retry, true);
+  assert.deepEqual(fetchedSymbols, ['AAPL']);
+  assert.equal(result.results[0].status, 'updated');
+  assert.equal(store.stocks[0].annualDividendPerShare, 3);
+  assert.equal(store.stocks[0].dividendLastError, '');
+  assert.equal(store.stocks[0].dividendLastErrorAt, null);
+  assert.equal(store.stocks[1].annualDividendPerShare, 1);
+});
+
+test('runSingleDividendRefresh stores retry diagnostics when the target still fails', async () => {
+  const store = createMemoryStore(baseStock);
+  const result = await runSingleDividendRefresh(
+    store,
+    {
+      quoteTimeoutMs: 1000,
+      dividendProviders: 'yahoo'
+    },
+    'stock-1',
+    {
+      now: new Date('2026-05-12T01:05:00.000Z'),
+      fetchDividendInfo: async () => {
+        const error = new Error('배당 정보를 찾을 수 없습니다: AAPL');
+        error.attempts = [
+          {
+            provider: 'yahoo',
+            status: 'error',
+            error: '배당 정보를 찾을 수 없습니다: AAPL'
+          }
+        ];
+        throw error;
+      }
+    }
+  );
+
+  assert.equal(result.retry, true);
+  assert.equal(result.summary.error, 1);
+  assert.equal(result.results[0].status, 'error');
+  assert.equal(store.stocks[0].annualDividendPerShare, 2);
+  assert.equal(store.stocks[0].dividendLastCheckedAt, '2026-05-12T01:05:00.000Z');
+  assert.equal(store.stocks[0].dividendLastError, '배당 정보를 찾을 수 없습니다: AAPL');
+  assert.equal(store.stocks[0].dividendLastDiagnostic.attempts[0].provider, 'yahoo');
+});
+
 test('runDividendRefresh skips inactive stocks', async () => {
   const store = createMemoryStore({
     ...baseStock,
@@ -199,8 +294,10 @@ test('runDividendRefresh skips inactive stocks', async () => {
 });
 
 function createMemoryStore(stock) {
+  const stocks = Array.isArray(stock) ? stock : [stock];
+
   return {
-    stocks: [{ ...stock }],
+    stocks: stocks.map((item) => ({ ...item })),
     async listStocks() {
       return this.stocks;
     },

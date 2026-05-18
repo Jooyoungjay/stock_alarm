@@ -2172,6 +2172,7 @@ function renderStocks() {
         ${renderHoldingSummary(stock)}
         ${renderAveragingCalculator(stock)}
         ${renderDividendEventSummary(stock)}
+        ${renderRetryFailurePanel(stock)}
         ${renderInvestmentPlanCard(stock)}
         <div class="stock-bottom">
           <div class="status-block">
@@ -2190,6 +2191,20 @@ function renderStocks() {
       actions.append(
         alertToggle(stock),
         manualTestForm(stock),
+        ...(stock.lastCheckStatus === 'error'
+          ? [
+              actionButton('시세 재시도', 'btn btn-outline btn-sm secondary-button', () =>
+                retryStockQuote(stock)
+              )
+            ]
+          : []),
+        ...(stock.dividendLastError
+          ? [
+              actionButton('배당 재시도', 'btn btn-outline btn-sm secondary-button', () =>
+                retryStockDividend(stock)
+              )
+            ]
+          : []),
         actionButton(state.editingStockId === stock.id ? '편집 닫기' : '편집', 'btn btn-ghost btn-sm secondary-button', () => {
           state.editingStockId = state.editingStockId === stock.id ? null : stock.id;
           renderStocks();
@@ -3386,6 +3401,68 @@ function renderManualTestMessage(result) {
   return labels[result.status] || '테스트 가격을 확인했습니다.';
 }
 
+async function retryStockQuote(stock) {
+  const result = await api(`/api/stocks/${stock.id}/retry-quote`, {
+    method: 'POST'
+  });
+  const stockResult = result.results?.[0];
+
+  showMessage(renderQuoteRetryMessage(stock, stockResult), stockResult?.status === 'error');
+  await loadData();
+}
+
+async function retryStockDividend(stock) {
+  const result = await api(`/api/stocks/${stock.id}/retry-dividend`, {
+    method: 'POST'
+  });
+  const stockResult = result.results?.[0];
+
+  showMessage(renderDividendRetryMessage(stock, stockResult), stockResult?.status === 'error');
+  await loadData();
+}
+
+function renderQuoteRetryMessage(stock, result) {
+  const name = stock.displayName || stock.symbol;
+
+  if (!result) {
+    return `${name} 시세를 다시 확인했습니다.`;
+  }
+
+  const labels = {
+    alert: `${name} 시세 재시도 완료: 알림 기준에 도달했습니다.`,
+    recovered: `${name} 시세 재시도 완료: 알림 기준 위로 회복됐습니다.`,
+    high_updated: `${name} 시세 재시도 완료: 새 최고가로 저장됐습니다.`,
+    checked: `${name} 시세 재시도 완료: 아직 알림 기준에는 닿지 않았습니다.`,
+    skipped: `${name} 알림이 꺼져 있어 시세 재시도를 건너뛰었습니다.`
+  };
+
+  if (result.status === 'error') {
+    return `${name} 시세 재시도 실패: ${result.error || '가격 정보를 다시 가져오지 못했습니다.'}`;
+  }
+
+  return labels[result.status] || `${name} 시세를 다시 확인했습니다.`;
+}
+
+function renderDividendRetryMessage(stock, result) {
+  const name = stock.displayName || stock.symbol;
+
+  if (!result) {
+    return `${name} 배당 정보를 다시 확인했습니다.`;
+  }
+
+  const labels = {
+    updated: `${name} 배당 정보를 업데이트했습니다.`,
+    checked: `${name} 배당 정보를 다시 확인했습니다. 변경된 값은 없습니다.`,
+    skipped: `${name} 알림이 꺼져 있어 배당 재시도를 건너뛰었습니다.`
+  };
+
+  if (result.status === 'error') {
+    return `${name} 배당 재시도 실패: ${result.error || '배당 정보를 다시 가져오지 못했습니다.'}`;
+  }
+
+  return labels[result.status] || `${name} 배당 정보를 다시 확인했습니다.`;
+}
+
 function getStockStatusLabel(stock) {
   if (!stock.active) {
     return '알림 꺼짐';
@@ -3952,6 +4029,61 @@ function renderDividendEventSummary(stock) {
       ${
         history.length
           ? `<div class="dividend-history-list">${history.slice(0, 3).map((item) => renderDividendHistoryItem(item, stock)).join('')}</div>`
+          : ''
+      }
+    </div>
+  `;
+}
+
+function renderRetryFailurePanel(stock) {
+  const quoteFailure =
+    stock.lastCheckStatus === 'error' || String(stock.lastError || '').trim()
+      ? renderRetryFailureItem({
+          title: '시세 조회 실패',
+          detail: stock.lastError || '최근 시세 조회에 실패했습니다.',
+          time: stock.lastErrorAt || stock.lastCheckedAt,
+          meta: stock.quoteProvider ? `마지막 출처 ${getProviderLabel(stock.quoteProvider)}` : '',
+          stock
+        })
+      : '';
+  const dividendFailure = stock.dividendLastError
+    ? renderRetryFailureItem({
+        title: '배당 조회 실패',
+        detail: stock.dividendLastError,
+        time: stock.dividendLastErrorAt || stock.dividendLastCheckedAt,
+        meta: stock.dividendLastDiagnostic?.preservedAnnualDividendPerShare
+          ? `기존 배당 ${formatMoney(
+              stock.dividendLastDiagnostic.preservedAnnualDividendPerShare,
+              stock.dividendLastDiagnostic.currency || stock.dividendCurrency || stock.currency
+            )} 유지`
+          : '',
+        attempts: Array.isArray(stock.dividendLastDiagnostic?.attempts)
+          ? stock.dividendLastDiagnostic.attempts
+          : [],
+        stock
+      })
+    : '';
+  const items = [quoteFailure, dividendFailure].filter(Boolean);
+
+  if (!items.length) {
+    return '';
+  }
+
+  return `<div class="retry-failure-panel">${items.join('')}</div>`;
+}
+
+function renderRetryFailureItem({ title, detail, time, meta = '', attempts = [], stock = {} }) {
+  return `
+    <div class="retry-failure-item">
+      <div class="retry-failure-head">
+        <strong>${escapeHtml(title)}</strong>
+        ${time ? `<span>${escapeHtml(formatDate(time))}</span>` : ''}
+      </div>
+      <div class="retry-failure-detail">${escapeHtml(detail)}</div>
+      ${meta ? `<div class="retry-failure-meta">${escapeHtml(meta)}</div>` : ''}
+      ${
+        attempts.length
+          ? `<div class="retry-attempt-list">${attempts.slice(0, 3).map((attempt) => renderDividendAttempt(attempt, stock)).join('')}</div>`
           : ''
       }
     </div>

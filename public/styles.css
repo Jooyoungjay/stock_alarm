@@ -1824,6 +1824,56 @@ select:focus {
   background: rgba(26, 158, 110, 0.06);
 }
 
+.retry-failure-panel {
+  display: grid;
+  gap: 8px;
+  padding: 10px;
+  border: 1px solid rgba(224, 92, 92, 0.28);
+  border-radius: var(--radius-sm);
+  background: rgba(224, 92, 92, 0.07);
+}
+
+.retry-failure-item {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+}
+
+.retry-failure-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  color: var(--danger);
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.retry-failure-head span,
+.retry-failure-meta,
+.retry-failure-detail {
+  overflow-wrap: anywhere;
+  font-size: 11px;
+  line-height: 1.35;
+}
+
+.retry-failure-head span,
+.retry-failure-meta {
+  color: var(--dim);
+  font-weight: 600;
+}
+
+.retry-failure-detail {
+  color: var(--text);
+}
+
+.retry-attempt-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  padding-top: 2px;
+}
+
 .averaging-calculator {
   display: grid;
   gap: 10px;
