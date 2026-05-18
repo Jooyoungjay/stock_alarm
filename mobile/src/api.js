@@ -87,6 +87,30 @@ export function getMobileSnapshot({ baseUrl, session, fetchImpl } = {}) {
   });
 }
 
+export function registerPushToken({ baseUrl, session, token, provider = 'expo', platform, fetchImpl } = {}) {
+  return requestJson('/api/mobile/push-token', {
+    baseUrl,
+    method: 'POST',
+    body: {
+      token,
+      provider,
+      platform: normalizeDevicePlatform(platform)
+    },
+    session,
+    fetchImpl
+  });
+}
+
+export function sendPushTest({ baseUrl, session, fetchImpl } = {}) {
+  return requestJson('/api/mobile/push-test', {
+    baseUrl,
+    method: 'POST',
+    body: {},
+    session,
+    fetchImpl
+  });
+}
+
 export function createMobileStock({ baseUrl, session, stock, fetchImpl } = {}) {
   return requestJson('/api/mobile/stocks', {
     baseUrl,

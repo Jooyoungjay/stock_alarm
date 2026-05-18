@@ -146,5 +146,7 @@ export const config = {
   openDartApiKey: process.env.OPENDART_API_KEY || '',
   alphaVantageApiKey: process.env.ALPHA_VANTAGE_API_KEY || '',
   telegramBotToken: process.env.TELEGRAM_BOT_TOKEN || '',
-  telegramChatId: process.env.TELEGRAM_CHAT_ID || ''
+  telegramChatId: process.env.TELEGRAM_CHAT_ID || '',
+  mobilePushEnabled: toBoolean(process.env.MOBILE_PUSH_ENABLED, true),
+  expoPushEndpoint: process.env.EXPO_PUSH_ENDPOINT || 'https://exp.host/--/api/v2/push/send'
 };

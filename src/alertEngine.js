@@ -1,4 +1,5 @@
 import { fetchHistoricalHighSince, fetchQuote, getQuoteSourceMeta } from './priceProvider.js';
+import { sendPushNotificationForStock } from './pushNotifications.js';
 import { ALERT_TYPES, DEFAULT_ALERT_TYPE, normalizeAlertType } from './storage.js';
 import { formatAlertMessage, isTelegramConfigured, sendTelegramMessage } from './telegram.js';
 
@@ -655,8 +656,56 @@ async function markStockError(store, stock, error, now) {
   };
 }
 
+function combineAlertDelivery(channels) {
+  const activeChannels = channels.filter((channel) => channel.status && channel.status !== 'none');
+  const sent = activeChannels.some((channel) => channel.status === 'sent' || channel.status === 'partial');
+  const errors = activeChannels
+    .filter((channel) => !sent || channel.status === 'failed')
+    .map((channel) => channel.error)
+    .filter(Boolean);
+
+  if (sent) {
+    return {
+      deliveryStatus: 'sent',
+      deliveryError: errors.join(' · ')
+    };
+  }
+
+  if (activeChannels.some((channel) => channel.status === 'failed')) {
+    return {
+      deliveryStatus: 'failed',
+      deliveryError: errors.join(' · ')
+    };
+  }
+
+  if (activeChannels.some((channel) => channel.status === 'not_configured')) {
+    return {
+      deliveryStatus: 'not_configured',
+      deliveryError: errors.join(' · ')
+    };
+  }
+
+  return {
+    deliveryStatus: 'none',
+    deliveryError: ''
+  };
+}
+
+function formatPushDeliveryError(result) {
+  if (!result) {
+    return '';
+  }
+
+  if (Array.isArray(result.errors) && result.errors.length) {
+    return result.errors.join(' · ');
+  }
+
+  return result.reason || '';
+}
+
 async function processStockQuote(store, config, stock, quote, options = {}) {
   const telegramSender = options.sendTelegramMessage || sendTelegramMessage;
+  const pushSender = options.sendPushNotification || sendPushNotificationForStock;
   const now = options.now || new Date();
 
   if (!stock.active) {
@@ -673,6 +722,12 @@ async function processStockQuote(store, config, stock, quote, options = {}) {
     let nextStock = evaluation.nextStock;
     let deliveryStatus = 'none';
     let deliveryError = '';
+    let telegramDeliveryStatus = 'none';
+    let telegramDeliveryError = '';
+    let pushDeliveryStatus = 'none';
+    let pushDeliveryError = '';
+    let pushDeliverySent = 0;
+    let pushDeliveryFailed = 0;
     let alert = null;
     const status = evaluation.alertDue
       ? 'alert'
@@ -694,15 +749,42 @@ async function processStockQuote(store, config, stock, quote, options = {}) {
       try {
         if (isTelegramConfigured(config)) {
           await telegramSender(config, message);
-          deliveryStatus = 'sent';
+          telegramDeliveryStatus = 'sent';
         } else {
-          deliveryStatus = 'not_configured';
-          deliveryError = '텔레그램 설정이 없습니다.';
+          telegramDeliveryStatus = 'not_configured';
+          telegramDeliveryError = '텔레그램 설정이 없습니다.';
         }
       } catch (error) {
-        deliveryStatus = 'failed';
-        deliveryError = error.message;
+        telegramDeliveryStatus = 'failed';
+        telegramDeliveryError = error.message;
       }
+
+      try {
+        const pushDelivery = await pushSender(store, config, nextStock, message, {
+          quote,
+          evaluation
+        });
+        pushDeliveryStatus = pushDelivery?.deliveryStatus || 'none';
+        pushDeliveryError = formatPushDeliveryError(pushDelivery);
+        pushDeliverySent = Number(pushDelivery?.sent || 0);
+        pushDeliveryFailed = Number(pushDelivery?.failed || 0);
+      } catch (error) {
+        pushDeliveryStatus = 'failed';
+        pushDeliveryError = error.message;
+      }
+
+      const delivery = combineAlertDelivery([
+        {
+          status: telegramDeliveryStatus,
+          error: telegramDeliveryError
+        },
+        {
+          status: pushDeliveryStatus,
+          error: pushDeliveryError
+        }
+      ]);
+      deliveryStatus = delivery.deliveryStatus;
+      deliveryError = delivery.deliveryError;
 
       nextStock = {
         ...nextStock,
@@ -736,6 +818,12 @@ async function processStockQuote(store, config, stock, quote, options = {}) {
         lastRecoveredAt: nextStock.alertRecoveredAt,
         deliveryStatus,
         deliveryError,
+        telegramDeliveryStatus,
+        telegramDeliveryError,
+        pushDeliveryStatus,
+        pushDeliveryError,
+        pushDeliverySent,
+        pushDeliveryFailed,
         message,
         createdAt: now.toISOString()
       });
@@ -767,6 +855,8 @@ async function processStockQuote(store, config, stock, quote, options = {}) {
       retracedProfitAmount: evaluation.retracedProfitAmount,
       retracedProfitPercent: evaluation.retracedProfitPercent,
       deliveryStatus,
+      telegramDeliveryStatus,
+      pushDeliveryStatus,
       alert
     };
   } catch (error) {
@@ -805,7 +895,8 @@ export async function runAlertCheck(store, config, options = {}) {
       });
       const result = await processStockQuote(store, config, stock, quote, {
         now,
-        sendTelegramMessage: options.sendTelegramMessage
+        sendTelegramMessage: options.sendTelegramMessage,
+        sendPushNotification: options.sendPushNotification
       });
       results.push(result);
     } catch (error) {
@@ -848,7 +939,8 @@ export async function runManualQuoteCheck(store, config, stockId, manualQuote, o
 
   const result = await processStockQuote(store, config, stock, quote, {
     now,
-    sendTelegramMessage: options.sendTelegramMessage
+    sendTelegramMessage: options.sendTelegramMessage,
+    sendPushNotification: options.sendPushNotification
   });
 
   return {

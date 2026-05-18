@@ -1032,6 +1032,29 @@ export class JsonStore {
     return sanitizeDevice(device);
   }
 
+  async listDevicePushTokens(deviceId, options = {}) {
+    const data = await this.read();
+    const id = String(deviceId || '').trim();
+    const provider = String(options.provider || '').trim().toLowerCase();
+    const enabledOnly = options.enabledOnly !== false;
+    const device = data.devices.find((item) => item.id === id);
+
+    if (!device) {
+      return [];
+    }
+
+    return device.pushTokens
+      .map(normalizePushToken)
+      .filter((token) => token.token)
+      .filter((token) => !provider || token.provider === provider)
+      .filter((token) => !enabledOnly || token.enabled)
+      .map((token) => ({
+        ...token,
+        deviceId: device.id,
+        deviceLabel: device.label
+      }));
+  }
+
   async listStocks(options = {}) {
     const data = await this.read();
     const deviceId = normalizeDeviceId(options.deviceId);

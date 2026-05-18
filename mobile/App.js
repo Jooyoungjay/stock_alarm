@@ -21,10 +21,13 @@ import {
   deleteMobileStock,
   getMobileSnapshot,
   normalizeBaseUrl,
+  registerPushToken,
+  sendPushTest,
   updateMobileStock
 } from './src/api.js';
 import { clearDeviceSession, loadBaseUrl, loadDeviceSession, saveBaseUrl, saveDeviceSession } from './src/deviceStorage.js';
 import { formatCurrency, formatPercent, formatSignedPercent, summarizePortfolio } from './src/format.js';
+import { registerForPushNotificationsAsync } from './src/pushNotifications.js';
 import {
   ALERT_TYPE_OPTIONS,
   buildStockPayload,
@@ -39,6 +42,7 @@ export default function App() {
   const [apiBaseUrl, setApiBaseUrl] = useState(DEFAULT_API_BASE_URL);
   const [deviceLabel, setDeviceLabel] = useState('Joo Mobile');
   const [session, setSession] = useState(null);
+  const [deviceInfo, setDeviceInfo] = useState(null);
   const [stocks, setStocks] = useState([]);
   const [alerts, setAlerts] = useState([]);
   const [health, setHealth] = useState(null);
@@ -51,6 +55,9 @@ export default function App() {
 
   const portfolio = useMemo(() => summarizePortfolio(stocks), [stocks]);
   const connected = Boolean(session?.deviceId && session?.deviceSecret);
+  const pushRegistered = Boolean(
+    deviceInfo?.pushTokens?.some((token) => token.provider === 'expo' && token.enabled)
+  );
 
   useEffect(() => {
     let mounted = true;
@@ -116,6 +123,7 @@ export default function App() {
     await Promise.all([saveBaseUrl(baseUrl), saveDeviceSession(nextSession)]);
     setApiBaseUrl(baseUrl);
     setSession(nextSession);
+    setDeviceInfo(result.device || null);
     setMessage('이 기기가 서버에 연결되었습니다.');
   }), [apiBaseUrl, deviceLabel, runWithLoading]);
 
@@ -131,6 +139,7 @@ export default function App() {
       session
     });
 
+    setDeviceInfo(snapshot.device || null);
     setStocks(Array.isArray(snapshot.stocks) ? snapshot.stocks : []);
     setAlerts(Array.isArray(snapshot.alerts) ? snapshot.alerts : []);
     await saveBaseUrl(baseUrl);
@@ -157,6 +166,7 @@ export default function App() {
   const handleForgetDevice = useCallback(() => runWithLoading(async () => {
     await clearDeviceSession();
     setSession(null);
+    setDeviceInfo(null);
     setStocks([]);
     setAlerts([]);
     setStockFormOpen(false);
@@ -164,6 +174,42 @@ export default function App() {
     setStockForm(createEmptyStockForm());
     setMessage('기기 연결을 해제했습니다.');
   }), [runWithLoading]);
+
+  const handleRegisterPush = useCallback(() => runWithLoading(async () => {
+    if (!session) {
+      throw new Error('먼저 기기를 연결하세요.');
+    }
+
+    const baseUrl = normalizeBaseUrl(apiBaseUrl);
+    const token = await registerForPushNotificationsAsync();
+    const result = await registerPushToken({
+      baseUrl,
+      session,
+      token,
+      platform: Platform.OS
+    });
+
+    setApiBaseUrl(baseUrl);
+    setDeviceInfo(result.device || null);
+    await saveBaseUrl(baseUrl);
+    setMessage('모바일 푸시 알림을 등록했습니다.');
+  }), [apiBaseUrl, runWithLoading, session]);
+
+  const handleSendPushTest = useCallback(() => runWithLoading(async () => {
+    if (!session) {
+      throw new Error('먼저 기기를 연결하세요.');
+    }
+
+    const baseUrl = normalizeBaseUrl(apiBaseUrl);
+    const result = await sendPushTest({
+      baseUrl,
+      session
+    });
+
+    setApiBaseUrl(baseUrl);
+    await saveBaseUrl(baseUrl);
+    setMessage(result.ok ? '테스트 푸시를 전송했습니다.' : `테스트 푸시 실패: ${result.reason || result.deliveryStatus}`);
+  }), [apiBaseUrl, runWithLoading, session]);
 
   const updateStockFormField = useCallback((field, value) => {
     setStockForm((current) => ({
@@ -306,9 +352,12 @@ export default function App() {
             setDeviceLabel,
             health,
             connected,
+            pushRegistered,
             onCheckServer: handleCheckServer,
             onConnectDevice: handleConnectDevice,
             onRefreshStocks: handleRefreshStocks,
+            onRegisterPush: handleRegisterPush,
+            onSendPushTest: handleSendPushTest,
             onForgetDevice: handleForgetDevice,
             loading
           }),
@@ -384,9 +433,28 @@ function ServerPanel(props) {
       })
     ),
     props.connected
+      ? e(View, { style: styles.actionRow },
+        e(ActionButton, {
+          label: props.pushRegistered ? '푸시 재등록' : '푸시 등록',
+          onPress: props.onRegisterPush,
+          disabled: props.loading,
+          variant: 'secondary'
+        }),
+        e(ActionButton, {
+          label: '테스트 푸시',
+          onPress: props.onSendPushTest,
+          disabled: props.loading || !props.pushRegistered,
+          variant: 'secondary'
+        })
+      )
+      : null,
+    props.connected
       ? e(Pressable, { onPress: props.onForgetDevice, style: styles.linkButton },
         e(Text, { style: styles.linkButtonText }, '기기 연결 해제')
       )
+      : null,
+    props.connected
+      ? e(Text, { style: styles.metaText }, `푸시 ${props.pushRegistered ? '등록됨' : '미등록'}`)
       : null,
     props.health
       ? e(Text, { style: styles.metaText }, `서버 PID ${props.health.pid || '-'} · 포트 ${props.health.port || '-'}`)

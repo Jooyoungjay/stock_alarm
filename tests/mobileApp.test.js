@@ -9,6 +9,8 @@ import {
   deleteMobileStock,
   getMobileSnapshot,
   normalizeBaseUrl,
+  registerPushToken,
+  sendPushTest,
   updateMobileStock
 } from '../mobile/src/api.js';
 import { summarizePortfolio } from '../mobile/src/format.js';
@@ -42,6 +44,19 @@ test('mobile API helpers call anonymous device endpoints', async () => {
       }, 201);
     }
 
+    if (url.endsWith('/api/mobile/push-token') && options.method === 'POST') {
+      return jsonResponse({
+        device: {
+          id: 'device-1',
+          pushTokens: [{ provider: 'expo', platform: 'ios', enabled: true }]
+        }
+      });
+    }
+
+    if (url.endsWith('/api/mobile/push-test') && options.method === 'POST') {
+      return jsonResponse({ ok: true, deliveryStatus: 'sent', sent: 1 });
+    }
+
     if (url.endsWith('/api/mobile/stocks') && options.method === 'POST') {
       return jsonResponse({ stock: { id: 'stock-1', symbol: '336260', displayName: '두산퓨얼셀' } }, 201);
     }
@@ -72,6 +87,18 @@ test('mobile API helpers call anonymous device endpoints', async () => {
     session: { deviceId: created.device.id, deviceSecret: created.deviceSecret },
     fetchImpl
   });
+  const push = await registerPushToken({
+    baseUrl: 'http://localhost:3001',
+    session: { deviceId: created.device.id, deviceSecret: created.deviceSecret },
+    token: 'ExpoPushToken[test]',
+    platform: 'ios',
+    fetchImpl
+  });
+  const pushTest = await sendPushTest({
+    baseUrl: 'http://localhost:3001',
+    session: { deviceId: created.device.id, deviceSecret: created.deviceSecret },
+    fetchImpl
+  });
   const added = await createMobileStock({
     baseUrl: 'http://localhost:3001',
     session: { deviceId: created.device.id, deviceSecret: created.deviceSecret },
@@ -95,15 +122,20 @@ test('mobile API helpers call anonymous device endpoints', async () => {
   assert.equal(created.device.id, 'device-1');
   assert.equal(health.mobileApi, true);
   assert.equal(snapshot.stocks[0].symbol, '336260');
+  assert.equal(push.device.pushTokens[0].provider, 'expo');
+  assert.equal(pushTest.deliveryStatus, 'sent');
   assert.equal(added.stock.displayName, '두산퓨얼셀');
   assert.equal(updated.stock.active, false);
   assert.equal(deleted.ok, true);
   assert.equal(calls[0].options.method, 'POST');
   assert.equal(calls[1].url, 'http://localhost:3001/api/mobile/ping');
   assert.equal(calls[2].options.headers['x-device-id'], 'device-1');
-  assert.equal(calls[3].options.method, 'POST');
-  assert.equal(calls[4].options.method, 'PATCH');
-  assert.equal(calls[5].options.method, 'DELETE');
+  assert.equal(calls[3].url, 'http://localhost:3001/api/mobile/push-token');
+  assert.equal(JSON.parse(calls[3].options.body).token, 'ExpoPushToken[test]');
+  assert.equal(calls[4].url, 'http://localhost:3001/api/mobile/push-test');
+  assert.equal(calls[5].options.method, 'POST');
+  assert.equal(calls[6].options.method, 'PATCH');
+  assert.equal(calls[7].options.method, 'DELETE');
 });
 
 test('mobile stock form builds add and edit payloads', () => {
@@ -181,10 +213,16 @@ test('Expo mobile scaffold declares SDK 55 and app store identifiers', async () 
 
   assert.equal(packageJson.dependencies.expo, '~55.0.0');
   assert.equal(packageJson.dependencies['expo-secure-store'], '~55.0.14');
+  assert.equal(packageJson.dependencies['expo-notifications'], '~55.0.23');
+  assert.equal(packageJson.dependencies['expo-constants'], '~55.0.16');
   assert.equal(appJson.expo.ios.bundleIdentifier, 'com.jooyoungjay.stockalarm');
   assert.equal(appJson.expo.android.package, 'com.jooyoungjay.stockalarm');
+  assert.ok(appJson.expo.plugins.some((plugin) => Array.isArray(plugin) && plugin[0] === 'expo-notifications'));
   assert.match(appSource, /createDevice/);
   assert.match(appSource, /getMobileSnapshot/);
+  assert.match(appSource, /registerForPushNotificationsAsync/);
+  assert.match(appSource, /registerPushToken/);
+  assert.match(appSource, /sendPushTest/);
   assert.match(appSource, /createMobileStock/);
   assert.match(appSource, /updateMobileStock/);
   assert.match(appSource, /deleteMobileStock/);

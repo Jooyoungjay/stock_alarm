@@ -1,8 +1,8 @@
 # Stock Alarm
 
-Stock Alarm은 매수한 종목의 가격을 주기적으로 확인하고, 사용자가 정한 매도 기준에 도달하면 텔레그램으로 반복 알림을 보내는 MVP입니다.
+Stock Alarm은 매수한 종목의 가격을 주기적으로 확인하고, 사용자가 정한 매도 기준에 도달하면 텔레그램과 모바일 푸시로 반복 알림을 보내는 MVP입니다.
 
-현재 단계는 **로컬 웹앱 + 텔레그램 봇 기반 MVP**입니다. 당장은 사용자가 자신의 PC에서 실행하는 방식을 기준으로 개발하고, 이후 App Store와 Play Store 앱으로 확장할 수 있도록 모바일 API 기초를 함께 준비하고 있습니다.
+현재 단계는 **로컬 웹앱 + 텔레그램 봇 + 모바일 앱 기반 MVP**입니다. 당장은 사용자가 자신의 PC에서 실행하는 방식을 기준으로 개발하고, 이후 App Store와 Play Store 앱으로 확장할 수 있도록 모바일 API와 푸시 알림 기초를 함께 준비하고 있습니다.
 
 ## 빠른 시작
 
@@ -112,9 +112,9 @@ stop-local.bat
 - 브라우저에서 앱처럼 실행할 수 있는 PWA 기본 설정
 - 같은 Wi-Fi 휴대폰 접속용 주소와 QR 코드 표시
 - 계정 없는 모바일 앱용 익명 기기 API 기초
-- 기기별 종목 격리와 푸시 토큰 저장
+- 기기별 종목 격리와 푸시 토큰 저장, 가격 알림 발생 시 모바일 푸시 전송
 - Expo SDK 55 기반 모바일 앱 초기 프로젝트와 서버 연결 화면
-- 모바일 앱 내 종목 등록, 편집, 알림 ON/OFF, 삭제
+- 모바일 앱 내 종목 등록, 편집, 알림 ON/OFF, 삭제, 푸시 토큰 등록과 테스트
 - 로컬 JSON 파일 기반 데이터 저장, 스키마 버전, 데이터 모델 요약 API
 - 안전한 로컬 서버 종료 스크립트
 
@@ -165,9 +165,15 @@ stock_alarm/
 │  ├─ package.json
 │  ├─ assets/
 │  └─ src/
+│     ├─ api.js
+│     ├─ deviceStorage.js
+│     ├─ pushNotifications.js
+│     ├─ stockForm.js
+│     └─ format.js
 ├─ src/
 │  ├─ server.js             # HTTP 서버와 API
 │  ├─ alertEngine.js        # 알림 기준 계산, 상태 추적, 알림 전송 흐름
+│  ├─ pushNotifications.js  # Expo Push 전송
 │  ├─ priceProvider.js      # Naver/Stooq/Alpha Vantage/Yahoo 시세 조회
 │  ├─ dividendCalendar.js   # 향후 배당 지급월/지급일 캘린더 생성
 │  ├─ dividendProvider.js   # 배당 provider 조회와 응답 파싱
@@ -249,6 +255,8 @@ OPENDART_API_KEY=
 ALPHA_VANTAGE_API_KEY=
 TELEGRAM_BOT_TOKEN=
 TELEGRAM_CHAT_ID=
+MOBILE_PUSH_ENABLED=true
+EXPO_PUSH_ENDPOINT=https://exp.host/--/api/v2/push/send
 ```
 
 주요 환경변수:
@@ -280,6 +288,8 @@ TELEGRAM_CHAT_ID=
 | `ALPHA_VANTAGE_API_KEY` | 빈 값 | Alpha Vantage API 키 |
 | `TELEGRAM_BOT_TOKEN` | 빈 값 | 텔레그램 봇 토큰 |
 | `TELEGRAM_CHAT_ID` | 빈 값 | 알림을 받을 텔레그램 채팅 ID |
+| `MOBILE_PUSH_ENABLED` | `true` | 모바일 Expo Push 전송 여부 |
+| `EXPO_PUSH_ENDPOINT` | Expo 기본 endpoint | Expo Push API endpoint. 일반 로컬 실행은 기본값 유지 |
 
 주의:
 
@@ -982,7 +992,8 @@ x-device-secret: <deviceSecret>
 |---|---|
 | `GET /api/mobile/ping` | 모바일 앱 서버 연결 확인 |
 | `GET /api/mobile/me` | 내 익명 기기 정보 확인 |
-| `POST /api/mobile/push-token` | Expo/FCM/APNs 푸시 토큰 저장 |
+| `POST /api/mobile/push-token` | Expo Push 토큰 저장 |
+| `POST /api/mobile/push-test` | 내 기기에 테스트 푸시 전송 |
 | `GET /api/mobile/stocks` | 내 기기의 종목과 알림 목록 조회 |
 | `POST /api/mobile/stocks` | 내 기기에 종목 등록 |
 | `PATCH /api/mobile/stocks/<stockId>` | 내 기기의 종목 수정 |
@@ -992,7 +1003,7 @@ x-device-secret: <deviceSecret>
 
 ## Expo 모바일 앱 초기 프로젝트
 
-모바일 앱은 `mobile/` 디렉터리에 분리했습니다. 현재는 Expo SDK 55 기준의 초기 앱이며, 로컬 Stock Alarm 서버 주소를 입력하고 익명 기기를 연결한 뒤 내 종목을 등록, 편집, 삭제할 수 있는 단계입니다.
+모바일 앱은 `mobile/` 디렉터리에 분리했습니다. 현재는 Expo SDK 55 기준 앱이며, 로컬 Stock Alarm 서버 주소를 입력하고 익명 기기를 연결한 뒤 내 종목을 등록, 편집, 삭제하고 Expo Push 토큰을 등록할 수 있는 단계입니다.
 
 Expo SDK 55는 Node.js `20.19.0` 이상이 필요합니다. 현재 PC의 Node가 그보다 낮으면 기존 로컬 서버는 계속 실행할 수 있지만, 모바일 앱의 `npm install` 또는 `npm start` 전에 Node를 업그레이드해야 합니다.
 
@@ -1029,11 +1040,13 @@ npm run local:phone
 - `POST /api/devices`로 익명 기기 등록
 - `expo-secure-store`로 `deviceId`, `deviceSecret` 저장
 - `GET /api/mobile/stocks`로 내 기기의 종목과 알림 목록 조회
+- `POST /api/mobile/push-token`으로 Expo Push 토큰 등록
+- `POST /api/mobile/push-test`로 테스트 푸시 전송
 - `POST /api/mobile/stocks`로 내 기기의 종목 등록
 - `PATCH /api/mobile/stocks/<stockId>`로 알림 기준, 매수가, 수량, 투자 계획, 알림 ON/OFF 수정
 - `DELETE /api/mobile/stocks/<stockId>`로 내 기기의 종목 삭제
 
-다음 모바일 단계는 Expo/FCM/APNs 푸시 토큰 등록과 테스트입니다. 다만 실제 앱 푸시는 배포 계정과 기기 권한 테스트가 필요하므로, 로컬 MVP 사용성 관점에서는 추가매수 계산기를 먼저 진행할 수 있습니다.
+가격 알림이 발생하면 텔레그램 전송과 별도로 해당 종목의 `deviceId`에 저장된 Expo Push 토큰으로 모바일 푸시를 보냅니다. 실제 휴대폰 푸시는 기기 권한, Expo Push 토큰, 네트워크 접속이 모두 맞아야 하며 시뮬레이터/Expo Go 환경에서는 제한될 수 있습니다.
 
 ## Railway 배포 준비
 
@@ -1106,6 +1119,7 @@ node --check scripts/local-server.js
 - 배당 자동 갱신
 - 종목 검색
 - 모바일 익명 기기 API 저장소
+- 모바일 Expo Push 전송 헬퍼와 알림 경로 연결
 
 ## 문제 해결
 
@@ -1204,10 +1218,10 @@ Invoke-RestMethod http://127.0.0.1:3001/api/health
 - 배당: 배당 API provider 진단, 텔레그램 배당 진단 명령, 국내 종목 매칭 보정, 배당락일/지급일/변경 이력, 배당 캘린더
 - 시세: provider 진단, 시세 출처/데이터 성격 표시, 공공데이터포털 일봉 provider 실험, NXT/공식 API 검토
 - 운영/관리: 사용자/관리자 화면 분리, 관리자 보호, 백업/복구/삭제, 데이터 모델 정리, 저장소 계약, JSON -> DB 이전 설계
-- 모바일: Expo SDK 55 초기 앱, 서버 연결, 익명 기기 저장, 모바일 종목 조회/등록/편집/삭제 화면
+- 모바일: Expo SDK 55 초기 앱, 서버 연결, 익명 기기 저장, 모바일 종목 조회/등록/편집/삭제, Expo Push 토큰 등록과 알림 전송
 
 우선순위가 높은 순서:
 
-1. 모바일 푸시 알림 연결
-2. 배당 성장률
-3. 작업 상태 필드 정리
+1. 배당 성장률
+2. 작업 상태 필드 정리
+3. 앱 심사 준비

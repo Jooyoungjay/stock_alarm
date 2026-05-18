@@ -39,6 +39,14 @@ test('JsonStore stores sanitized push tokens for devices', async () => {
   assert.equal(device.pushTokens[0].platform, 'android');
   assert.equal(device.pushTokens[0].enabled, true);
   assert.equal(device.pushTokens[0].token, undefined);
+
+  const tokens = await store.listDevicePushTokens(created.device.id, {
+    provider: 'expo',
+    enabledOnly: true
+  });
+  assert.equal(tokens.length, 1);
+  assert.equal(tokens[0].token, 'ExponentPushToken[test]');
+  assert.equal(tokens[0].deviceId, created.device.id);
 });
 
 test('JsonStore scopes stocks and alerts by anonymous device', async () => {

@@ -23,6 +23,7 @@ import {
   runManualQuoteCheck
 } from './alertEngine.js';
 import { fetchHistoricalHighSince, fetchQuote } from './priceProvider.js';
+import { sendPushNotificationToDevice } from './pushNotifications.js';
 import {
   APP_DISPLAY_NAME,
   APP_NAME,
@@ -527,6 +528,23 @@ async function handleApi(request, response, url) {
       const updatedDevice = await store.upsertDevicePushToken(device.id, body);
 
       sendJson(response, 200, { device: updatedDevice });
+      return;
+    }
+
+    if (request.method === 'POST' && segments[2] === 'push-test') {
+      const result = await sendPushNotificationToDevice(store, config, device.id, {
+        title: 'Stock Alarm 테스트',
+        body: `서버 시간이 ${new Date().toLocaleString('ko-KR')}로 확인되었습니다.`,
+        data: {
+          type: 'push-test',
+          createdAt: new Date().toISOString()
+        }
+      });
+
+      sendJson(response, 200, {
+        ok: result.deliveryStatus === 'sent' || result.deliveryStatus === 'partial',
+        ...result
+      });
       return;
     }
 

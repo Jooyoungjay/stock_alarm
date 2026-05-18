@@ -10,6 +10,7 @@ export const STORE_CONTRACT_METHODS = Object.freeze([
   'createDevice',
   'authenticateDevice',
   'upsertDevicePushToken',
+  'listDevicePushTokens',
   'listStocks',
   'addStock',
   'updateStock',
