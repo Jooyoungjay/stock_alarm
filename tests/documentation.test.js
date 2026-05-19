@@ -55,6 +55,7 @@ test('app review documents cover privacy, store metadata, and review blockers', 
   assert.match(reviewMarkdown, /App Store Review Guidelines/);
   assert.match(reviewMarkdown, /Google Play Data safety/);
   assert.match(reviewMarkdown, /HTTPS 데모 서버/);
+  assert.match(reviewMarkdown, /check:demo/);
   assert.match(reviewMarkdown, /투자 자문/);
   assert.match(reviewMarkdown, /데이터 삭제/);
 
@@ -70,4 +71,18 @@ test('app review documents cover privacy, store metadata, and review blockers', 
   assert.equal(listing.dataSafety.accountCreation, 'notRequired');
   assert.ok(listing.dataSafety.dataCollected.some((item) => item.type === 'Device identifiers'));
   assert.ok(listing.reviewNotes.some((item) => item.includes('HTTPS 서버')));
+});
+
+test('HTTPS demo server guide documents review readiness checks', async () => {
+  const markdown = await fs.readFile(
+    new URL('../docs/https-demo-server.md', import.meta.url),
+    'utf8'
+  );
+
+  assert.match(markdown, /HTTPS 데모 서버 준비/);
+  assert.match(markdown, /npm run check:demo/);
+  assert.match(markdown, /REVIEW_DEMO_URL/);
+  assert.match(markdown, /PRIVACY_POLICY_URL/);
+  assert.match(markdown, /ADMIN_TOKEN/);
+  assert.match(markdown, /stock_alarm_store/);
 });

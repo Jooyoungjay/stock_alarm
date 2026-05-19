@@ -12,6 +12,7 @@
     "local:phone": "node scripts/local-server.js start-lan",
     "local:status": "node scripts/local-server.js status",
     "check:railway": "node scripts/check-railway-config.js",
+    "check:demo": "node scripts/check-demo-server.js",
     "check:publicdata-price": "node scripts/check-publicdata-price.js",
     "migrate:postgres:dry-run": "node scripts/json-to-postgres-dry-run.js",
     "migrate:postgres:rehearsal": "node scripts/postgres-connection-rehearsal.js",

@@ -33,6 +33,7 @@ test('parseRoadmapMarkdown extracts roadmap metadata and next task', async () =>
   assert.ok(roadmap.completedScope.some((item) => item.category === '모바일 종목 CRUD'));
   assert.ok(roadmap.completedScope.some((item) => item.category === '모바일 푸시 알림'));
   assert.ok(roadmap.completedScope.some((item) => item.category === '앱 심사 준비'));
+  assert.ok(roadmap.completedScope.some((item) => item.category === 'HTTPS 데모 서버 준비'));
   assert.ok(roadmap.completedScope.some((item) => item.category === '배당 이벤트 알림'));
   assert.ok(roadmap.completedScope.some((item) => item.category === '배당 성장률'));
   assert.ok(roadmap.completedScope.some((item) => item.category === '배당 캘린더'));
@@ -45,9 +46,9 @@ test('parseRoadmapMarkdown extracts roadmap metadata and next task', async () =>
   assert.ok(roadmap.completedScope.some((item) => item.category === 'Postgres 쿼리 어댑터'));
   assert.ok(roadmap.completedScope.some((item) => item.category === 'Postgres 연결 리허설'));
   assert.ok(roadmap.sections.length >= 9);
-  assert.equal(roadmap.recommendedOrder[0], '앱 제출 전 HTTPS 데모 서버 준비');
+  assert.equal(roadmap.recommendedOrder[0], '스토어 스크린샷 제작');
   assert.equal(roadmap.recommendedOrder[1], 'NXT provider 추가(API 확인 시)');
-  assert.equal(roadmap.nextTask.title, '앱 제출 전 HTTPS 데모 서버 준비');
+  assert.equal(roadmap.nextTask.title, '스토어 스크린샷 제작');
   assert.ok(roadmap.statusLegend.some((item) => item.status === 'pending' && item.label === '예정'));
   assert.ok(roadmap.summary.pending > 0);
   assert.ok(roadmap.summary.paused > 0);
@@ -97,9 +98,12 @@ test('parseRoadmapMarkdown normalizes explicit WBS task statuses', async () => {
   const completedReviewTask = roadmap.sections
     .find((section) => section.id === '9')
     .tasks.find((task) => task.id === '9.4');
-  const pendingHttpsDemoTask = roadmap.sections
+  const completedHttpsDemoTask = roadmap.sections
     .find((section) => section.id === '9')
     .tasks.find((task) => task.id === '9.5');
+  const pendingStoreScreenshotTask = roadmap.sections
+    .find((section) => section.id === '9')
+    .tasks.find((task) => task.id === '9.6');
 
   assert.equal(completedStatusTask.status, 'completed');
   assert.equal(completedStatusTask.statusLabel, '완료');
@@ -118,7 +122,8 @@ test('parseRoadmapMarkdown normalizes explicit WBS task statuses', async () => {
   assert.equal(completedProviderTask.status, 'completed');
   assert.equal(completedReviewTask.status, 'completed');
   assert.equal(completedReviewTask.statusLabel, '완료');
-  assert.equal(pendingHttpsDemoTask.status, 'pending');
+  assert.equal(completedHttpsDemoTask.status, 'completed');
+  assert.equal(pendingStoreScreenshotTask.status, 'pending');
   assert.equal(
     roadmap.sections.flatMap((section) => section.tasks).some((task) => task.priority === '완료'),
     false

@@ -207,6 +207,7 @@ stock_alarm/
 ├─ scripts/
 │  ├─ local-server.js       # 로컬 서버 시작/상태 확인 스크립트
 │  ├─ stop-server.js        # 안전 종료 스크립트
+│  ├─ check-demo-server.js  # 앱 심사용 HTTPS 데모 서버 준비 점검
 │  ├─ check-publicdata-price.js # 공공데이터포털 일봉 provider 실험
 │  ├─ json-to-postgres-dry-run.js # JSON -> Postgres dry-run CLI
 │  ├─ postgres-connection-rehearsal.js # Postgres 연결 리허설 CLI
@@ -218,6 +219,7 @@ stock_alarm/
 │  ├─ market-data-api-candidates.md # 공식/유료 시세 API 후보 검토
 │  ├─ nxt-market-data-review.md    # NXT 시세 API 검토
 │  ├─ app-store-review-prep.md     # 앱 심사 준비 체크리스트
+│  ├─ https-demo-server.md         # HTTPS 데모 서버 준비와 점검 절차
 │  ├─ privacy-policy-ko.md         # 개인정보 처리방침 초안
 │  └─ railway-deploy.md            # Railway 배포 가이드
 ├─ tests/                   # Node.js 테스트
@@ -293,6 +295,10 @@ EXPO_PUSH_ENDPOINT=https://exp.host/--/api/v2/push/send
 | `STORAGE_ENGINE` | `json` | 저장소 엔진. 기본 실행은 `json`; `postgres` 쿼리 어댑터는 구현됐지만 일반 서버 전환은 아직 보호 차단 |
 | `DATABASE_URL` | 빈 값 | Postgres 저장소용 연결 문자열. 테스트에서는 fake client를 쓰고, 실제 연결은 `pg` 설치 후 사용 |
 | `ADMIN_TOKEN` | 빈 값 | `/admin` 화면과 운영 API 보호용 토큰. 비우면 관리자 보호가 꺼짐 |
+| `REVIEW_DEMO_URL` | 빈 값 | 앱 심사용 공개 HTTPS 데모 서버 URL |
+| `PRIVACY_POLICY_URL` | 빈 값 | 앱 심사용 공개 HTTPS 개인정보 처리방침 URL |
+| `SUPPORT_URL` | 빈 값 | 앱 심사용 공개 HTTPS 지원/문의 URL |
+| `REVIEW_NOTES_URL` | 빈 값 | 선택. 리뷰어 안내 문서 URL |
 | `POLL_INTERVAL_SECONDS` | `60` | 시세 자동 확인 주기 |
 | `TELEGRAM_COMMAND_POLL_SECONDS` | `5` | 텔레그램 명령어 확인 주기 |
 | `DIVIDEND_REFRESH_INTERVAL_SECONDS` | `86400` | 배당 데이터 자동 보조 갱신 주기. 기본값은 하루 1회 |
@@ -1114,10 +1120,21 @@ npm run local:phone
 앱 심사 준비 문서:
 
 - [앱 심사 준비 체크리스트](docs/app-store-review-prep.md)
+- [HTTPS 데모 서버 준비](docs/https-demo-server.md)
 - [개인정보 처리방침 초안](docs/privacy-policy-ko.md)
 - [한국어 스토어 등록 정보 초안](mobile/store-listing.ko.json)
 
 현재 심사 준비 문서는 제출 전 확인용입니다. 실제 App Store와 Play Store 제출 전에는 개인정보 처리방침을 HTTPS 공개 URL로 게시하고, 리뷰어가 접근할 수 있는 HTTPS 데모 서버 또는 내부 테스트 환경을 제공해야 합니다.
+
+HTTPS 데모 서버 준비 점검:
+
+```powershell
+npm run check:demo
+npm run check:demo -- --json
+npm run check:demo -- --fail-on-warn
+```
+
+주요 점검 항목은 `REVIEW_DEMO_URL`, `PRIVACY_POLICY_URL`, `SUPPORT_URL`, `ADMIN_TOKEN`, 외부 서버용 `HOST=0.0.0.0`, 저장소 설정, 푸시/텔레그램 시연 설정입니다.
 
 ## Railway 배포 준비
 
@@ -1292,12 +1309,12 @@ Invoke-RestMethod http://127.0.0.1:3001/api/health
 - 알림/포트폴리오: 이익금 반납률 알림, 최대 수익금/반납 금액, 계좌 총 반납률, 종목별 알림 토글
 - 배당: 배당 API provider 진단, 텔레그램 배당 진단 명령, 국내 종목 매칭 보정, 배당락일/지급일/변경 이력, 배당 성장률, 배당 캘린더 필터/월별 합계, 배당락일/지급일 전후 알림
 - 시세: provider 진단, 시세 출처/데이터 성격 표시, 공공데이터포털 일봉 provider 실험, NXT/공식 API 검토
-- 운영/관리: 사용자/관리자 화면 분리, 관리자 보호, 백업/복구/삭제, 백업 스냅샷 계약, 데이터 모델 정리, 저장소 계약, JSON -> DB 이전 설계, WBS 상태 표준화
+- 운영/관리: 사용자/관리자 화면 분리, 관리자 보호, 백업/복구/삭제, 백업 스냅샷 계약, 데이터 모델 정리, 저장소 계약, JSON -> DB 이전 설계, WBS 상태 표준화, HTTPS 데모 서버 점검
 - 저장소: PostgresStore JSONB 쿼리 어댑터, DATABASE_URL 마스킹, 계약 테스트, JSON -> Postgres dry-run 마이그레이션 검증, 통합 테스트 데이터셋, 백업 스냅샷 계약 검증, Postgres 연결 리허설 CLI
 - 안정화: 시세/배당 실패 사유 표시와 종목별 재시도 UX
-- 모바일: Expo SDK 55 초기 앱, 서버 연결, 익명 기기 저장, 모바일 종목 조회/등록/편집/삭제, Expo Push 토큰 등록과 알림 전송, 앱 심사 준비 문서와 스토어 메타데이터 초안
+- 모바일: Expo SDK 55 초기 앱, 서버 연결, 익명 기기 저장, 모바일 종목 조회/등록/편집/삭제, Expo Push 토큰 등록과 알림 전송, 앱 심사 준비 문서, HTTPS 데모 서버 준비, 스토어 메타데이터 초안
 
 우선순위가 높은 순서:
 
-1. 앱 제출 전 HTTPS 데모 서버 준비
+1. 스토어 스크린샷 제작
 2. NXT provider 추가(API 확인 시)
