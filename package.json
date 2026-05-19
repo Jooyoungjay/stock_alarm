@@ -14,6 +14,7 @@
     "check:railway": "node scripts/check-railway-config.js",
     "check:publicdata-price": "node scripts/check-publicdata-price.js",
     "migrate:postgres:dry-run": "node scripts/json-to-postgres-dry-run.js",
+    "migrate:postgres:rehearsal": "node scripts/postgres-connection-rehearsal.js",
     "mobile:install": "npm --prefix mobile install",
     "mobile:start": "npm --prefix mobile start",
     "test": "node --test"

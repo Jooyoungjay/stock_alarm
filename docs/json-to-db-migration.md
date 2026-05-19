@@ -151,6 +151,7 @@
 - `src/postgresStore.js`: Postgres JSONB 스냅샷 테이블 기반 쿼리 어댑터
 - `src/postgresMigrationDryRun.js`: JSON 스냅샷을 Postgres 테이블 후보 행으로 변환하고 건수/샘플/주의 사항을 검증하는 dry-run 로직
 - `scripts/json-to-postgres-dry-run.js`: 로컬 `data/store.json` 또는 백업 JSON 파일을 대상으로 dry-run을 실행하는 CLI
+- `scripts/postgres-connection-rehearsal.js`: 실제 `DATABASE_URL`에 리허설 전용 JSONB 테이블을 만들고 import/export 건수를 검증하는 CLI
 - `tests/fixtures/postgres-migration/store.snapshot.json`: 실제 Postgres 연결 전 반복 검증용 표준 JSON 스냅샷
 - `tests/fixtures/postgres-migration/expected-api.json`: `JsonStore` 핵심 API와 dry-run 테이블 변환의 기대 결과
 - `tests/helpers/storageSnapshotContract.js`: 저장소별 스냅샷 export/import 계약을 검증하는 공통 테스트 헬퍼
@@ -161,6 +162,16 @@
 PostgresStore는 `stock_alarm_store` JSONB 테이블에 저장소 스냅샷을 저장하는 실제 쿼리 어댑터입니다. 초기화 시 `CREATE SCHEMA`, `CREATE TABLE`, 기본 row 생성 쿼리를 실행하고, 읽기/쓰기는 `SELECT payload`, `INSERT ... ON CONFLICT DO UPDATE`로 처리합니다. 다만 로컬 기본 실행은 여전히 `STORAGE_ENGINE=json`이며, `STORAGE_ENGINE=postgres` 일반 서버 전환은 데이터 이전 리허설 전까지 보호 차단합니다.
 
 초기 PostgresStore는 안정성을 위해 전체 저장소 스냅샷을 JSONB row로 저장합니다. 이 방식은 현재 `JsonStore` 계약, 백업/복구, 관리자 화면을 그대로 재사용하게 해 주며, 이후 필요할 때 dry-run에서 정의한 `devices`, `stocks`, `alerts` 관계형 테이블로 확장할 수 있습니다.
+
+Postgres 연결 리허설 CLI:
+
+```bash
+npm run migrate:postgres:rehearsal
+npm run migrate:postgres:rehearsal -- --store data/backups/store-YYYYMMDD-HHMMSS-manual.json
+npm run migrate:postgres:rehearsal -- --json
+```
+
+리허설은 기본적으로 `stock_alarm_store_rehearsal` 테이블을 사용합니다. 운영용 `stock_alarm_store` 테이블은 명시 옵션 없이는 사용할 수 없게 막아두었습니다.
 
 dry-run 실행:
 
@@ -291,4 +302,4 @@ DB 이전은 화면 분리와 직접 연결됩니다. 사용자 화면은 종목
 
 ## 다음 구현 작업
 
-1. Postgres 연결 리허설 CLI
+1. 앱 제출 전 HTTPS 데모 서버 준비

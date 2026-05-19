@@ -60,6 +60,7 @@
 | Postgres 통합 테스트 데이터셋 | 완료 | 표준 JSON fixture, 예상 API 기준, dry-run 테이블 기준 고정 |
 | 저장소별 백업 스냅샷 검증 | 완료 | JsonStore와 PostgresStore export/import round-trip 계약 자동 검증 |
 | Postgres 쿼리 어댑터 | 완료 | JSONB 스냅샷 테이블 기반 PostgresStore read/write/list/import/export 구현과 fake client 계약 테스트 |
+| Postgres 연결 리허설 | 완료 | 실제 DATABASE_URL 대상 리허설 전용 테이블 import/export smoke test CLI |
 | 사용자/관리자 화면 분리 설계 | 완료 | 사용자 앱과 운영 관리자 화면의 기능 경계, 라우팅, 보호 전략 문서화 |
 | 저장소 인터페이스 | 완료 | 저장소 공통 계약, 저장소 팩토리, JsonStore 계약 검증 테스트 추가 |
 | 사용자/관리자 라우팅 | 완료 | `/`, `/app` 사용자 화면과 `/admin` 관리자 화면 분리 |
@@ -172,7 +173,7 @@
 
 목표: 로컬 JSON 기반 MVP에서 향후 앱 서비스 구조로 옮길 수 있게 준비합니다.
 
-상태: 7.1부터 7.9까지 완료. 저장소 계약, 팩토리, 백업 스냅샷 export/import 흐름, PostgresStore JSONB 쿼리 어댑터, dry-run 변환 검증, 통합 테스트 데이터셋, 저장소별 스냅샷 계약 검증을 고정했습니다. 다음은 실제 DATABASE_URL을 대상으로 한 연결 리허설 CLI입니다.
+상태: 7.1부터 7.10까지 완료. 저장소 계약, 팩토리, 백업 스냅샷 export/import 흐름, PostgresStore JSONB 쿼리 어댑터, dry-run 변환 검증, 통합 테스트 데이터셋, 저장소별 스냅샷 계약 검증, 실제 DATABASE_URL 연결 리허설 CLI를 고정했습니다.
 
 | ID | 작업 | 산출물 | 상태 | 우선순위 | 예상 작업량 |
 |---|---|---|---|---:|---:|
@@ -185,7 +186,7 @@
 | 7.7 | Postgres 통합 테스트 데이터셋 | 실제 연결 전 표준 fixture와 API 응답 비교 샘플 | 완료 | 중간 | 1.5일 |
 | 7.8 | 저장소별 백업 스냅샷 검증 | JsonStore/PostgresStore 공통 export/import 계약 검증 자동화 | 완료 | 중간 | 1일 |
 | 7.9 | Postgres 실제 연결과 쿼리 구현 | PostgresStore read/write/list/import/export 구현과 JSON 비교 테스트 | 완료 | 중간 | 3일 |
-| 7.10 | Postgres 연결 리허설 CLI | 실제 DATABASE_URL 대상 초기화, 스냅샷 import/export, 건수 비교 smoke test | 예정 | 중간 | 1일 |
+| 7.10 | Postgres 연결 리허설 CLI | 실제 DATABASE_URL 대상 초기화, 스냅샷 import/export, 건수 비교 smoke test | 완료 | 중간 | 1일 |
 
 ### 8. 사용자/관리자 화면 분리
 
@@ -216,15 +217,15 @@
 | 9.2 | 익명 기기 API 연동 | 기기 등록, 인증 저장, 종목 CRUD | 완료 | 높음 | 1.5일 |
 | 9.3 | 푸시 알림 연결 | Expo Push 토큰 등록, 테스트 API, 가격 알림 경로 연결 | 완료 | 높음 | 2일 |
 | 9.4 | 앱 심사 준비 | 권한 설명, 개인정보 처리방침 초안, 스토어 등록 정보, 제출 체크리스트 | 완료 | 낮음 | 2일 |
+| 9.5 | HTTPS 데모 서버 준비 | 앱 심사용 HTTPS 접속 URL, 리뷰어 확인 경로, 로컬 개발과 분리된 실행 절차 | 예정 | 중간 | 1일 |
 
 ## 추천 진행 순서
 
-1. Postgres 연결 리허설 CLI
-2. 앱 제출 전 HTTPS 데모 서버 준비
-3. NXT provider 추가(API 확인 시)
+1. 앱 제출 전 HTTPS 데모 서버 준비
+2. NXT provider 추가(API 확인 시)
 
 ## 다음 작업
 
-가장 다음 개발건은 **Postgres 연결 리허설 CLI**입니다.
+가장 다음 개발건은 **앱 제출 전 HTTPS 데모 서버 준비**입니다.
 
-PostgresStore 쿼리 어댑터와 스냅샷 계약 테스트까지 완료했습니다. 다음에는 실제 `DATABASE_URL`을 지정했을 때 DB를 초기화하고, JSON 스냅샷을 import/export한 뒤 건수를 비교하는 리허설 CLI를 추가합니다. 기본 로컬 실행은 계속 `STORAGE_ENGINE=json`으로 유지합니다.
+PostgresStore 쿼리 어댑터와 실제 `DATABASE_URL` 리허설 CLI까지 완료했습니다. 다음에는 앱 심사와 외부 테스트를 위해 리뷰어가 접근 가능한 HTTPS 데모 서버 준비 범위를 정리하고, 로컬 PC 기반 개발 흐름을 해치지 않는 방식으로 연결합니다.

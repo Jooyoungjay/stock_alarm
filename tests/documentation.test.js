@@ -13,6 +13,7 @@ test('JSON to DB migration guide documents the migration contract', async () => 
   assert.match(markdown, /`stocks`/);
   assert.match(markdown, /`alerts`/);
   assert.match(markdown, /migrate:postgres:dry-run/);
+  assert.match(markdown, /migrate:postgres:rehearsal/);
   assert.match(markdown, /quote_provider_attempts/);
   assert.match(markdown, /tests\/fixtures\/postgres-migration/);
   assert.match(markdown, /storageSnapshotContract/);

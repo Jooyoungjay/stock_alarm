@@ -124,6 +124,7 @@ stop-local.bat
 - JSON -> Postgres dry-run 마이그레이션 검증 스크립트
 - 실제 Postgres 연결용 통합 테스트 데이터셋
 - 저장소별 백업 스냅샷 export/import 계약 검증
+- Postgres 연결 리허설 CLI
 - 안전한 로컬 서버 종료 스크립트
 
 지원하는 알림 기준:
@@ -208,6 +209,7 @@ stock_alarm/
 │  ├─ stop-server.js        # 안전 종료 스크립트
 │  ├─ check-publicdata-price.js # 공공데이터포털 일봉 provider 실험
 │  ├─ json-to-postgres-dry-run.js # JSON -> Postgres dry-run CLI
+│  ├─ postgres-connection-rehearsal.js # Postgres 연결 리허설 CLI
 │  └─ check-railway-config.js
 ├─ docs/
 │  ├─ development-roadmap.md       # 개발 WBS와 다음 작업 순서
@@ -961,6 +963,7 @@ data/server.json
 - 서버는 `src/storageFactory.js`를 통해 저장소를 생성합니다.
 - `src/postgresStore.js`에 `JsonStore`와 같은 계약을 따르는 Postgres JSONB 쿼리 어댑터를 추가했습니다.
 - `npm run migrate:postgres:dry-run`으로 현재 `data/store.json`을 Postgres 테이블 후보 행으로 변환하고 건수/샘플/주의 사항을 확인할 수 있습니다.
+- `npm run migrate:postgres:rehearsal`로 실제 `DATABASE_URL`에 리허설 전용 JSONB 테이블을 만들고 스냅샷 import/export 건수를 검증할 수 있습니다.
 - `tests/fixtures/postgres-migration/`에는 실제 DB 연결 전에 JSON API 응답과 dry-run 테이블 변환을 비교할 표준 데이터셋이 있습니다.
 - `tests/storageSnapshotContract.test.js`는 JsonStore와 PostgresStore의 스냅샷 round-trip 계약을 함께 검증합니다.
 - 백업/복구는 저장소 스냅샷 export/import 계약을 사용하므로, 향후 DB 저장소도 같은 관리자 화면과 텔레그램 명령을 재사용할 수 있습니다.
@@ -974,6 +977,17 @@ npm run migrate:postgres:dry-run
 npm run migrate:postgres:dry-run -- --json --samples 5
 npm run migrate:postgres:dry-run -- --store data/backups/<백업파일명>.json
 ```
+
+Postgres 연결 리허설:
+
+```powershell
+$env:DATABASE_URL="postgres://user:password@host:5432/dbname"
+npm run migrate:postgres:rehearsal
+npm run migrate:postgres:rehearsal -- --store data/backups/<백업파일명>.json
+npm run migrate:postgres:rehearsal -- --json
+```
+
+기본 리허설 테이블은 `stock_alarm_store_rehearsal`입니다. 운영용 `stock_alarm_store` 테이블을 바로 덮지 않도록 기본값을 분리했습니다.
 
 백업 위치:
 
@@ -1279,12 +1293,11 @@ Invoke-RestMethod http://127.0.0.1:3001/api/health
 - 배당: 배당 API provider 진단, 텔레그램 배당 진단 명령, 국내 종목 매칭 보정, 배당락일/지급일/변경 이력, 배당 성장률, 배당 캘린더 필터/월별 합계, 배당락일/지급일 전후 알림
 - 시세: provider 진단, 시세 출처/데이터 성격 표시, 공공데이터포털 일봉 provider 실험, NXT/공식 API 검토
 - 운영/관리: 사용자/관리자 화면 분리, 관리자 보호, 백업/복구/삭제, 백업 스냅샷 계약, 데이터 모델 정리, 저장소 계약, JSON -> DB 이전 설계, WBS 상태 표준화
-- 저장소: PostgresStore JSONB 쿼리 어댑터, DATABASE_URL 마스킹, 계약 테스트, JSON -> Postgres dry-run 마이그레이션 검증, 통합 테스트 데이터셋, 백업 스냅샷 계약 검증
+- 저장소: PostgresStore JSONB 쿼리 어댑터, DATABASE_URL 마스킹, 계약 테스트, JSON -> Postgres dry-run 마이그레이션 검증, 통합 테스트 데이터셋, 백업 스냅샷 계약 검증, Postgres 연결 리허설 CLI
 - 안정화: 시세/배당 실패 사유 표시와 종목별 재시도 UX
 - 모바일: Expo SDK 55 초기 앱, 서버 연결, 익명 기기 저장, 모바일 종목 조회/등록/편집/삭제, Expo Push 토큰 등록과 알림 전송, 앱 심사 준비 문서와 스토어 메타데이터 초안
 
 우선순위가 높은 순서:
 
-1. Postgres 연결 리허설 CLI
-2. 앱 제출 전 HTTPS 데모 서버 준비
-3. NXT provider 추가(API 확인 시)
+1. 앱 제출 전 HTTPS 데모 서버 준비
+2. NXT provider 추가(API 확인 시)
