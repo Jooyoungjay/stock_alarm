@@ -40,10 +40,11 @@ test('parseRoadmapMarkdown extracts roadmap metadata and next task', async () =>
   assert.ok(roadmap.completedScope.some((item) => item.category === '실패 종목 재시도 UX'));
   assert.ok(roadmap.completedScope.some((item) => item.category === 'PostgresStore 골격'));
   assert.ok(roadmap.completedScope.some((item) => item.category === 'JSON -> Postgres dry-run'));
+  assert.ok(roadmap.completedScope.some((item) => item.category === 'Postgres 통합 테스트 데이터셋'));
   assert.ok(roadmap.sections.length >= 9);
-  assert.equal(roadmap.recommendedOrder[0], '실제 Postgres 연결 전 통합 테스트 데이터셋 준비');
-  assert.equal(roadmap.recommendedOrder[1], 'NXT provider 추가');
-  assert.equal(roadmap.nextTask.title, '실제 Postgres 연결 전 통합 테스트 데이터셋 준비');
+  assert.equal(roadmap.recommendedOrder[0], '저장소별 백업 스냅샷 export/import 검증 자동화');
+  assert.equal(roadmap.recommendedOrder[1], 'Postgres 실제 연결과 쿼리 구현');
+  assert.equal(roadmap.nextTask.title, '저장소별 백업 스냅샷 export/import 검증 자동화');
   assert.ok(roadmap.statusLegend.some((item) => item.status === 'pending' && item.label === '예정'));
   assert.ok(roadmap.summary.pending > 0);
   assert.ok(roadmap.summary.paused > 0);
@@ -72,9 +73,12 @@ test('parseRoadmapMarkdown normalizes explicit WBS task statuses', async () => {
   const completedDryRunTask = roadmap.sections
     .find((section) => section.id === '7')
     .tasks.find((task) => task.id === '7.6');
-  const pendingPostgresDatasetTask = roadmap.sections
+  const completedPostgresDatasetTask = roadmap.sections
     .find((section) => section.id === '7')
     .tasks.find((task) => task.id === '7.7');
+  const pendingSnapshotContractTask = roadmap.sections
+    .find((section) => section.id === '7')
+    .tasks.find((task) => task.id === '7.8');
   const completedDividendAlertTask = roadmap.sections
     .find((section) => section.id === '5')
     .tasks.find((task) => task.id === '5.5');
@@ -95,7 +99,8 @@ test('parseRoadmapMarkdown normalizes explicit WBS task statuses', async () => {
   assert.equal(completedBackupStrategyTask.status, 'completed');
   assert.equal(completedPostgresStoreTask.status, 'completed');
   assert.equal(completedDryRunTask.status, 'completed');
-  assert.equal(pendingPostgresDatasetTask.status, 'pending');
+  assert.equal(completedPostgresDatasetTask.status, 'completed');
+  assert.equal(pendingSnapshotContractTask.status, 'pending');
   assert.equal(completedProviderTask.status, 'completed');
   assert.equal(completedReviewTask.status, 'completed');
   assert.equal(completedReviewTask.statusLabel, '완료');

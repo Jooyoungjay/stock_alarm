@@ -151,6 +151,8 @@
 - `src/postgresStore.js`: 계약 검증용 비활성 PostgresStore 골격
 - `src/postgresMigrationDryRun.js`: JSON 스냅샷을 Postgres 테이블 후보 행으로 변환하고 건수/샘플/주의 사항을 검증하는 dry-run 로직
 - `scripts/json-to-postgres-dry-run.js`: 로컬 `data/store.json` 또는 백업 JSON 파일을 대상으로 dry-run을 실행하는 CLI
+- `tests/fixtures/postgres-migration/store.snapshot.json`: 실제 Postgres 연결 전 반복 검증용 표준 JSON 스냅샷
+- `tests/fixtures/postgres-migration/expected-api.json`: `JsonStore` 핵심 API와 dry-run 테이블 변환의 기대 결과
 - `src/storageFactory.js`: 기본 실행은 `json`만 허용하고, `postgres` 일반 실행은 아직 차단
 - `DATABASE_URL`: 현재는 연결 문자열 마스킹과 설정 상태 검증까지만 사용
 
@@ -187,6 +189,13 @@ dry-run은 다음 테이블 후보 행을 만듭니다.
 - `settings`
 
 푸시 토큰은 원문을 내보내지 않고 SHA-256 해시만 샘플에 포함합니다. 삭제된 종목의 과거 알림처럼 현재 `stocks[]`에 없는 `stock_id`가 발견되면 주의 사항으로 표시하지만, 실제 DB 연결이나 쓰기는 수행하지 않습니다.
+
+통합 테스트 데이터셋:
+
+- 기기 2개, 푸시 토큰 2개, 종목 2개, 알림 2개, 배당 변경 이력 1개를 포함합니다.
+- 국내 배당주, 미국 종목, 활성/중지 종목, 이익금 반납률, 직접 기준가 알림을 함께 포함합니다.
+- 삭제된 종목을 가리키는 과거 알림 1건을 포함해 `stock_id` 정합성 경고를 고정합니다.
+- `tests/postgresMigrationDataset.test.js`에서 `JsonStore`의 `listStocks`, `listAlerts`, `getDataModelInfo` 결과와 dry-run 테이블 행을 함께 검증합니다.
 
 필수 메서드:
 
@@ -271,6 +280,5 @@ DB 이전은 화면 분리와 직접 연결됩니다. 사용자 화면은 종목
 
 ## 다음 구현 작업
 
-1. 실제 Postgres 연결 전 통합 테스트 데이터셋 준비
-2. 저장소별 백업 스냅샷 export/import 검증 자동화
-3. Postgres 실제 연결과 쿼리 구현
+1. 저장소별 백업 스냅샷 export/import 검증 자동화
+2. Postgres 실제 연결과 쿼리 구현

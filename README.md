@@ -122,6 +122,7 @@ stop-local.bat
 - 로컬 JSON 파일 기반 데이터 저장, 스키마 버전, 데이터 모델 요약 API
 - PostgresStore 비활성 골격과 저장소 계약 검증
 - JSON -> Postgres dry-run 마이그레이션 검증 스크립트
+- 실제 Postgres 연결 전 통합 테스트 데이터셋
 - 안전한 로컬 서버 종료 스크립트
 
 지원하는 알림 기준:
@@ -217,6 +218,7 @@ stock_alarm/
 │  ├─ privacy-policy-ko.md         # 개인정보 처리방침 초안
 │  └─ railway-deploy.md            # Railway 배포 가이드
 ├─ tests/                   # Node.js 테스트
+│  └─ fixtures/postgres-migration/ # DB 이전 검증용 표준 스냅샷과 기대 결과
 ├─ data/                    # 로컬 실행 데이터, Git 제외
 │  ├─ store.json            # 실제 앱 데이터
 │  ├─ server.json           # 실행 중 서버 PID/포트 정보
@@ -957,6 +959,7 @@ data/server.json
 - 서버는 `src/storageFactory.js`를 통해 저장소를 생성합니다.
 - `src/postgresStore.js`에 `JsonStore`와 같은 계약을 따르는 PostgresStore 골격을 추가했습니다.
 - `npm run migrate:postgres:dry-run`으로 현재 `data/store.json`을 Postgres 테이블 후보 행으로 변환하고 건수/샘플/주의 사항을 확인할 수 있습니다.
+- `tests/fixtures/postgres-migration/`에는 실제 DB 연결 전에 JSON API 응답과 dry-run 테이블 변환을 비교할 표준 데이터셋이 있습니다.
 - 백업/복구는 저장소 스냅샷 export/import 계약을 사용하므로, 향후 DB 저장소도 같은 관리자 화면과 텔레그램 명령을 재사용할 수 있습니다.
 - 실제 이전 전에는 스냅샷 백업, dry-run, 건수 검증, API 응답 비교를 수행합니다.
 - `STORAGE_ENGINE=postgres`는 아직 실제 실행 저장소가 아니며, 현재는 골격이 있어도 일반 서버 실행에서는 명확한 오류를 내도록 막아두었습니다.
@@ -1273,12 +1276,12 @@ Invoke-RestMethod http://127.0.0.1:3001/api/health
 - 배당: 배당 API provider 진단, 텔레그램 배당 진단 명령, 국내 종목 매칭 보정, 배당락일/지급일/변경 이력, 배당 성장률, 배당 캘린더 필터/월별 합계, 배당락일/지급일 전후 알림
 - 시세: provider 진단, 시세 출처/데이터 성격 표시, 공공데이터포털 일봉 provider 실험, NXT/공식 API 검토
 - 운영/관리: 사용자/관리자 화면 분리, 관리자 보호, 백업/복구/삭제, 백업 스냅샷 계약, 데이터 모델 정리, 저장소 계약, JSON -> DB 이전 설계, WBS 상태 표준화
-- 저장소: PostgresStore 비활성 골격, DATABASE_URL 마스킹, 계약 테스트, JSON -> Postgres dry-run 마이그레이션 검증
+- 저장소: PostgresStore 비활성 골격, DATABASE_URL 마스킹, 계약 테스트, JSON -> Postgres dry-run 마이그레이션 검증, 통합 테스트 데이터셋
 - 안정화: 시세/배당 실패 사유 표시와 종목별 재시도 UX
 - 모바일: Expo SDK 55 초기 앱, 서버 연결, 익명 기기 저장, 모바일 종목 조회/등록/편집/삭제, Expo Push 토큰 등록과 알림 전송, 앱 심사 준비 문서와 스토어 메타데이터 초안
 
 우선순위가 높은 순서:
 
-1. 실제 Postgres 연결 전 통합 테스트 데이터셋 준비
-2. NXT provider 추가
-3. 저장소별 백업 스냅샷 export/import 검증 자동화
+1. 저장소별 백업 스냅샷 export/import 검증 자동화
+2. Postgres 실제 연결과 쿼리 구현
+3. NXT provider 추가
