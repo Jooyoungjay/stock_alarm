@@ -149,10 +149,44 @@
 
 - `src/storage.js`: 실제 실행 중인 로컬 JSON 저장소
 - `src/postgresStore.js`: 계약 검증용 비활성 PostgresStore 골격
+- `src/postgresMigrationDryRun.js`: JSON 스냅샷을 Postgres 테이블 후보 행으로 변환하고 건수/샘플/주의 사항을 검증하는 dry-run 로직
+- `scripts/json-to-postgres-dry-run.js`: 로컬 `data/store.json` 또는 백업 JSON 파일을 대상으로 dry-run을 실행하는 CLI
 - `src/storageFactory.js`: 기본 실행은 `json`만 허용하고, `postgres` 일반 실행은 아직 차단
 - `DATABASE_URL`: 현재는 연결 문자열 마스킹과 설정 상태 검증까지만 사용
 
 PostgresStore 골격은 모든 저장소 계약 메서드를 갖고 있지만 실제 DB I/O는 수행하지 않습니다. `STORAGE_ENGINE=postgres`로 일반 서버를 실행하면 명확한 오류를 내도록 막아두었고, 테스트에서만 명시 옵션으로 골격을 생성합니다.
+
+dry-run 실행:
+
+```bash
+npm run migrate:postgres:dry-run
+```
+
+백업 파일을 직접 확인할 때:
+
+```bash
+npm run migrate:postgres:dry-run -- --store data/backups/store-YYYYMMDD-HHMMSS-manual.json
+```
+
+JSON으로 상세 결과를 받을 때:
+
+```bash
+npm run migrate:postgres:dry-run -- --json --samples 5
+```
+
+dry-run은 다음 테이블 후보 행을 만듭니다.
+
+- `devices`
+- `push_tokens`
+- `stocks`
+- `dividend_events`
+- `alerts`
+- `quote_provider_stats`
+- `quote_provider_attempts`
+- `job_runs`
+- `settings`
+
+푸시 토큰은 원문을 내보내지 않고 SHA-256 해시만 샘플에 포함합니다. 삭제된 종목의 과거 알림처럼 현재 `stocks[]`에 없는 `stock_id`가 발견되면 주의 사항으로 표시하지만, 실제 DB 연결이나 쓰기는 수행하지 않습니다.
 
 필수 메서드:
 
@@ -237,7 +271,6 @@ DB 이전은 화면 분리와 직접 연결됩니다. 사용자 화면은 종목
 
 ## 다음 구현 작업
 
-1. JSON -> Postgres dry-run 마이그레이션 스크립트 추가
-2. 실제 Postgres 연결 전 통합 테스트 데이터셋 준비
-3. 저장소별 백업 스냅샷 export/import 검증 자동화
-4. Postgres 실제 연결과 쿼리 구현
+1. 실제 Postgres 연결 전 통합 테스트 데이터셋 준비
+2. 저장소별 백업 스냅샷 export/import 검증 자동화
+3. Postgres 실제 연결과 쿼리 구현
