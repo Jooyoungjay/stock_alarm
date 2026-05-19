@@ -153,6 +153,8 @@
 - `scripts/json-to-postgres-dry-run.js`: 로컬 `data/store.json` 또는 백업 JSON 파일을 대상으로 dry-run을 실행하는 CLI
 - `tests/fixtures/postgres-migration/store.snapshot.json`: 실제 Postgres 연결 전 반복 검증용 표준 JSON 스냅샷
 - `tests/fixtures/postgres-migration/expected-api.json`: `JsonStore` 핵심 API와 dry-run 테이블 변환의 기대 결과
+- `tests/helpers/storageSnapshotContract.js`: 저장소별 스냅샷 export/import 계약을 검증하는 공통 테스트 헬퍼
+- `tests/storageSnapshotContract.test.js`: JsonStore의 실제 스냅샷 round-trip과 PostgresStore scaffold의 실행 차단 계약 검증
 - `src/storageFactory.js`: 기본 실행은 `json`만 허용하고, `postgres` 일반 실행은 아직 차단
 - `DATABASE_URL`: 현재는 연결 문자열 마스킹과 설정 상태 검증까지만 사용
 
@@ -196,6 +198,13 @@ dry-run은 다음 테이블 후보 행을 만듭니다.
 - 국내 배당주, 미국 종목, 활성/중지 종목, 이익금 반납률, 직접 기준가 알림을 함께 포함합니다.
 - 삭제된 종목을 가리키는 과거 알림 1건을 포함해 `stock_id` 정합성 경고를 고정합니다.
 - `tests/postgresMigrationDataset.test.js`에서 `JsonStore`의 `listStocks`, `listAlerts`, `getDataModelInfo` 결과와 dry-run 테이블 행을 함께 검증합니다.
+
+스냅샷 계약 검증:
+
+- 실행 가능한 저장소는 `importBackupSnapshot -> exportBackupSnapshot -> importBackupSnapshot` round-trip을 통과해야 합니다.
+- `JsonStore`는 표준 fixture를 가져온 뒤 종목, 알림, 데이터 모델 건수가 유지되는지 검증합니다.
+- `PostgresStore` scaffold는 같은 메서드를 갖고 있지만 아직 실행 가능하지 않다는 명확한 오류를 내야 합니다.
+- 향후 실제 `PostgresStore` 구현 시 같은 헬퍼에 Postgres factory를 연결해 JSON 저장소와 동일한 백업/복구 계약을 검증합니다.
 
 필수 메서드:
 
@@ -280,5 +289,4 @@ DB 이전은 화면 분리와 직접 연결됩니다. 사용자 화면은 종목
 
 ## 다음 구현 작업
 
-1. 저장소별 백업 스냅샷 export/import 검증 자동화
-2. Postgres 실제 연결과 쿼리 구현
+1. Postgres 실제 연결과 쿼리 구현

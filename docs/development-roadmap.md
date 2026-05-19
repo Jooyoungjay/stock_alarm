@@ -58,6 +58,7 @@
 | PostgresStore 골격 | 완료 | 비활성 PostgresStore 클래스, DATABASE_URL 마스킹, 계약 테스트 |
 | JSON -> Postgres dry-run | 완료 | 로컬 JSON을 Postgres 테이블 후보로 변환하고 건수/샘플/주의 사항 검증 |
 | Postgres 통합 테스트 데이터셋 | 완료 | 표준 JSON fixture, 예상 API 기준, dry-run 테이블 기준 고정 |
+| 저장소별 백업 스냅샷 검증 | 완료 | JsonStore export/import round-trip과 PostgresStore scaffold 실패 계약 자동 검증 |
 | 사용자/관리자 화면 분리 설계 | 완료 | 사용자 앱과 운영 관리자 화면의 기능 경계, 라우팅, 보호 전략 문서화 |
 | 저장소 인터페이스 | 완료 | 저장소 공통 계약, 저장소 팩토리, JsonStore 계약 검증 테스트 추가 |
 | 사용자/관리자 라우팅 | 완료 | `/`, `/app` 사용자 화면과 `/admin` 관리자 화면 분리 |
@@ -170,7 +171,7 @@
 
 목표: 로컬 JSON 기반 MVP에서 향후 앱 서비스 구조로 옮길 수 있게 준비합니다.
 
-상태: 7.1부터 7.7까지 완료. 실제 Postgres 연결은 아직 넣지 않고, 저장소 계약, 팩토리, 백업 스냅샷 export/import 흐름, 비활성 PostgresStore 골격, dry-run 변환 검증, 통합 테스트 데이터셋을 먼저 고정했습니다. 다음은 저장소별 백업 스냅샷 검증 자동화입니다.
+상태: 7.1부터 7.8까지 완료. 실제 Postgres 연결은 아직 넣지 않고, 저장소 계약, 팩토리, 백업 스냅샷 export/import 흐름, 비활성 PostgresStore 골격, dry-run 변환 검증, 통합 테스트 데이터셋, 저장소별 스냅샷 계약 검증을 먼저 고정했습니다. 다음은 실제 Postgres 연결과 쿼리 구현입니다.
 
 | ID | 작업 | 산출물 | 상태 | 우선순위 | 예상 작업량 |
 |---|---|---|---|---:|---:|
@@ -181,7 +182,8 @@
 | 7.5 | PostgresStore 골격 추가 | 계약을 따르는 비활성 DB 저장소 클래스와 기본 연결 검증 | 완료 | 중간 | 1.5일 |
 | 7.6 | JSON -> Postgres dry-run | 마이그레이션 스크립트와 건수/샘플 검증 | 완료 | 중간 | 2일 |
 | 7.7 | Postgres 통합 테스트 데이터셋 | 실제 연결 전 표준 fixture와 API 응답 비교 샘플 | 완료 | 중간 | 1.5일 |
-| 7.8 | 저장소별 백업 스냅샷 검증 | JsonStore/PostgresStore 공통 export/import 계약 검증 자동화 | 예정 | 중간 | 1일 |
+| 7.8 | 저장소별 백업 스냅샷 검증 | JsonStore/PostgresStore 공통 export/import 계약 검증 자동화 | 완료 | 중간 | 1일 |
+| 7.9 | Postgres 실제 연결과 쿼리 구현 | PostgresStore read/write/list/import/export 구현과 JSON 비교 테스트 | 예정 | 중간 | 3일 |
 
 ### 8. 사용자/관리자 화면 분리
 
@@ -215,12 +217,12 @@
 
 ## 추천 진행 순서
 
-1. 저장소별 백업 스냅샷 export/import 검증 자동화
-2. Postgres 실제 연결과 쿼리 구현
-3. NXT provider 추가
+1. Postgres 실제 연결과 쿼리 구현
+2. NXT provider 추가
+3. 앱 제출 전 HTTPS 데모 서버 준비
 
 ## 다음 작업
 
-가장 다음 개발건은 **저장소별 백업 스냅샷 export/import 검증 자동화**입니다.
+가장 다음 개발건은 **Postgres 실제 연결과 쿼리 구현**입니다.
 
-Postgres 전환 준비의 테스트 기준까지 완료했습니다. 다음에는 현재 JsonStore 백업 스냅샷 계약을 저장소 공통 검증으로 끌어올려, 향후 PostgresStore가 실제 구현되어도 같은 백업/복구 흐름을 통과하는지 자동으로 확인하게 만듭니다.
+Postgres 전환 준비의 테스트 기준과 스냅샷 계약 검증까지 완료했습니다. 다음에는 실제 Postgres 연결 라이브러리와 쿼리 계층을 붙이되, 기본 로컬 실행은 계속 `STORAGE_ENGINE=json`으로 유지하고 테스트 환경에서만 Postgres 구현을 검증합니다.
