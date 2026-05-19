@@ -16,6 +16,8 @@ test('JSON to DB migration guide documents the migration contract', async () => 
   assert.match(markdown, /quote_provider_attempts/);
   assert.match(markdown, /tests\/fixtures\/postgres-migration/);
   assert.match(markdown, /storageSnapshotContract/);
+  assert.match(markdown, /JSONB/);
+  assert.match(markdown, /Postgres 연결 리허설 CLI/);
   assert.match(markdown, /검증 기준/);
   assert.match(markdown, /롤백 전략/);
 });

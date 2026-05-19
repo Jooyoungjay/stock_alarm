@@ -120,9 +120,9 @@ stop-local.bat
 - 모바일 앱 내 종목 등록, 편집, 알림 ON/OFF, 삭제, 푸시 토큰 등록과 테스트
 - 앱스토어/플레이스토어 심사용 개인정보 처리방침 초안, 스토어 메타데이터, 제출 체크리스트
 - 로컬 JSON 파일 기반 데이터 저장, 스키마 버전, 데이터 모델 요약 API
-- PostgresStore 비활성 골격과 저장소 계약 검증
+- PostgresStore JSONB 쿼리 어댑터와 저장소 계약 검증
 - JSON -> Postgres dry-run 마이그레이션 검증 스크립트
-- 실제 Postgres 연결 전 통합 테스트 데이터셋
+- 실제 Postgres 연결용 통합 테스트 데이터셋
 - 저장소별 백업 스냅샷 export/import 계약 검증
 - 안전한 로컬 서버 종료 스크립트
 
@@ -191,7 +191,7 @@ stock_alarm/
 │  ├─ dividendRefresh.js    # 배당 데이터 자동/수동 갱신
 │  ├─ dataModel.js          # 저장 데이터 모델과 스키마 버전
 │  ├─ storage.js            # 로컬 JSON 저장소
-│  ├─ postgresStore.js      # 향후 DB 이전용 Postgres 저장소 골격
+│  ├─ postgresStore.js      # Postgres JSONB 저장소 쿼리 어댑터
 │  ├─ postgresMigrationDryRun.js # JSON -> Postgres dry-run 변환/검증
 │  ├─ storageContract.js    # 저장소 공통 계약
 │  ├─ storageFactory.js     # 저장소 엔진 선택
@@ -288,8 +288,8 @@ EXPO_PUSH_ENDPOINT=https://exp.host/--/api/v2/push/send
 | `HOST` | `127.0.0.1` | 로컬 PC만 접속하려면 기본값 사용. 휴대폰 테스트는 `0.0.0.0` 사용 |
 | `PORT` | `3000` | 서버 포트. 사용 중이면 로컬 시작 스크립트가 다음 포트를 찾음 |
 | `DATA_DIR` | `data` | 데이터 저장 폴더. 비우면 프로젝트의 `data/` 사용 |
-| `STORAGE_ENGINE` | `json` | 저장소 엔진. 현재 실제 실행 가능한 값은 `json`; `postgres`는 골격만 있고 일반 실행은 차단 |
-| `DATABASE_URL` | 빈 값 | 향후 Postgres 저장소용 연결 문자열. 현재는 PostgresStore 골격의 설정 검증과 마스킹 테스트에만 사용 |
+| `STORAGE_ENGINE` | `json` | 저장소 엔진. 기본 실행은 `json`; `postgres` 쿼리 어댑터는 구현됐지만 일반 서버 전환은 아직 보호 차단 |
+| `DATABASE_URL` | 빈 값 | Postgres 저장소용 연결 문자열. 테스트에서는 fake client를 쓰고, 실제 연결은 `pg` 설치 후 사용 |
 | `ADMIN_TOKEN` | 빈 값 | `/admin` 화면과 운영 API 보호용 토큰. 비우면 관리자 보호가 꺼짐 |
 | `POLL_INTERVAL_SECONDS` | `60` | 시세 자동 확인 주기 |
 | `TELEGRAM_COMMAND_POLL_SECONDS` | `5` | 텔레그램 명령어 확인 주기 |
@@ -959,13 +959,13 @@ data/server.json
 - 현재 로컬 JSON 실행은 유지합니다.
 - 저장소 인터페이스는 `src/storageContract.js`에 고정되어 있습니다.
 - 서버는 `src/storageFactory.js`를 통해 저장소를 생성합니다.
-- `src/postgresStore.js`에 `JsonStore`와 같은 계약을 따르는 PostgresStore 골격을 추가했습니다.
+- `src/postgresStore.js`에 `JsonStore`와 같은 계약을 따르는 Postgres JSONB 쿼리 어댑터를 추가했습니다.
 - `npm run migrate:postgres:dry-run`으로 현재 `data/store.json`을 Postgres 테이블 후보 행으로 변환하고 건수/샘플/주의 사항을 확인할 수 있습니다.
 - `tests/fixtures/postgres-migration/`에는 실제 DB 연결 전에 JSON API 응답과 dry-run 테이블 변환을 비교할 표준 데이터셋이 있습니다.
-- `tests/storageSnapshotContract.test.js`는 JsonStore의 스냅샷 round-trip과 PostgresStore scaffold의 실행 차단 계약을 함께 검증합니다.
+- `tests/storageSnapshotContract.test.js`는 JsonStore와 PostgresStore의 스냅샷 round-trip 계약을 함께 검증합니다.
 - 백업/복구는 저장소 스냅샷 export/import 계약을 사용하므로, 향후 DB 저장소도 같은 관리자 화면과 텔레그램 명령을 재사용할 수 있습니다.
 - 실제 이전 전에는 스냅샷 백업, dry-run, 건수 검증, API 응답 비교를 수행합니다.
-- `STORAGE_ENGINE=postgres`는 아직 실제 실행 저장소가 아니며, 현재는 골격이 있어도 일반 서버 실행에서는 명확한 오류를 내도록 막아두었습니다.
+- `STORAGE_ENGINE=postgres`는 쿼리 어댑터가 준비됐지만, 데이터 손실을 막기 위해 일반 서버 실행에서는 아직 명시 보호 옵션 뒤에 둡니다.
 
 dry-run 상세 옵션:
 
@@ -1279,12 +1279,12 @@ Invoke-RestMethod http://127.0.0.1:3001/api/health
 - 배당: 배당 API provider 진단, 텔레그램 배당 진단 명령, 국내 종목 매칭 보정, 배당락일/지급일/변경 이력, 배당 성장률, 배당 캘린더 필터/월별 합계, 배당락일/지급일 전후 알림
 - 시세: provider 진단, 시세 출처/데이터 성격 표시, 공공데이터포털 일봉 provider 실험, NXT/공식 API 검토
 - 운영/관리: 사용자/관리자 화면 분리, 관리자 보호, 백업/복구/삭제, 백업 스냅샷 계약, 데이터 모델 정리, 저장소 계약, JSON -> DB 이전 설계, WBS 상태 표준화
-- 저장소: PostgresStore 비활성 골격, DATABASE_URL 마스킹, 계약 테스트, JSON -> Postgres dry-run 마이그레이션 검증, 통합 테스트 데이터셋, 백업 스냅샷 계약 검증
+- 저장소: PostgresStore JSONB 쿼리 어댑터, DATABASE_URL 마스킹, 계약 테스트, JSON -> Postgres dry-run 마이그레이션 검증, 통합 테스트 데이터셋, 백업 스냅샷 계약 검증
 - 안정화: 시세/배당 실패 사유 표시와 종목별 재시도 UX
 - 모바일: Expo SDK 55 초기 앱, 서버 연결, 익명 기기 저장, 모바일 종목 조회/등록/편집/삭제, Expo Push 토큰 등록과 알림 전송, 앱 심사 준비 문서와 스토어 메타데이터 초안
 
 우선순위가 높은 순서:
 
-1. Postgres 실제 연결과 쿼리 구현
-2. NXT provider 추가
-3. 앱 제출 전 HTTPS 데모 서버 준비
+1. Postgres 연결 리허설 CLI
+2. 앱 제출 전 HTTPS 데모 서버 준비
+3. NXT provider 추가(API 확인 시)

@@ -18,6 +18,9 @@
     "mobile:start": "npm --prefix mobile start",
     "test": "node --test"
   },
+  "optionalDependencies": {
+    "pg": "^8.13.1"
+  },
   "engines": {
     "node": ">=20"
   }

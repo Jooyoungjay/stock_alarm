@@ -148,17 +148,19 @@
 현재 구현 상태:
 
 - `src/storage.js`: 실제 실행 중인 로컬 JSON 저장소
-- `src/postgresStore.js`: 계약 검증용 비활성 PostgresStore 골격
+- `src/postgresStore.js`: Postgres JSONB 스냅샷 테이블 기반 쿼리 어댑터
 - `src/postgresMigrationDryRun.js`: JSON 스냅샷을 Postgres 테이블 후보 행으로 변환하고 건수/샘플/주의 사항을 검증하는 dry-run 로직
 - `scripts/json-to-postgres-dry-run.js`: 로컬 `data/store.json` 또는 백업 JSON 파일을 대상으로 dry-run을 실행하는 CLI
 - `tests/fixtures/postgres-migration/store.snapshot.json`: 실제 Postgres 연결 전 반복 검증용 표준 JSON 스냅샷
 - `tests/fixtures/postgres-migration/expected-api.json`: `JsonStore` 핵심 API와 dry-run 테이블 변환의 기대 결과
 - `tests/helpers/storageSnapshotContract.js`: 저장소별 스냅샷 export/import 계약을 검증하는 공통 테스트 헬퍼
-- `tests/storageSnapshotContract.test.js`: JsonStore의 실제 스냅샷 round-trip과 PostgresStore scaffold의 실행 차단 계약 검증
-- `src/storageFactory.js`: 기본 실행은 `json`만 허용하고, `postgres` 일반 실행은 아직 차단
-- `DATABASE_URL`: 현재는 연결 문자열 마스킹과 설정 상태 검증까지만 사용
+- `tests/storageSnapshotContract.test.js`: JsonStore와 PostgresStore의 실제 스냅샷 round-trip 계약 검증
+- `src/storageFactory.js`: 기본 실행은 `json`을 유지하고, `postgres` 일반 실행은 아직 보호 차단
+- `DATABASE_URL`: 실제 Postgres 연결 문자열. 테스트는 fake query client를 사용하고, 운영 실험은 `pg` 설치 후 진행
 
-PostgresStore 골격은 모든 저장소 계약 메서드를 갖고 있지만 실제 DB I/O는 수행하지 않습니다. `STORAGE_ENGINE=postgres`로 일반 서버를 실행하면 명확한 오류를 내도록 막아두었고, 테스트에서만 명시 옵션으로 골격을 생성합니다.
+PostgresStore는 `stock_alarm_store` JSONB 테이블에 저장소 스냅샷을 저장하는 실제 쿼리 어댑터입니다. 초기화 시 `CREATE SCHEMA`, `CREATE TABLE`, 기본 row 생성 쿼리를 실행하고, 읽기/쓰기는 `SELECT payload`, `INSERT ... ON CONFLICT DO UPDATE`로 처리합니다. 다만 로컬 기본 실행은 여전히 `STORAGE_ENGINE=json`이며, `STORAGE_ENGINE=postgres` 일반 서버 전환은 데이터 이전 리허설 전까지 보호 차단합니다.
+
+초기 PostgresStore는 안정성을 위해 전체 저장소 스냅샷을 JSONB row로 저장합니다. 이 방식은 현재 `JsonStore` 계약, 백업/복구, 관리자 화면을 그대로 재사용하게 해 주며, 이후 필요할 때 dry-run에서 정의한 `devices`, `stocks`, `alerts` 관계형 테이블로 확장할 수 있습니다.
 
 dry-run 실행:
 
@@ -203,8 +205,8 @@ dry-run은 다음 테이블 후보 행을 만듭니다.
 
 - 실행 가능한 저장소는 `importBackupSnapshot -> exportBackupSnapshot -> importBackupSnapshot` round-trip을 통과해야 합니다.
 - `JsonStore`는 표준 fixture를 가져온 뒤 종목, 알림, 데이터 모델 건수가 유지되는지 검증합니다.
-- `PostgresStore` scaffold는 같은 메서드를 갖고 있지만 아직 실행 가능하지 않다는 명확한 오류를 내야 합니다.
-- 향후 실제 `PostgresStore` 구현 시 같은 헬퍼에 Postgres factory를 연결해 JSON 저장소와 동일한 백업/복구 계약을 검증합니다.
+- `PostgresStore`는 fake query client 기반 테스트에서 같은 스냅샷 계약을 통과해야 합니다.
+- 실제 `DATABASE_URL`을 연결하기 전에도 같은 헬퍼로 JSON 저장소와 동일한 백업/복구 계약을 검증합니다.
 
 필수 메서드:
 
@@ -236,7 +238,7 @@ dry-run은 다음 테이블 후보 행을 만듭니다.
 
 - 서버와 텔레그램 명령은 `store.createBackup`, `store.listBackups`, `store.restoreBackup`, `store.deleteBackup`만 호출합니다.
 - `JsonStore`는 현재 데이터를 스냅샷으로 내보낸 뒤 `data/backups/`에 JSON 파일로 저장합니다.
-- 향후 `PostgresStore`도 같은 스냅샷 구조를 export/import하면 관리자 화면, 텔레그램 명령, 안전 백업 흐름을 바꾸지 않고 사용할 수 있습니다.
+- `PostgresStore`도 같은 스냅샷 구조를 export/import하므로 관리자 화면, 텔레그램 명령, 안전 백업 흐름을 바꾸지 않고 사용할 수 있습니다.
 - 복구 전에는 현재 저장소 상태를 `before-restore` 백업으로 먼저 남깁니다.
 
 ## 이전 절차
@@ -289,4 +291,4 @@ DB 이전은 화면 분리와 직접 연결됩니다. 사용자 화면은 종목
 
 ## 다음 구현 작업
 
-1. Postgres 실제 연결과 쿼리 구현
+1. Postgres 연결 리허설 CLI

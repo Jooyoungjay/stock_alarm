@@ -54,7 +54,7 @@ export async function assertUnavailableSnapshotContract(store, options = {}) {
   for (const method of SNAPSHOT_CONTRACT_METHODS) {
     await assert.rejects(
       () => store[method](),
-      options.errorPattern || /아직 실행 가능하지 않습니다/,
+      options.errorPattern || /실행할 수 없습니다/,
       `${options.name || 'store'}.${method} should reject while unavailable`
     );
   }

@@ -2,7 +2,7 @@
 
 이 문서는 Stock Alarm의 남은 개발건을 작업 단위로 쪼개고, 어떤 순서로 진행할지 보기 위한 WBS입니다.
 
-날짜 기준: 2026-05-18
+날짜 기준: 2026-05-19
 
 ## 원칙
 
@@ -55,10 +55,11 @@
 | 계좌 수익 반납 요약 | 완료 | 통화별 포트폴리오 총 최대 수익금, 총 반납 금액, 총 반납률 표시 |
 | JSON -> DB 이전 설계 | 완료 | Postgres 이전 대상 테이블, 절차, 검증 기준, 롤백 전략 문서화 |
 | 백업/복구 DB 대응 | 완료 | 저장소 스냅샷 export/import 계약으로 백업/복구 흐름 분리 |
-| PostgresStore 골격 | 완료 | 비활성 PostgresStore 클래스, DATABASE_URL 마스킹, 계약 테스트 |
+| PostgresStore 골격 | 완료 | PostgresStore 초기 클래스, DATABASE_URL 마스킹, 계약 테스트 |
 | JSON -> Postgres dry-run | 완료 | 로컬 JSON을 Postgres 테이블 후보로 변환하고 건수/샘플/주의 사항 검증 |
 | Postgres 통합 테스트 데이터셋 | 완료 | 표준 JSON fixture, 예상 API 기준, dry-run 테이블 기준 고정 |
-| 저장소별 백업 스냅샷 검증 | 완료 | JsonStore export/import round-trip과 PostgresStore scaffold 실패 계약 자동 검증 |
+| 저장소별 백업 스냅샷 검증 | 완료 | JsonStore와 PostgresStore export/import round-trip 계약 자동 검증 |
+| Postgres 쿼리 어댑터 | 완료 | JSONB 스냅샷 테이블 기반 PostgresStore read/write/list/import/export 구현과 fake client 계약 테스트 |
 | 사용자/관리자 화면 분리 설계 | 완료 | 사용자 앱과 운영 관리자 화면의 기능 경계, 라우팅, 보호 전략 문서화 |
 | 저장소 인터페이스 | 완료 | 저장소 공통 계약, 저장소 팩토리, JsonStore 계약 검증 테스트 추가 |
 | 사용자/관리자 라우팅 | 완료 | `/`, `/app` 사용자 화면과 `/admin` 관리자 화면 분리 |
@@ -171,7 +172,7 @@
 
 목표: 로컬 JSON 기반 MVP에서 향후 앱 서비스 구조로 옮길 수 있게 준비합니다.
 
-상태: 7.1부터 7.8까지 완료. 실제 Postgres 연결은 아직 넣지 않고, 저장소 계약, 팩토리, 백업 스냅샷 export/import 흐름, 비활성 PostgresStore 골격, dry-run 변환 검증, 통합 테스트 데이터셋, 저장소별 스냅샷 계약 검증을 먼저 고정했습니다. 다음은 실제 Postgres 연결과 쿼리 구현입니다.
+상태: 7.1부터 7.9까지 완료. 저장소 계약, 팩토리, 백업 스냅샷 export/import 흐름, PostgresStore JSONB 쿼리 어댑터, dry-run 변환 검증, 통합 테스트 데이터셋, 저장소별 스냅샷 계약 검증을 고정했습니다. 다음은 실제 DATABASE_URL을 대상으로 한 연결 리허설 CLI입니다.
 
 | ID | 작업 | 산출물 | 상태 | 우선순위 | 예상 작업량 |
 |---|---|---|---|---:|---:|
@@ -179,11 +180,12 @@
 | 7.2 | JSON -> DB 이전 설계 | 마이그레이션 전략 | 완료 | 중간 | 1.5일 |
 | 7.3 | Postgres 저장소 인터페이스 | storage 계층 분리 | 완료 | 중간 | 2일 |
 | 7.4 | 백업/복구 DB 대응 | DB 백업 전략 | 완료 | 낮음 | 1.5일 |
-| 7.5 | PostgresStore 골격 추가 | 계약을 따르는 비활성 DB 저장소 클래스와 기본 연결 검증 | 완료 | 중간 | 1.5일 |
+| 7.5 | PostgresStore 골격 추가 | 계약을 따르는 DB 저장소 클래스와 기본 연결 검증 | 완료 | 중간 | 1.5일 |
 | 7.6 | JSON -> Postgres dry-run | 마이그레이션 스크립트와 건수/샘플 검증 | 완료 | 중간 | 2일 |
 | 7.7 | Postgres 통합 테스트 데이터셋 | 실제 연결 전 표준 fixture와 API 응답 비교 샘플 | 완료 | 중간 | 1.5일 |
 | 7.8 | 저장소별 백업 스냅샷 검증 | JsonStore/PostgresStore 공통 export/import 계약 검증 자동화 | 완료 | 중간 | 1일 |
-| 7.9 | Postgres 실제 연결과 쿼리 구현 | PostgresStore read/write/list/import/export 구현과 JSON 비교 테스트 | 예정 | 중간 | 3일 |
+| 7.9 | Postgres 실제 연결과 쿼리 구현 | PostgresStore read/write/list/import/export 구현과 JSON 비교 테스트 | 완료 | 중간 | 3일 |
+| 7.10 | Postgres 연결 리허설 CLI | 실제 DATABASE_URL 대상 초기화, 스냅샷 import/export, 건수 비교 smoke test | 예정 | 중간 | 1일 |
 
 ### 8. 사용자/관리자 화면 분리
 
@@ -217,12 +219,12 @@
 
 ## 추천 진행 순서
 
-1. Postgres 실제 연결과 쿼리 구현
-2. NXT provider 추가
-3. 앱 제출 전 HTTPS 데모 서버 준비
+1. Postgres 연결 리허설 CLI
+2. 앱 제출 전 HTTPS 데모 서버 준비
+3. NXT provider 추가(API 확인 시)
 
 ## 다음 작업
 
-가장 다음 개발건은 **Postgres 실제 연결과 쿼리 구현**입니다.
+가장 다음 개발건은 **Postgres 연결 리허설 CLI**입니다.
 
-Postgres 전환 준비의 테스트 기준과 스냅샷 계약 검증까지 완료했습니다. 다음에는 실제 Postgres 연결 라이브러리와 쿼리 계층을 붙이되, 기본 로컬 실행은 계속 `STORAGE_ENGINE=json`으로 유지하고 테스트 환경에서만 Postgres 구현을 검증합니다.
+PostgresStore 쿼리 어댑터와 스냅샷 계약 테스트까지 완료했습니다. 다음에는 실제 `DATABASE_URL`을 지정했을 때 DB를 초기화하고, JSON 스냅샷을 import/export한 뒤 건수를 비교하는 리허설 CLI를 추가합니다. 기본 로컬 실행은 계속 `STORAGE_ENGINE=json`으로 유지합니다.

@@ -7,9 +7,9 @@ import { PostgresStore } from '../src/postgresStore.js';
 import { JsonStore } from '../src/storage.js';
 import {
   assertRunnableSnapshotContract,
-  assertSnapshotContractMethods,
-  assertUnavailableSnapshotContract
+  assertSnapshotContractMethods
 } from './helpers/storageSnapshotContract.js';
+import { createFakePostgresClient } from './helpers/fakePostgresClient.js';
 
 const fixtureSnapshotUrl = new URL('./fixtures/postgres-migration/store.snapshot.json', import.meta.url);
 const expectedApiUrl = new URL('./fixtures/postgres-migration/expected-api.json', import.meta.url);
@@ -31,20 +31,26 @@ test('JsonStore satisfies the runnable backup snapshot export/import contract', 
   });
 });
 
-test('PostgresStore scaffold exposes snapshot methods but rejects runtime snapshot operations', async () => {
-  const store = new PostgresStore({
-    databaseUrl: 'postgres://stock_user:secret@localhost:5432/stock_alarm',
-    backups: {
-      enabled: true,
-      maxBackups: 5
-    }
-  });
+test('PostgresStore query adapter satisfies the runnable backup snapshot export/import contract', async () => {
+  const fixture = await readJson(fixtureSnapshotUrl);
+  const expected = await readJson(expectedApiUrl);
 
-  assertSnapshotContractMethods(store, 'PostgresStore');
-  await assertUnavailableSnapshotContract(store, {
+  await assertRunnableSnapshotContract({
     name: 'PostgresStore',
-    errorPattern: /PostgresStore\..+아직 실행 가능하지 않습니다/
+    createStore: createPostgresStore,
+    fixture,
+    replacement: createReplacementSnapshot(),
+    expectedSummary: {
+      counts: expected.dataModelCounts
+    },
+    expectedStockSymbols: expected.stockSymbols,
+    expectedAlertIds: expected.alertIds
   });
+});
+
+test('PostgresStore without a connection still exposes snapshot methods clearly', async () => {
+  const store = new PostgresStore();
+  assertSnapshotContractMethods(store, 'PostgresStore');
 });
 
 async function createJsonStore() {
@@ -54,6 +60,17 @@ async function createJsonStore() {
     defaultAlertCooldownMinutes: 30,
     backups: {
       enabled: true,
+      maxBackups: 5
+    }
+  });
+}
+
+async function createPostgresStore() {
+  return new PostgresStore({
+    queryClient: createFakePostgresClient(),
+    databaseUrl: 'postgres://stock_user:secret@localhost:5432/stock_alarm',
+    backups: {
+      enabled: false,
       maxBackups: 5
     }
   });

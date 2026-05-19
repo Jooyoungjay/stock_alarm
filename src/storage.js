@@ -54,7 +54,7 @@ async function writeJson(filePath, data) {
   await fs.rename(tempPath, filePath);
 }
 
-function normalizeStock(input, defaults) {
+export function normalizeStock(input, defaults) {
   const now = new Date().toISOString();
   const symbol = normalizeSymbolInput(input.symbol);
 
@@ -157,7 +157,7 @@ function normalizeStock(input, defaults) {
   return stock;
 }
 
-function normalizeDevice(input) {
+export function normalizeDevice(input) {
   const now = new Date().toISOString();
   const deviceId = String(input.deviceId || randomUUID()).trim();
 
@@ -176,7 +176,7 @@ function normalizeDevice(input) {
   };
 }
 
-function applyStockPatch(stock, patch) {
+export function applyStockPatch(stock, patch) {
   const next = {
     ...stock,
     updatedAt: new Date().toISOString()
@@ -327,7 +327,7 @@ function applyStockPatch(stock, patch) {
   return next;
 }
 
-function normalizeStoredStock(stock) {
+export function normalizeStoredStock(stock) {
   const purchasePrice = Number(stock.purchasePrice);
   const quantity = Number(stock.quantity);
   const annualDividendPerShare = Number(stock.annualDividendPerShare);
@@ -422,7 +422,7 @@ function normalizeStoredStock(stock) {
   };
 }
 
-function normalizeStoredDevice(device) {
+export function normalizeStoredDevice(device) {
   return {
     id: String(device.id || device.deviceId || '').trim(),
     label: String(device.label || '').trim(),
@@ -681,7 +681,7 @@ function normalizeQuoteProviderStat(provider, value = {}) {
   };
 }
 
-function updateQuoteProviderStats(value, rawAttempt) {
+export function updateQuoteProviderStats(value, rawAttempt) {
   const stats = normalizeQuoteProviderStats(value);
   const attempt = normalizeQuoteProviderAttempt(rawAttempt);
 
@@ -729,7 +729,7 @@ function updateQuoteProviderStats(value, rawAttempt) {
   return stats;
 }
 
-function buildQuoteProviderStatsSnapshot(value) {
+export function buildQuoteProviderStatsSnapshot(value) {
   const stats = normalizeQuoteProviderStats(value);
 
   return {
@@ -743,7 +743,7 @@ function buildQuoteProviderStatsSnapshot(value) {
   };
 }
 
-function normalizeDeviceId(value) {
+export function normalizeDeviceId(value) {
   const id = String(value || '').trim();
   return id || null;
 }
@@ -755,15 +755,15 @@ function normalizeDevicePlatform(value) {
   return allowed.includes(platform) ? platform : 'unknown';
 }
 
-function createDeviceSecret() {
+export function createDeviceSecret() {
   return randomBytes(32).toString('base64url');
 }
 
-function hashDeviceSecret(secret) {
+export function hashDeviceSecret(secret) {
   return createHash('sha256').update(String(secret || '')).digest('hex');
 }
 
-function normalizePushToken(input) {
+export function normalizePushToken(input) {
   return {
     token: String(input.token || '').trim(),
     provider: String(input.provider || 'expo').trim().toLowerCase(),
@@ -1243,7 +1243,7 @@ export class JsonStore {
   }
 }
 
-function stockMatchesDevice(stock, deviceId) {
+export function stockMatchesDevice(stock, deviceId) {
   if (deviceId === undefined) {
     return true;
   }
@@ -1251,7 +1251,7 @@ function stockMatchesDevice(stock, deviceId) {
   return normalizeDeviceId(stock.deviceId) === normalizeDeviceId(deviceId);
 }
 
-function sanitizeDevice(device) {
+export function sanitizeDevice(device) {
   return {
     id: device.id,
     label: device.label,

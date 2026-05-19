@@ -6,6 +6,7 @@ import path from 'node:path';
 import { PostgresStore, maskDatabaseUrl } from '../src/postgresStore.js';
 import { JsonStore } from '../src/storage.js';
 import { createStore } from '../src/storageFactory.js';
+import { createFakePostgresClient } from './helpers/fakePostgresClient.js';
 import {
   STORE_CONTRACT_METHODS,
   STORAGE_ENGINES,
@@ -52,11 +53,13 @@ test('storage engine normalization rejects unsupported values', () => {
   assert.throws(() => normalizeStorageEngine('sqlite'), /지원하지 않는 저장소 엔진/);
 });
 
-test('PostgresStore scaffold satisfies the storage contract but rejects runtime operations', async () => {
+test('PostgresStore query adapter satisfies the storage contract with an injected client', async () => {
+  const queryClient = createFakePostgresClient();
   const store = new PostgresStore({
     databaseUrl: 'postgres://stock_user:secret@localhost:5432/stock_alarm',
+    queryClient,
     backups: {
-      enabled: true,
+      enabled: false,
       maxBackups: 5
     }
   });
@@ -67,11 +70,69 @@ test('PostgresStore scaffold satisfies the storage contract but rejects runtime 
   assert.deepEqual(snapshot.missingMethods, []);
   assert.equal(assertStoreContract(store), store);
   assert.equal(store.getConnectionInfo().configured, true);
+  assert.equal(store.getConnectionInfo().runtimeEnabled, true);
+  assert.equal(store.getConnectionInfo().implementationStage, 'jsonb-query-adapter');
   assert.equal(store.getConnectionInfo().databaseUrl, 'postgres://***:***@localhost:5432/stock_alarm');
-  await assert.rejects(() => store.listStocks(), /PostgresStore\.listStocks는 아직 실행 가능하지 않습니다/);
+
+  await store.importBackupSnapshot({
+    devices: [],
+    stocks: [
+      {
+        id: 'stock-1',
+        symbol: 'AAPL',
+        displayName: 'Apple',
+        purchasePrice: 100,
+        quantity: 2,
+        alertType: 'profit_retracement',
+        thresholdPercent: 10,
+        active: true,
+        dividendHistory: [],
+        createdAt: '2026-05-19T00:00:00.000Z',
+        updatedAt: '2026-05-19T00:00:00.000Z'
+      }
+    ],
+    alerts: [],
+    meta: {
+      schemaVersion: 1,
+      createdAt: '2026-05-19T00:00:00.000Z',
+      updatedAt: '2026-05-19T00:00:00.000Z'
+    }
+  });
+
+  const stocks = await store.listStocks();
+  const alert = await store.appendAlert({
+    stockId: 'stock-1',
+    symbol: 'AAPL',
+    alertType: 'profit_retracement',
+    price: 120,
+    sent: true,
+    createdAt: '2026-05-19T00:01:00.000Z'
+  });
+  const dataModel = await store.getDataModelInfo();
+
+  assert.deepEqual(stocks.map((stock) => stock.symbol), ['AAPL']);
+  assert.equal(alert.symbol, 'AAPL');
+  assert.equal((await store.listAlerts(10))[0].id, alert.id);
+  assert.equal(await store.setMetaValue('telegramUpdateOffset', 42), 42);
+  assert.equal(await store.getMetaValue('telegramUpdateOffset'), 42);
+  assert.equal(dataModel.storageEngine, STORAGE_ENGINES.POSTGRES);
+  assert.equal(dataModel.store.counts.stocks, 1);
+  assert.ok(queryClient.queryLog.some((entry) => entry.sql.startsWith('CREATE TABLE IF NOT EXISTS')));
+  assert.ok(queryClient.queryLog.some((entry) => entry.sql.startsWith('SELECT payload')));
+  assert.ok(queryClient.queryLog.some((entry) => entry.sql.includes('DO UPDATE')));
 });
 
-test('createStore blocks postgres runtime by default even though the scaffold exists', async () => {
+test('PostgresStore without connection settings keeps runtime operations unavailable', async () => {
+  const store = new PostgresStore();
+
+  assert.equal(store.getConnectionInfo().runtimeEnabled, false);
+  await assert.rejects(
+    () => store.listStocks(),
+    /PostgresStore\.connect를 실행할 수 없습니다/
+  );
+});
+
+test('createStore blocks postgres runtime by default even though the query adapter exists', async () => {
   const dataDir = await fs.mkdtemp(path.join(os.tmpdir(), 'stock-alarm-postgres-test-'));
 
   assert.throws(
@@ -83,11 +144,11 @@ test('createStore blocks postgres runtime by default even though the scaffold ex
         defaultAlertCooldownMinutes: 30,
         backupRetention: 5
       }),
-    /골격만 준비/
+    /쿼리 어댑터까지 준비/
   );
 });
 
-test('createStore can return the postgres scaffold when explicitly allowed for contract tests', async () => {
+test('createStore can return the postgres query adapter when explicitly allowed for contract tests', async () => {
   const dataDir = await fs.mkdtemp(path.join(os.tmpdir(), 'stock-alarm-postgres-contract-test-'));
   const store = createStore(
     {

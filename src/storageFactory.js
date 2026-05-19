@@ -27,7 +27,9 @@ export function createStore(config, options = {}) {
   if (engine === STORAGE_ENGINES.POSTGRES) {
     const store = assertStoreContract(
       new PostgresStore({
+        dataDir: config.dataDir,
         databaseUrl: config.databaseUrl,
+        defaultAlertCooldownMinutes: config.defaultAlertCooldownMinutes,
         backups: defaults.backups
       }),
       {
@@ -51,6 +53,6 @@ function createPostgresRuntimeDisabledError(store) {
   const databaseState = info.configured ? 'DATABASE_URL 설정됨' : 'DATABASE_URL 미설정';
 
   return new Error(
-    `STORAGE_ENGINE=postgres 저장소는 골격만 준비되어 있고 실제 런타임 전환은 아직 비활성화되어 있습니다. 현재 실행 가능한 저장소는 STORAGE_ENGINE=json 입니다. (${databaseState})`
+    `STORAGE_ENGINE=postgres 저장소는 쿼리 어댑터까지 준비되어 있지만 일반 서버 실행 전환은 아직 비활성화되어 있습니다. 현재 기본 실행 저장소는 STORAGE_ENGINE=json 입니다. (${databaseState})`
   );
 }
