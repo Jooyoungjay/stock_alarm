@@ -143,7 +143,16 @@
 
 ## 저장소 인터페이스 목표
 
-`JsonStore`와 향후 `PostgresStore`는 `src/storageContract.js`의 같은 메서드를 제공해야 합니다. 서버는 저장소 구현을 직접 생성하지 않고 `src/storageFactory.js`를 통해 생성합니다.
+`JsonStore`와 `PostgresStore`는 `src/storageContract.js`의 같은 메서드를 제공해야 합니다. 서버는 저장소 구현을 직접 생성하지 않고 `src/storageFactory.js`를 통해 생성합니다.
+
+현재 구현 상태:
+
+- `src/storage.js`: 실제 실행 중인 로컬 JSON 저장소
+- `src/postgresStore.js`: 계약 검증용 비활성 PostgresStore 골격
+- `src/storageFactory.js`: 기본 실행은 `json`만 허용하고, `postgres` 일반 실행은 아직 차단
+- `DATABASE_URL`: 현재는 연결 문자열 마스킹과 설정 상태 검증까지만 사용
+
+PostgresStore 골격은 모든 저장소 계약 메서드를 갖고 있지만 실제 DB I/O는 수행하지 않습니다. `STORAGE_ENGINE=postgres`로 일반 서버를 실행하면 명확한 오류를 내도록 막아두었고, 테스트에서만 명시 옵션으로 골격을 생성합니다.
 
 필수 메서드:
 
@@ -228,7 +237,7 @@ DB 이전은 화면 분리와 직접 연결됩니다. 사용자 화면은 종목
 
 ## 다음 구현 작업
 
-1. `PostgresStore` 골격 추가
-2. JSON -> Postgres dry-run 마이그레이션 스크립트 추가
-3. 실제 Postgres 연결 전 통합 테스트 데이터셋 준비
-4. 저장소별 백업 스냅샷 export/import 검증 자동화
+1. JSON -> Postgres dry-run 마이그레이션 스크립트 추가
+2. 실제 Postgres 연결 전 통합 테스트 데이터셋 준비
+3. 저장소별 백업 스냅샷 export/import 검증 자동화
+4. Postgres 실제 연결과 쿼리 구현
