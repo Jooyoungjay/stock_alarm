@@ -15,6 +15,7 @@
     "check:demo": "node scripts/check-demo-server.js",
     "check:store-assets": "node scripts/check-store-assets.js",
     "check:broker-api": "node scripts/check-broker-api.js",
+    "check:kis-quote": "node scripts/check-kis-quote.js",
     "check:publicdata-price": "node scripts/check-publicdata-price.js",
     "kis:token": "node scripts/kis-token.js",
     "migrate:postgres:dry-run": "node scripts/json-to-postgres-dry-run.js",

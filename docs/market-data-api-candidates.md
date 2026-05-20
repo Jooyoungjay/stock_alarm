@@ -21,11 +21,12 @@ Stock Alarm은 현재 로컬 웹앱 MVP 단계이며, 무료/공개 provider 체
 5. 증권사 API adapter 검토: 완료
 6. KIS quote provider 구현: 완료
 7. KIS 토큰 자동 발급/갱신: 완료
+8. KIS 실계정 현재가 smoke test CLI: 완료
 
 남은 추천 순서:
 
-8. KIS 실계정 현재가 smoke test CLI
-9. NXT 실계약 endpoint 확보 시 운영 검증
+9. 관리자 KIS 현재가 점검 버튼
+10. NXT 실계약 endpoint 확보 시 운영 검증
 
 ## 후보 비교
 
@@ -190,13 +191,21 @@ KIS_MARKET_DIV_CODE=J
 
 공식 샘플의 시장 구분 코드 기준으로 `J`는 KRX, `NX`는 NXT, `UN`은 통합입니다. 접근 토큰은 `/oauth2/tokenP`로 발급하고 `data/kis-token.json`에 캐시합니다.
 
+실제 키가 준비되면 아래 명령으로 KIS 현재가 호출까지 점검합니다. 토큰 원문과 앱 시크릿은 출력하지 않습니다.
+
+```powershell
+npm run check:kis-quote
+npm run check:kis-quote -- --symbol 336260 --market J
+npm run check:kis-quote -- --symbol 33626L --market all
+```
+
 상세 내용은 [증권사 API adapter 검토](broker-api-adapter-review.md)에 정리했습니다.
 
 ## 다음 개발로 넘길 항목
 
-현재 provider 실패율 기록, 시세 출처 표시, 공식 일봉 provider 실험, NXT 계약 API adapter 골격, 증권사 API adapter 검토, KIS quote provider 구현, KIS 토큰 자동 발급/갱신은 완료했습니다. 다음 구현 후보는 `KIS 실계정 현재가 smoke test CLI`입니다.
+현재 provider 실패율 기록, 시세 출처 표시, 공식 일봉 provider 실험, NXT 계약 API adapter 골격, 증권사 API adapter 검토, KIS quote provider 구현, KIS 토큰 자동 발급/갱신, KIS 실계정 현재가 smoke test CLI는 완료했습니다. 다음 구현 후보는 `관리자 KIS 현재가 점검 버튼`입니다.
 
-KIS 실계정 현재가 smoke test CLI를 진행할 때 먼저 보여줄 값:
+관리자 KIS 현재가 점검 버튼을 진행할 때 먼저 보여줄 값:
 
 - 요청 종목코드와 시장 구분
 - provider 성공/실패 여부

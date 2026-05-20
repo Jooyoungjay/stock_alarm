@@ -48,6 +48,15 @@ npm run kis:token -- --json
 npm run kis:token -- --force
 ```
 
+실제 키로 현재가 호출까지 확인하는 smoke test CLI도 추가했습니다. 기본 종목은 `336260`이고, `--market all`을 쓰면 KRX, NXT, 통합을 순서대로 확인합니다.
+
+```powershell
+npm run check:kis-quote
+npm run check:kis-quote -- --symbol 336260 --market J
+npm run check:kis-quote -- --symbol 33626L --market all
+npm run check:kis-quote -- --symbol 005930 --market UN --json
+```
+
 키가 없거나 해외 종목이면 `kis` provider는 스킵되고 다음 provider로 넘어갑니다.
 
 ## 환경변수
@@ -65,6 +74,7 @@ npm run kis:token -- --force
 | `KIS_CUST_TYPE` | `P` | 한국투자증권 고객 구분. 기본값 `P` 개인 |
 | `KIS_TOKEN_AUTO_REFRESH` | `true` | 접근 토큰 자동 발급/갱신 여부 |
 | `KIS_TOKEN_CACHE_PATH` | `data/kis-token.json` | 선택. 접근 토큰 캐시 파일 경로. 기본 경로는 Git 제외 |
+| `KIS_SMOKE_SYMBOL` | `336260` | 선택. `npm run check:kis-quote` 기본 점검 종목 |
 | `KIWOOM_API_BASE_URL` | `https://api.kiwoom.com` | 키움 REST API URL |
 | `KIWOOM_APP_KEY` | 빈 값 | 키움 앱 키 |
 | `KIWOOM_SECRET_KEY` | 빈 값 | 키움 시크릿 키 |
@@ -101,13 +111,13 @@ npm run kis:token -- --force
 
 ## 다음 구현 조건
 
-KIS 접근 토큰 자동 발급/갱신은 구현했습니다. 다음 단계는 실제 KIS 키가 준비된 환경에서 현재가 smoke test CLI로 실계정 응답을 확인하는 것입니다.
+KIS 접근 토큰 자동 발급/갱신과 현재가 smoke test CLI는 구현했습니다. 다음 단계는 터미널 명령을 모르는 사용자도 관리자 화면에서 안전하게 KIS 현재가 점검을 실행할 수 있게 하는 것입니다.
 
 실제 운영 전에 확인할 항목:
 
 - 사용자가 한국투자증권 API 신청을 완료
 - 앱 키와 시크릿을 `.env`에 준비
-- 현재가 조회 호출 제한을 실제 계정으로 확인
+- `npm run check:kis-quote -- --symbol 336260 --market J`로 현재가 조회 호출 제한과 오류 메시지를 실제 계정으로 확인
 - 주문 API를 호출하지 않는다는 제품 범위 유지
 
 ## 참고 링크
