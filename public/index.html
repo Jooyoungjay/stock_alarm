@@ -20,7 +20,7 @@
       href="https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=Noto+Sans+KR:wght@300;400;500;600;700&display=swap"
       rel="stylesheet"
     />
-    <link rel="stylesheet" href="/styles.css?v=20260520-kis-drift" />
+    <link rel="stylesheet" href="/styles.css?v=20260520-kis-history" />
   </head>
   <body data-register-modal="closed">
     <header class="app-header">
@@ -468,7 +468,7 @@
           <div class="card-header">
             <div>
               <h2 id="kisNaverCompareTitle" class="card-title">KIS/Naver 가격 비교</h2>
-              <p class="card-subtitle">같은 종목의 Naver 가격과 KIS KRX/NXT/통합 가격 차이를 확인합니다.</p>
+              <p class="card-subtitle">같은 종목의 Naver 가격과 KIS KRX/NXT/통합 가격 차이를 확인하고 최근 이력을 저장합니다.</p>
             </div>
             <div class="watch-actions">
               <button
@@ -529,6 +529,7 @@
           </form>
 
           <div id="kisNaverCompareResult" class="kis-smoke-result" aria-live="polite"></div>
+          <div id="kisNaverCompareHistoryPanel" class="kis-compare-history" aria-live="polite"></div>
         </div>
 
         <div class="card" data-page-scope="admin" data-admin-protected="true">
@@ -616,6 +617,6 @@
       </div>
     </nav>
 
-    <script src="/app.js?v=20260520-kis-drift" type="module"></script>
+    <script src="/app.js?v=20260520-kis-history" type="module"></script>
   </body>
 </html>

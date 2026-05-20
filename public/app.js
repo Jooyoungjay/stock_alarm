@@ -29,6 +29,7 @@ const state = {
   quoteProviderStats: null,
   kisQuoteSmokeTest: null,
   kisNaverQuoteComparison: null,
+  kisNaverCompareHistory: [],
   adminAuthRequired: false,
   adminAuthenticated: false,
   backupRetention: 0,
@@ -109,6 +110,7 @@ const elements = {
   kisNaverCompareDriftThresholdInput: document.querySelector('#kisNaverCompareDriftThresholdInput'),
   kisNaverCompareRunButton: document.querySelector('#kisNaverCompareRunButton'),
   kisNaverCompareResult: document.querySelector('#kisNaverCompareResult'),
+  kisNaverCompareHistoryPanel: document.querySelector('#kisNaverCompareHistoryPanel'),
   tabSections: document.querySelectorAll('.tab-section'),
   mobileNavButtons: document.querySelectorAll('.nav-item')
 };
@@ -123,6 +125,7 @@ renderRegistrationSummary();
 updateRegistrationStep(1);
 renderKisSmokeTestResult(null);
 renderKisNaverCompareResult(null);
+renderKisNaverCompareHistory([]);
 
 elements.form.elements.alertType.addEventListener('change', () => {
   syncAlertTypeControls(elements.form);
@@ -460,6 +463,9 @@ async function loadData() {
     state.alerts = data.alerts || [];
     state.dividendCalendar = data.dividendCalendar || null;
     state.quoteProviderStats = data.quoteProviderStats || null;
+    state.kisNaverCompareHistory = Array.isArray(data.kisNaverCompareHistory)
+      ? data.kisNaverCompareHistory
+      : state.kisNaverCompareHistory;
     renderStatus(data);
     renderStocks();
     renderDividendCalendar(state.dividendCalendar);
@@ -467,6 +473,7 @@ async function loadData() {
     renderDividendDiagnostics(data.lastDividendRefresh);
     renderAlerts();
     renderKisNaverCompareResult(state.kisNaverQuoteComparison);
+    renderKisNaverCompareHistory(state.kisNaverCompareHistory);
 
     if (isAdminMode() && roadmapResult.payload) {
       state.roadmap = roadmapResult.payload.roadmap || null;
@@ -540,7 +547,11 @@ async function runKisNaverCompare() {
 
     state.kisNaverQuoteComparison = result.kisNaverQuoteComparison || null;
     state.quoteProviderStats = result.quoteProviderStats || state.quoteProviderStats;
+    state.kisNaverCompareHistory = Array.isArray(result.kisNaverCompareHistory)
+      ? result.kisNaverCompareHistory
+      : state.kisNaverCompareHistory;
     renderKisNaverCompareResult(state.kisNaverQuoteComparison);
+    renderKisNaverCompareHistory(state.kisNaverCompareHistory);
     renderQuoteDiagnostics(state.quoteProviderStats);
     showMessage(
       state.kisNaverQuoteComparison?.ok
@@ -1799,6 +1810,69 @@ function renderKisNaverCompareResult(result) {
   `;
 }
 
+function renderKisNaverCompareHistory(history = []) {
+  if (!elements.kisNaverCompareHistoryPanel) {
+    return;
+  }
+
+  const rows = Array.isArray(history) ? history.slice(0, 8) : [];
+
+  if (!rows.length) {
+    elements.kisNaverCompareHistoryPanel.innerHTML = `
+      <div class="kis-smoke-empty">
+        비교를 실행하면 최근 KIS/Naver 가격 차이와 이상치 판정 이력이 저장됩니다.
+      </div>
+    `;
+    return;
+  }
+
+  elements.kisNaverCompareHistoryPanel.innerHTML = `
+    <div class="kis-compare-history-head">
+      <div>
+        <strong>최근 비교 이력</strong>
+        <span>최근 ${escapeHtml(rows.length)}개 비교 결과</span>
+      </div>
+      <span>${escapeHtml(formatDate(rows[0].createdAt || rows[0].generatedAt))}</span>
+    </div>
+    <div class="kis-smoke-market-list">
+      ${rows.map(renderKisNaverCompareHistoryRow).join('')}
+    </div>
+  `;
+}
+
+function renderKisNaverCompareHistoryRow(item = {}) {
+  const drift = item.drift || {};
+  const statusClass = getKisNaverDriftStatusClass(drift.status, item.ok);
+  const recommendation = item.recommendation || null;
+  const summary = item.summary || {};
+  const meta = [
+    `비교 ${summary.comparable || 0}개`,
+    `이상치 ${drift.abnormal || 0}개`,
+    recommendation?.market
+      ? `추천 ${recommendation.marketLabel || recommendation.market}`
+      : '',
+    drift.worstMarket
+      ? `최대 괴리 ${drift.worstMarketLabel || drift.worstMarket} ${formatPercent(
+          drift.maxAbsoluteDifferencePercent
+        )}`
+      : ''
+  ].filter(Boolean);
+
+  return `
+    <div class="dividend-diagnostic-row ${statusClass}">
+      <div class="dividend-diagnostic-main">
+        <span class="dividend-diagnostic-stock">${escapeHtml(item.symbol || item.inputSymbol || '-')}</span>
+        <span class="status-badge ${statusClass}">${escapeHtml(getKisNaverDriftStatusLabel(drift.status))}</span>
+        <span class="status-badge muted">${escapeHtml(formatDate(item.createdAt || item.generatedAt))}</span>
+      </div>
+      <div class="dividend-diagnostic-meta">
+        ${meta.map((part) => `<span>${escapeHtml(part)}</span>`).join('')}
+      </div>
+      ${drift.message ? `<div class="dividend-diagnostic-meta kis-drift-detail ${statusClass}">${escapeHtml(drift.message)}</div>` : ''}
+    </div>
+  `;
+}
+
 function renderNaverComparisonBaseline(item = {}) {
   const statusClass = item?.ok ? 'ok' : 'error';
   const quote = item?.quote || {};
@@ -1935,6 +2009,10 @@ function getKisNaverDriftStatusClass(status, comparisonOk = true) {
     return 'alert';
   }
 
+  if (status === 'not_comparable') {
+    return 'muted';
+  }
+
   return 'ok';
 }
 
@@ -1945,6 +2023,10 @@ function getKisNaverDriftStatusLabel(status) {
 
   if (status === 'warning') {
     return '주의';
+  }
+
+  if (status === 'not_comparable') {
+    return '비교 불가';
   }
 
   return '정상';

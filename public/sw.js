@@ -1,11 +1,11 @@
-const CACHE_NAME = 'stock-alarm-webapp-v27';
+const CACHE_NAME = 'stock-alarm-webapp-v28';
 const SHELL_ASSETS = [
   '/',
   '/app',
   '/admin',
   '/index.html',
-  '/styles.css?v=20260520-kis-drift',
-  '/app.js?v=20260520-kis-drift',
+  '/styles.css?v=20260520-kis-history',
+  '/app.js?v=20260520-kis-history',
   '/averagingCalculator.js',
   '/manifest.webmanifest',
   '/icons/stock-alarm-192.png',

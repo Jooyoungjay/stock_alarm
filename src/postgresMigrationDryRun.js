@@ -3,7 +3,7 @@ import fs from 'node:fs/promises';
 import path from 'node:path';
 
 import { buildStoreSummary, normalizeStoreEnvelope } from './dataModel.js';
-import { JsonStore } from './storage.js';
+import { buildKisNaverCompareHistorySnapshot, JsonStore } from './storage.js';
 
 export const POSTGRES_DRY_RUN_TABLES = Object.freeze([
   'devices',
@@ -13,11 +13,18 @@ export const POSTGRES_DRY_RUN_TABLES = Object.freeze([
   'alerts',
   'quote_provider_stats',
   'quote_provider_attempts',
+  'kis_naver_compare_history',
   'job_runs',
   'settings'
 ]);
 
-const RESERVED_META_KEYS = new Set(['schemaVersion', 'createdAt', 'updatedAt', 'quoteProviderStats']);
+const RESERVED_META_KEYS = new Set([
+  'schemaVersion',
+  'createdAt',
+  'updatedAt',
+  'quoteProviderStats',
+  'kisNaverCompareHistory'
+]);
 const JOB_RUN_META_KEYS = new Set([
   'lastDividendRefresh',
   'lastDividendEventAlert',
@@ -104,6 +111,10 @@ export function buildPostgresMigrationRows(input = {}) {
   const stocks = data.stocks;
   const alerts = data.alerts;
   const quoteProviderStats = normalizeQuoteProviderStats(data.meta.quoteProviderStats);
+  const kisNaverCompareHistory = buildKisNaverCompareHistorySnapshot(
+    data.meta.kisNaverCompareHistory,
+    100
+  );
 
   return {
     devices: devices.map(mapDeviceRow),
@@ -113,6 +124,7 @@ export function buildPostgresMigrationRows(input = {}) {
     alerts: alerts.map(mapAlertRow),
     quote_provider_stats: Object.values(quoteProviderStats.providers).map(mapQuoteProviderStatRow),
     quote_provider_attempts: quoteProviderStats.recentAttempts.map(mapQuoteProviderAttemptRow),
+    kis_naver_compare_history: kisNaverCompareHistory.map(mapKisNaverCompareHistoryRow),
     job_runs: mapJobRunRows(data.meta),
     settings: mapSettingRows(data.meta)
   };
@@ -411,6 +423,25 @@ function mapQuoteProviderAttemptRow(attempt, index) {
   };
 }
 
+function mapKisNaverCompareHistoryRow(entry) {
+  return {
+    id: stringify(entry.id),
+    symbol: stringify(entry.symbol),
+    input_symbol: nullableString(entry.inputSymbol),
+    ok: Boolean(entry.ok),
+    generated_at: nullableString(entry.generatedAt),
+    created_at: nullableString(entry.createdAt),
+    drift_status: stringify(entry.drift?.status),
+    drift_threshold_percent: nullableNumber(entry.drift?.thresholdPercent),
+    max_absolute_difference_percent: nullableNumber(entry.drift?.maxAbsoluteDifferencePercent),
+    worst_market: nullableString(entry.drift?.worstMarket),
+    recommendation_market: nullableString(entry.recommendation?.market),
+    naver_price: nullableNumber(entry.naver?.price),
+    result_count: Array.isArray(entry.results) ? entry.results.length : 0,
+    value_json: cloneJson(entry)
+  };
+}
+
 function mapJobRunRows(meta) {
   return Object.entries(meta)
     .filter(([key]) => JOB_RUN_META_KEYS.has(key))
@@ -448,6 +479,12 @@ function buildMigrationChecks(expected, counts, rows) {
       '배당 변경 이력 수',
       expected.dividendEvents,
       counts.dividend_events
+    ),
+    createCountCheck(
+      'kis_naver_compare_history_count',
+      'KIS/Naver 비교 이력 수',
+      expected.kisNaverCompareHistory,
+      counts.kis_naver_compare_history
     ),
     {
       name: 'push_tokens_are_hashed',

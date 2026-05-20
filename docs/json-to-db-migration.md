@@ -64,6 +64,7 @@
 | `stocks[].dividendHistory[]` | `dividend_events` | `id` | 배당금, 배당락일, 지급일 변경 이력 |
 | `alerts[]` | `alerts` | `id` | 알림 전송 이력 |
 | `meta.quoteProviderStats` | `quote_provider_attempts`, `quote_provider_stats` | `id`, `provider` | 원천 시도 로그와 집계 분리 |
+| `meta.kisNaverCompareHistory[]` | `kis_naver_compare_history` | `id` | KIS/Naver 가격 비교와 이상치 판정 이력 |
 | `meta.lastDividendRefresh` | `job_runs` | `id` | 배당 갱신 같은 백그라운드 작업 이력 |
 | `meta.lastDailyBriefingDate` | `job_runs` 또는 `settings` | `key` | 일일 브리핑 중복 전송 방지 |
 
@@ -201,6 +202,7 @@ dry-run은 다음 테이블 후보 행을 만듭니다.
 - `alerts`
 - `quote_provider_stats`
 - `quote_provider_attempts`
+- `kis_naver_compare_history`
 - `job_runs`
 - `settings`
 
@@ -264,7 +266,7 @@ dry-run은 다음 테이블 후보 행을 만듭니다.
 7. `stocks`를 넣습니다.
 8. `dividend_events`를 넣습니다.
 9. `alerts`를 넣습니다.
-10. `meta` 기반 운영 정보를 `settings`, `job_runs`, provider 통계 테이블로 옮깁니다.
+10. `meta` 기반 운영 정보를 `settings`, `job_runs`, provider 통계, KIS/Naver 비교 이력 테이블로 옮깁니다.
 11. 건수 검증을 수행합니다.
 12. 샘플 종목 1개로 API 응답을 비교합니다.
 13. 문제가 없으면 서버 저장소 설정을 DB로 전환합니다.

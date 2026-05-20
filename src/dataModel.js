@@ -116,6 +116,24 @@ const entities = [
       { name: 'failureRatePercent', type: 'number', required: true },
       { name: 'lastCheckedAt', type: 'datetime | null', required: false }
     ]
+  },
+  {
+    name: 'kis_naver_compare_history',
+    storagePath: 'meta.kisNaverCompareHistory[]',
+    primaryKey: 'id',
+    description: 'KIS/Naver 가격 비교 결과와 이상치 판정 이력입니다.',
+    fields: [
+      { name: 'id', type: 'uuid', required: true },
+      { name: 'symbol', type: 'string', required: true },
+      { name: 'generatedAt', type: 'datetime', required: true },
+      { name: 'createdAt', type: 'datetime', required: true },
+      { name: 'ok', type: 'boolean', required: true },
+      { name: 'drift.status', type: 'normal | warning | critical | not_comparable', required: true },
+      { name: 'drift.thresholdPercent', type: 'number | null', required: false },
+      { name: 'drift.maxAbsoluteDifferencePercent', type: 'number | null', required: false },
+      { name: 'recommendation.market', type: 'J | NX | UN | null', required: false },
+      { name: 'results', type: 'kis_naver_compare_market_results[]', required: true }
+    ]
   }
 ];
 
@@ -202,7 +220,10 @@ export function buildStoreSummary(input = {}) {
       dividendEvents: stocks.reduce(
         (sum, stock) => sum + (Array.isArray(stock?.dividendHistory) ? stock.dividendHistory.length : 0),
         0
-      )
+      ),
+      kisNaverCompareHistory: Array.isArray(data.meta.kisNaverCompareHistory)
+        ? data.meta.kisNaverCompareHistory.length
+        : 0
     }
   };
 }

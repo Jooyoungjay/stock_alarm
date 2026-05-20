@@ -204,6 +204,87 @@ test('JsonStore stores and updates per-stock KIS market settings', async () => {
   );
 });
 
+test('JsonStore records recent KIS and Naver comparison history', async () => {
+  const store = await createStore();
+  const history = await store.recordKisNaverCompareHistory({
+    symbol: '336260',
+    inputSymbol: '336260',
+    ok: true,
+    generatedAt: '2026-05-20T01:00:00.000Z',
+    markets: [{ code: 'J', label: 'KRX' }],
+    summary: {
+      total: 1,
+      kisSuccess: 1,
+      kisFailed: 0,
+      comparable: 1
+    },
+    drift: {
+      thresholdPercent: 1,
+      status: 'warning',
+      comparable: 1,
+      normal: 0,
+      warning: 1,
+      critical: 0,
+      abnormal: 1,
+      maxAbsoluteDifferencePercent: 1.4,
+      worstMarket: 'J',
+      worstMarketLabel: 'KRX',
+      message: '1개 시장에서 가격 차이가 기준 이상입니다.'
+    },
+    recommendation: {
+      market: 'J',
+      marketLabel: 'KRX',
+      difference: 100,
+      differencePercent: 1.4,
+      absoluteDifference: 100,
+      reason: 'Naver 기준가와 가격 차이가 가장 작은 KIS 시장입니다.'
+    },
+    naver: {
+      ok: true,
+      quote: {
+        price: 10000,
+        currency: 'KRW',
+        provider: 'naver',
+        providerLabel: 'Naver'
+      }
+    },
+    results: [
+      {
+        market: 'J',
+        marketLabel: 'KRX',
+        ok: true,
+        quote: {
+          price: 10100,
+          currency: 'KRW'
+        },
+        comparison: {
+          comparable: true,
+          difference: 100,
+          differencePercent: 1,
+          absoluteDifference: 100
+        },
+        drift: {
+          status: 'warning',
+          comparable: true,
+          abnormal: true,
+          absoluteDifferencePercent: 1
+        }
+      }
+    ]
+  });
+
+  assert.equal(history.length, 1);
+  assert.equal(history[0].symbol, '336260');
+  assert.equal(history[0].drift.status, 'warning');
+  assert.equal(history[0].recommendation.market, 'J');
+  assert.equal(history[0].results[0].driftStatus, 'warning');
+  assert.equal(history[0].naver.price, 10000);
+
+  const snapshot = await store.getKisNaverCompareHistory(1);
+  assert.equal(snapshot.length, 1);
+  assert.equal(snapshot[0].summary.comparable, 1);
+});
+
 test('JsonStore records quote provider success and failure stats', async () => {
   const store = await createStore();
 

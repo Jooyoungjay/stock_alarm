@@ -1445,6 +1445,33 @@ select:focus {
   gap: 10px;
 }
 
+.kis-compare-history {
+  display: grid;
+  gap: 10px;
+  margin-top: 12px;
+  padding-top: 12px;
+  border-top: 1px solid var(--border-soft);
+}
+
+.kis-compare-history-head {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 10px;
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.kis-compare-history-head > div {
+  display: grid;
+  gap: 2px;
+}
+
+.kis-compare-history-head strong {
+  color: var(--text);
+  font-size: 13px;
+}
+
 .kis-smoke-empty,
 .kis-smoke-token,
 .kis-smoke-message {

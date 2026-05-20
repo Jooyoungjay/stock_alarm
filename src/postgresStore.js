@@ -8,6 +8,8 @@ import {
 import { buildDataModelInfo, normalizeStoreEnvelope, touchStoreEnvelope } from './dataModel.js';
 import {
   applyStockPatch,
+  appendKisNaverCompareHistory,
+  buildKisNaverCompareHistorySnapshot,
   buildQuoteProviderStatsSnapshot,
   createDeviceSecret,
   hashDeviceSecret,
@@ -334,6 +336,28 @@ export class PostgresStore {
     };
     await this.write(data);
     return buildQuoteProviderStatsSnapshot(data.meta.quoteProviderStats);
+  }
+
+  async getKisNaverCompareHistory(limit = 20) {
+    const data = await this.read();
+    return buildKisNaverCompareHistorySnapshot(data.meta.kisNaverCompareHistory, limit);
+  }
+
+  async recordKisNaverCompareHistory(entry, options = {}) {
+    const data = await this.read();
+    data.meta = {
+      ...data.meta,
+      kisNaverCompareHistory: appendKisNaverCompareHistory(
+        data.meta.kisNaverCompareHistory,
+        entry,
+        { limit: options.maxEntries || 100 }
+      )
+    };
+    await this.write(data);
+    return buildKisNaverCompareHistorySnapshot(
+      data.meta.kisNaverCompareHistory,
+      options.returnLimit || options.limit || 20
+    );
   }
 
   async appendAlert(alert) {

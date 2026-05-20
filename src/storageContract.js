@@ -21,6 +21,8 @@ export const STORE_CONTRACT_METHODS = Object.freeze([
   'setMetaValue',
   'getQuoteProviderStats',
   'recordQuoteProviderAttempt',
+  'getKisNaverCompareHistory',
+  'recordKisNaverCompareHistory',
   'appendAlert',
   'createBackup',
   'listBackups',

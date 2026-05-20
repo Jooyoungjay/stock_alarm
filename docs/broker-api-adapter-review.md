@@ -59,7 +59,7 @@ npm run check:kis-quote -- --symbol 005930 --market UN --json
 
 관리자 화면에서도 같은 점검을 실행할 수 있습니다. `/admin`의 `KIS 현재가 점검` 카드에서 종목코드와 `KRX`, `NXT`, `통합`, `전체` 시장을 선택하면 `POST /api/kis/quote-smoke-test`가 실행되고, 토큰 출처와 시장별 성공/실패가 표시됩니다.
 
-`/admin`의 `KIS/Naver 가격 비교` 카드에서는 `POST /api/kis/naver-compare`로 같은 종목의 Naver 기준가와 KIS KRX/NXT/통합 가격을 나란히 조회합니다. 결과에는 시장별 가격 차이, 차이율, 추천 시장, 가격 차이 이상치 주의/경고, 실패 사유, provider 진단 시도가 표시되며 관리자 API 보호 대상입니다. 등록된 같은 종목이 있으면 `POST /api/kis/naver-compare/apply`로 해당 시장을 종목의 KIS 기준에 바로 적용할 수 있습니다.
+`/admin`의 `KIS/Naver 가격 비교` 카드에서는 `POST /api/kis/naver-compare`로 같은 종목의 Naver 기준가와 KIS KRX/NXT/통합 가격을 나란히 조회합니다. 결과에는 시장별 가격 차이, 차이율, 추천 시장, 가격 차이 이상치 주의/경고, 실패 사유, provider 진단 시도가 표시되며 관리자 API 보호 대상입니다. 비교 결과와 이상치 판정은 최근 이력으로 저장되어 관리자 화면에서 다시 확인할 수 있습니다. 등록된 같은 종목이 있으면 `POST /api/kis/naver-compare/apply`로 해당 시장을 종목의 KIS 기준에 바로 적용할 수 있습니다.
 
 사용자 종목에는 `kisMarketDivCode`를 저장할 수 있습니다. 비어 있으면 `KIS_MARKET_DIV_CODE` 기본값을 사용하고, 값이 있으면 자동 가격 확인과 실패 종목 재시도에서 해당 종목의 KRX/NXT/통합 기준을 우선 적용합니다.
 
@@ -117,7 +117,7 @@ npm run check:kis-quote -- --symbol 005930 --market UN --json
 
 ## 다음 구현 조건
 
-KIS 접근 토큰 자동 발급/갱신, 현재가 smoke test CLI, 관리자 화면 점검 버튼, 종목별 KIS 시장 설정, KIS/Naver 가격 비교 진단, 비교 결과 기반 시장 적용, 가격 차이 이상치 모니터링은 구현했습니다. 다음 단계는 KIS/Naver 비교 결과와 이상치 판정 이력을 저장해 반복적으로 벌어지는 시장 차이를 추세로 확인하는 기능입니다.
+KIS 접근 토큰 자동 발급/갱신, 현재가 smoke test CLI, 관리자 화면 점검 버튼, 종목별 KIS 시장 설정, KIS/Naver 가격 비교 진단, 비교 결과 기반 시장 적용, 가격 차이 이상치 모니터링, 가격 비교 이력 저장은 구현했습니다. 다음 단계는 저장된 KIS/Naver 비교 이력을 시장별 괴리 추세와 반복 이상치로 시각화하는 기능입니다.
 
 실제 운영 전에 확인할 항목:
 

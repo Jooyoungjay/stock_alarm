@@ -15,6 +15,7 @@ test('JSON to DB migration guide documents the migration contract', async () => 
   assert.match(markdown, /migrate:postgres:dry-run/);
   assert.match(markdown, /migrate:postgres:rehearsal/);
   assert.match(markdown, /quote_provider_attempts/);
+  assert.match(markdown, /kis_naver_compare_history/);
   assert.match(markdown, /tests\/fixtures\/postgres-migration/);
   assert.match(markdown, /storageSnapshotContract/);
   assert.match(markdown, /JSONB/);
@@ -164,6 +165,7 @@ test('broker API adapter guide documents quote-only checks and trading guard', a
   assert.match(markdown, /\/api\/kis\/naver-compare/);
   assert.match(markdown, /\/api\/kis\/naver-compare\/apply/);
   assert.match(markdown, /가격 차이 이상치/);
+  assert.match(markdown, /가격 비교 이력/);
   assert.match(markdown, /KIS_MARKET_DIV_CODE/);
   assert.match(markdown, /KIS_TOKEN_AUTO_REFRESH/);
   assert.match(markdown, /KIS_SMOKE_SYMBOL/);
@@ -192,9 +194,12 @@ test('admin page exposes the KIS and Naver comparison controls', async () => {
   assert.match(html, /kisNaverCompareForm/);
   assert.match(html, /kisNaverCompareMarketSelect/);
   assert.match(html, /kisNaverCompareDriftThresholdInput/);
+  assert.match(html, /kisNaverCompareHistoryPanel/);
   assert.match(html, /이상치 기준/);
   assert.match(script, /\/api\/kis\/naver-compare/);
   assert.match(script, /\/api\/kis\/naver-compare\/apply/);
+  assert.match(script, /kisNaverCompareHistory/);
+  assert.match(script, /renderKisNaverCompareHistory/);
   assert.match(script, /data-kis-apply-market/);
   assert.match(script, /driftThresholdPercent/);
   assert.match(script, /renderKisNaverCompareResult/);

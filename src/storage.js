@@ -751,6 +751,198 @@ export function buildQuoteProviderStatsSnapshot(value) {
   };
 }
 
+function normalizeHistoryLimit(value, fallback = 20) {
+  const number = Math.trunc(Number(value));
+
+  if (!Number.isFinite(number) || number < 1) {
+    return fallback;
+  }
+
+  return Math.min(number, 100);
+}
+
+function normalizeKisNaverCompareMarkets(value) {
+  if (!Array.isArray(value)) {
+    return [];
+  }
+
+  return value
+    .map((market) => ({
+      code: String(market?.code || '').trim().toUpperCase(),
+      label: String(market?.label || '').trim()
+    }))
+    .filter((market) => market.code)
+    .slice(0, 5);
+}
+
+function normalizeKisNaverCompareQuote(source = {}) {
+  const quote = source?.quote && typeof source.quote === 'object' ? source.quote : source;
+
+  return {
+    ok: Boolean(source?.ok),
+    price: normalizeOptionalStoredNumber(quote?.price),
+    currency: String(quote?.currency || '').trim(),
+    provider: String(quote?.provider || '').trim(),
+    providerLabel: String(quote?.providerLabel || '').trim(),
+    exchange: String(quote?.exchange || '').trim(),
+    regularMarketTime: normalizeIsoDateTime(quote?.regularMarketTime) || null,
+    error: String(source?.error || '').trim()
+  };
+}
+
+function normalizeKisNaverDriftStatus(value, fallback = 'not_comparable') {
+  const status = String(value || '').trim();
+
+  return ['normal', 'warning', 'critical', 'not_comparable'].includes(status)
+    ? status
+    : fallback;
+}
+
+function normalizeKisNaverCompareHistoryResult(value = {}) {
+  if (!value || typeof value !== 'object') {
+    return null;
+  }
+
+  const quote = value.quote && typeof value.quote === 'object' ? value.quote : {};
+  const comparison = value.comparison && typeof value.comparison === 'object' ? value.comparison : value;
+  const drift = value.drift && typeof value.drift === 'object' ? value.drift : value;
+  const market = String(value.market || '').trim().toUpperCase();
+
+  if (!market) {
+    return null;
+  }
+
+  const comparable = Boolean(comparison.comparable);
+
+  return {
+    market,
+    marketLabel: String(value.marketLabel || '').trim(),
+    ok: Boolean(value.ok),
+    comparable,
+    price: normalizeOptionalStoredNumber(quote.price ?? value.price),
+    currency: String(quote.currency || value.currency || '').trim(),
+    difference: normalizeOptionalStoredNumber(comparison.difference ?? value.difference),
+    differencePercent: normalizeOptionalStoredNumber(
+      comparison.differencePercent ?? value.differencePercent
+    ),
+    absoluteDifference: normalizeOptionalStoredNumber(
+      comparison.absoluteDifference ?? value.absoluteDifference
+    ),
+    absoluteDifferencePercent: normalizeOptionalStoredNumber(
+      drift.absoluteDifferencePercent ?? value.absoluteDifferencePercent
+    ),
+    driftStatus: normalizeKisNaverDriftStatus(
+      drift.status || value.driftStatus,
+      comparable ? 'normal' : 'not_comparable'
+    ),
+    abnormal: Boolean(drift.abnormal ?? value.abnormal),
+    error: String(value.error || comparison.reason || '').trim()
+  };
+}
+
+function normalizeKisNaverCompareHistorySummary(value = {}) {
+  const summary = value && typeof value === 'object' ? value : {};
+
+  return {
+    total: normalizeNonNegativeInteger(summary.total),
+    kisSuccess: normalizeNonNegativeInteger(summary.kisSuccess),
+    kisFailed: normalizeNonNegativeInteger(summary.kisFailed),
+    comparable: normalizeNonNegativeInteger(summary.comparable)
+  };
+}
+
+function normalizeKisNaverCompareHistoryDrift(value = {}) {
+  const drift = value && typeof value === 'object' ? value : {};
+
+  return {
+    thresholdPercent: normalizeOptionalStoredNumber(drift.thresholdPercent),
+    status: normalizeKisNaverDriftStatus(drift.status),
+    comparable: normalizeNonNegativeInteger(drift.comparable),
+    normal: normalizeNonNegativeInteger(drift.normal),
+    warning: normalizeNonNegativeInteger(drift.warning),
+    critical: normalizeNonNegativeInteger(drift.critical),
+    abnormal: normalizeNonNegativeInteger(drift.abnormal),
+    maxAbsoluteDifferencePercent: normalizeOptionalStoredNumber(
+      drift.maxAbsoluteDifferencePercent
+    ),
+    worstMarket: String(drift.worstMarket || '').trim(),
+    worstMarketLabel: String(drift.worstMarketLabel || '').trim(),
+    message: String(drift.message || '').trim()
+  };
+}
+
+function normalizeKisNaverCompareRecommendation(value = null) {
+  if (!value || typeof value !== 'object' || !value.market) {
+    return null;
+  }
+
+  return {
+    market: String(value.market || '').trim().toUpperCase(),
+    marketLabel: String(value.marketLabel || '').trim(),
+    difference: normalizeOptionalStoredNumber(value.difference),
+    differencePercent: normalizeOptionalStoredNumber(value.differencePercent),
+    absoluteDifference: normalizeOptionalStoredNumber(value.absoluteDifference),
+    reason: String(value.reason || '').trim()
+  };
+}
+
+export function normalizeKisNaverCompareHistoryEntry(value = {}) {
+  if (!value || typeof value !== 'object') {
+    return null;
+  }
+
+  const createdAt =
+    normalizeIsoDateTime(value.createdAt) ||
+    normalizeIsoDateTime(value.generatedAt) ||
+    new Date().toISOString();
+  const generatedAt = normalizeIsoDateTime(value.generatedAt) || createdAt;
+  const symbol =
+    normalizeSymbolInput(value.symbol) || String(value.symbol || '').trim().toUpperCase();
+  const results = Array.isArray(value.results)
+    ? value.results.map(normalizeKisNaverCompareHistoryResult).filter(Boolean)
+    : [];
+
+  return {
+    id: String(value.id || randomUUID()).trim(),
+    createdAt,
+    generatedAt,
+    symbol,
+    inputSymbol: String(value.inputSymbol || '').trim(),
+    ok: Boolean(value.ok),
+    message: String(value.message || '').trim(),
+    markets: normalizeKisNaverCompareMarkets(value.markets),
+    summary: normalizeKisNaverCompareHistorySummary(value.summary),
+    drift: normalizeKisNaverCompareHistoryDrift(value.drift),
+    recommendation: normalizeKisNaverCompareRecommendation(value.recommendation),
+    naver: normalizeKisNaverCompareQuote(value.naver),
+    results
+  };
+}
+
+function normalizeKisNaverCompareHistory(value) {
+  if (!Array.isArray(value)) {
+    return [];
+  }
+
+  return value.map(normalizeKisNaverCompareHistoryEntry).filter(Boolean).slice(0, 100);
+}
+
+export function appendKisNaverCompareHistory(value, entry, options = {}) {
+  const limit = normalizeHistoryLimit(options.limit ?? options.maxEntries, 100);
+  const nextEntry = normalizeKisNaverCompareHistoryEntry(entry);
+  const history = normalizeKisNaverCompareHistory(value);
+
+  if (!nextEntry) {
+    return history.slice(0, limit);
+  }
+
+  return [nextEntry, ...history.filter((item) => item.id !== nextEntry.id)].slice(0, limit);
+}
+
+export function buildKisNaverCompareHistorySnapshot(value, limit = 20) {
+  return normalizeKisNaverCompareHistory(value).slice(0, normalizeHistoryLimit(limit, 20));
+}
+
 export function normalizeDeviceId(value) {
   const id = String(value || '').trim();
   return id || null;
@@ -1187,6 +1379,28 @@ export class JsonStore {
     };
     await this.write(data);
     return buildQuoteProviderStatsSnapshot(data.meta.quoteProviderStats);
+  }
+
+  async getKisNaverCompareHistory(limit = 20) {
+    const data = await this.read();
+    return buildKisNaverCompareHistorySnapshot(data.meta.kisNaverCompareHistory, limit);
+  }
+
+  async recordKisNaverCompareHistory(entry, options = {}) {
+    const data = await this.read();
+    data.meta = {
+      ...data.meta,
+      kisNaverCompareHistory: appendKisNaverCompareHistory(
+        data.meta.kisNaverCompareHistory,
+        entry,
+        { limit: options.maxEntries || 100 }
+      )
+    };
+    await this.write(data);
+    return buildKisNaverCompareHistorySnapshot(
+      data.meta.kisNaverCompareHistory,
+      options.returnLimit || options.limit || 20
+    );
   }
 
   async appendAlert(alert) {

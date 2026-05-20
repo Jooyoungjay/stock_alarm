@@ -598,14 +598,18 @@ async function handleApi(request, response, url) {
       dividendRefreshSnapshot,
       dividendEventAlertSnapshot,
       dailyBriefingSnapshot,
-      quoteProviderStats
+      quoteProviderStats,
+      kisNaverCompareHistory
     ] = await Promise.all([
       store.listStocks(),
       store.listAlerts(30),
       canReadAdminDetails ? getLastDividendRefreshSnapshot() : Promise.resolve(null),
       canReadAdminDetails ? getLastDividendEventAlertSnapshot() : Promise.resolve(null),
       getLastDailyBriefingSnapshot(),
-      canReadAdminDetails ? store.getQuoteProviderStats() : Promise.resolve(null)
+      canReadAdminDetails ? store.getQuoteProviderStats() : Promise.resolve(null),
+      canReadAdminDetails && typeof store.getKisNaverCompareHistory === 'function'
+        ? store.getKisNaverCompareHistory(12)
+        : Promise.resolve([])
     ]);
     const dividendCalendar = buildDividendCalendar(stocks);
 
@@ -635,6 +639,7 @@ async function handleApi(request, response, url) {
       lastDividendRefresh: dividendRefreshSnapshot,
       lastDividendEventAlert: dividendEventAlertSnapshot,
       quoteProviderStats,
+      kisNaverCompareHistory,
       lastCheck
     });
     return;
@@ -938,10 +943,15 @@ async function handleApi(request, response, url) {
   if (request.method === 'POST' && url.pathname === '/api/kis/naver-compare') {
     const body = await readJsonBody(request);
     const result = await runKisNaverQuoteComparison(body);
+    const kisNaverCompareHistory =
+      typeof store.recordKisNaverCompareHistory === 'function'
+        ? await store.recordKisNaverCompareHistory(result, { returnLimit: 12 })
+        : [];
     const quoteProviderStats = await store.getQuoteProviderStats();
 
     sendJson(response, 200, {
       kisNaverQuoteComparison: result,
+      kisNaverCompareHistory,
       quoteProviderStats
     });
     return;

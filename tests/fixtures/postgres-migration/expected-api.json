@@ -5,7 +5,8 @@
     "stocks": 2,
     "activeStocks": 1,
     "alerts": 2,
-    "dividendEvents": 1
+    "dividendEvents": 1,
+    "kisNaverCompareHistory": 0
   },
   "stockSymbols": ["336260", "AAPL"],
   "deviceStockSymbols": {
@@ -25,6 +26,7 @@
     "alerts": 2,
     "quote_provider_stats": 2,
     "quote_provider_attempts": 2,
+    "kis_naver_compare_history": 0,
     "job_runs": 3,
     "settings": 1
   },
