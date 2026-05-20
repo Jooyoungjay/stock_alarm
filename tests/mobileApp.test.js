@@ -13,7 +13,12 @@ import {
   sendPushTest,
   updateMobileStock
 } from '../mobile/src/api.js';
-import { summarizePortfolio } from '../mobile/src/format.js';
+import {
+  formatCurrencyTotals,
+  formatDateOnly,
+  summarizeDividendCalendar,
+  summarizePortfolio
+} from '../mobile/src/format.js';
 import { buildStockPayload, stockToForm, validateStockForm } from '../mobile/src/stockForm.js';
 
 test('mobile API helpers normalize URLs and attach device auth headers', () => {
@@ -69,7 +74,34 @@ test('mobile API helpers call anonymous device endpoints', async () => {
       return jsonResponse({ ok: true });
     }
 
-    return jsonResponse({ stocks: [{ id: 'stock-1', symbol: '336260' }], alerts: [] });
+    return jsonResponse({
+      stocks: [{ id: 'stock-1', symbol: '336260' }],
+      alerts: [
+        {
+          id: 'alert-1',
+          symbol: '336260',
+          alertType: 'dividend_event',
+          dividendEventOffsetLabel: '1일 전'
+        }
+      ],
+      dividendCalendar: {
+        months: [
+          {
+            key: '2026-06',
+            label: '2026년 6월',
+            events: [{ symbol: '336260', amount: 3000, currency: 'KRW' }]
+          }
+        ],
+        summary: {
+          monthsAhead: 6,
+          stocksWithDividends: 1,
+          eventCount: 1,
+          paymentEventCount: 1,
+          exDividendEventCount: 0,
+          annualDividendTotals: [{ currency: 'KRW', amount: 12000 }]
+        }
+      }
+    });
   };
 
   const created = await createDevice({
@@ -122,6 +154,8 @@ test('mobile API helpers call anonymous device endpoints', async () => {
   assert.equal(created.device.id, 'device-1');
   assert.equal(health.mobileApi, true);
   assert.equal(snapshot.stocks[0].symbol, '336260');
+  assert.equal(snapshot.alerts[0].alertType, 'dividend_event');
+  assert.equal(snapshot.dividendCalendar.summary.eventCount, 1);
   assert.equal(push.device.pushTokens[0].provider, 'expo');
   assert.equal(pushTest.deliveryStatus, 'sent');
   assert.equal(added.stock.displayName, '두산퓨얼셀');
@@ -206,6 +240,31 @@ test('mobile portfolio summary counts active, warning, and triggered stocks', ()
   });
 });
 
+test('mobile format helpers summarize dividend calendars for app panels', () => {
+  const calendar = {
+    months: [{ key: '2026-06', events: [{ symbol: '336260' }] }],
+    summary: {
+      monthsAhead: 6,
+      stocksWithDividends: 1,
+      eventCount: 2,
+      paymentEventCount: 1,
+      exDividendEventCount: 1,
+      confirmedEventCount: 1,
+      estimatedEventCount: 1,
+      pendingScheduleCount: 0,
+      annualDividendTotals: [{ currency: 'KRW', amount: 12000 }]
+    }
+  };
+  const summary = summarizeDividendCalendar(calendar);
+
+  assert.equal(formatDateOnly('2026-05-20T00:00:00.000Z'), '2026.05.20');
+  assert.match(formatCurrencyTotals([{ currency: 'KRW', amount: 12000 }]), /12,000/);
+  assert.equal(summary.stocksWithDividends, 1);
+  assert.equal(summary.paymentEventCount, 1);
+  assert.equal(summary.exDividendEventCount, 1);
+  assert.match(summary.annualDividendText, /12,000/);
+});
+
 test('Expo mobile scaffold declares SDK 55 and app store identifiers', async () => {
   const packageJson = JSON.parse(await fs.readFile(new URL('../mobile/package.json', import.meta.url), 'utf8'));
   const appJson = JSON.parse(await fs.readFile(new URL('../mobile/app.json', import.meta.url), 'utf8'));
@@ -236,6 +295,9 @@ test('Expo mobile scaffold declares SDK 55 and app store identifiers', async () 
   assert.match(appSource, /createMobileStock/);
   assert.match(appSource, /updateMobileStock/);
   assert.match(appSource, /deleteMobileStock/);
+  assert.match(appSource, /DividendCalendarPanel/);
+  assert.match(appSource, /AlertHistoryPanel/);
+  assert.match(appSource, /summarizeDividendCalendar/);
 });
 
 function jsonResponse(payload, status = 200) {

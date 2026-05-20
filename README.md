@@ -1064,7 +1064,7 @@ x-device-secret: <deviceSecret>
 | `GET /api/mobile/me` | 내 익명 기기 정보 확인 |
 | `POST /api/mobile/push-token` | Expo Push 토큰 저장 |
 | `POST /api/mobile/push-test` | 내 기기에 테스트 푸시 전송 |
-| `GET /api/mobile/stocks` | 내 기기의 종목과 알림 목록 조회 |
+| `GET /api/mobile/stocks` | 내 기기의 종목, 배당 캘린더, 알림 목록 조회 |
 | `POST /api/mobile/stocks` | 내 기기에 종목 등록 |
 | `PATCH /api/mobile/stocks/<stockId>` | 내 기기의 종목 수정 |
 | `DELETE /api/mobile/stocks/<stockId>` | 내 기기의 종목 삭제 |
@@ -1109,7 +1109,8 @@ npm run local:phone
 - `GET /api/mobile/ping`으로 모바일 서버 연결 확인
 - `POST /api/devices`로 익명 기기 등록
 - `expo-secure-store`로 `deviceId`, `deviceSecret` 저장
-- `GET /api/mobile/stocks`로 내 기기의 종목과 알림 목록 조회
+- `GET /api/mobile/stocks`로 내 기기의 종목, 배당 캘린더, 알림 목록 조회
+- 모바일 앱 첫 화면에서 내 기기 기준 배당 캘린더와 알림 기록 상세 확인
 - `POST /api/mobile/push-token`으로 Expo Push 토큰 등록
 - `POST /api/mobile/push-test`로 테스트 푸시 전송
 - `POST /api/mobile/stocks`로 내 기기의 종목 등록
@@ -1314,10 +1315,9 @@ Invoke-RestMethod http://127.0.0.1:3001/api/health
 - 운영/관리: 사용자/관리자 화면 분리, 관리자 보호, 백업/복구/삭제, 백업 스냅샷 계약, 데이터 모델 정리, 저장소 계약, JSON -> DB 이전 설계, WBS 상태 표준화, HTTPS 데모 서버 점검
 - 저장소: PostgresStore JSONB 쿼리 어댑터, DATABASE_URL 마스킹, 계약 테스트, JSON -> Postgres dry-run 마이그레이션 검증, 통합 테스트 데이터셋, 백업 스냅샷 계약 검증, Postgres 연결 리허설 CLI
 - 안정화: 시세/배당 실패 사유 표시와 종목별 재시도 UX
-- 모바일: Expo SDK 55 초기 앱, 서버 연결, 익명 기기 저장, 모바일 종목 조회/등록/편집/삭제, Expo Push 토큰 등록과 알림 전송, 앱 심사 준비 문서, HTTPS 데모 서버 준비, 스토어 메타데이터 초안, 스토어 스크린샷 화면/문구/대체 텍스트 가이드
+- 모바일: Expo SDK 55 초기 앱, 서버 연결, 익명 기기 저장, 모바일 종목 조회/등록/편집/삭제, 배당 캘린더/알림 기록 상세, Expo Push 토큰 등록과 알림 전송, 앱 심사 준비 문서, HTTPS 데모 서버 준비, 스토어 메타데이터 초안, 스토어 스크린샷 화면/문구/대체 텍스트 가이드
 
 우선순위가 높은 순서:
 
-1. 모바일 배당/알림 기록 화면 보강
-2. 스토어 제출 자산 최종 점검
-3. NXT provider 추가(API 확인 시)
+1. 스토어 제출 자산 최종 점검
+2. NXT provider 추가(API 확인 시)

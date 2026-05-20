@@ -599,8 +599,9 @@ async function handleApi(request, response, url) {
         store.listStocks({ deviceId: device.id }),
         store.listAlerts(30, { deviceId: device.id })
       ]);
+      const dividendCalendar = buildDividendCalendar(stocks);
 
-      sendJson(response, 200, { device, stocks, alerts });
+      sendJson(response, 200, { device, stocks, alerts, dividendCalendar });
       return;
     }
 

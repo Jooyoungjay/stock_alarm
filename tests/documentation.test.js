@@ -75,7 +75,7 @@ test('app review documents cover privacy, store metadata, and review blockers', 
   assert.equal(listing.storeScreenshots.sourceDocument, '../docs/store-screenshots.md');
   assert.ok(listing.storeScreenshots.screens.some((item) => item.id === 'dividend-calendar'));
   assert.ok(listing.storeScreenshots.screens.some((item) => item.id === 'alert-toggle-push'));
-  assert.ok(listing.storeScreenshots.knownGapsBeforeSubmission.some((item) => item.includes('알림 기록')));
+  assert.ok(listing.storeScreenshots.knownGapsBeforeSubmission.some((item) => item.includes('실제 캡처')));
   assert.ok(listing.dataSafety.dataCollected.some((item) => item.type === 'Device identifiers'));
   assert.ok(listing.reviewNotes.some((item) => item.includes('HTTPS 서버')));
 });

@@ -32,6 +32,66 @@ export function formatSignedPercent(value) {
   return `${percent > 0 ? '+' : ''}${percent.toFixed(2)}%`;
 }
 
+export function formatDateOnly(value) {
+  if (!value) {
+    return '-';
+  }
+
+  const match = String(value).match(/^(\d{4})-(\d{2})-(\d{2})/);
+
+  if (match) {
+    return `${match[1]}.${match[2]}.${match[3]}`;
+  }
+
+  return formatDateTime(value);
+}
+
+export function formatDateTime(value) {
+  if (!value) {
+    return '-';
+  }
+
+  const date = new Date(value);
+
+  if (!Number.isFinite(date.getTime())) {
+    return '-';
+  }
+
+  return date.toLocaleString('ko-KR');
+}
+
+export function formatCurrencyTotals(totals = []) {
+  const items = (Array.isArray(totals) ? totals : [])
+    .map((item) => ({
+      amount: Number(item?.amount),
+      currency: item?.currency || 'KRW'
+    }))
+    .filter((item) => Number.isFinite(item.amount));
+
+  if (!items.length) {
+    return '-';
+  }
+
+  return items.map((item) => formatCurrency(item.amount, item.currency)).join(' · ');
+}
+
+export function summarizeDividendCalendar(calendar = {}) {
+  const summary = calendar?.summary || {};
+  const months = Array.isArray(calendar?.months) ? calendar.months : [];
+
+  return {
+    monthsAhead: Number(summary.monthsAhead || months.length || 0),
+    stocksWithDividends: Number(summary.stocksWithDividends || 0),
+    eventCount: Number(summary.eventCount || 0),
+    paymentEventCount: Number(summary.paymentEventCount || 0),
+    exDividendEventCount: Number(summary.exDividendEventCount || 0),
+    confirmedEventCount: Number(summary.confirmedEventCount || 0),
+    estimatedEventCount: Number(summary.estimatedEventCount || 0),
+    pendingScheduleCount: Number(summary.pendingScheduleCount || 0),
+    annualDividendText: formatCurrencyTotals(summary.annualDividendTotals)
+  };
+}
+
 export function summarizePortfolio(stocks = []) {
   const activeStocks = stocks.filter((stock) => stock.active !== false);
   const triggeredStocks = activeStocks.filter((stock) => stock.alertState === 'triggered');

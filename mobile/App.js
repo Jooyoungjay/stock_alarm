@@ -26,7 +26,16 @@ import {
   updateMobileStock
 } from './src/api.js';
 import { clearDeviceSession, loadBaseUrl, loadDeviceSession, saveBaseUrl, saveDeviceSession } from './src/deviceStorage.js';
-import { formatCurrency, formatPercent, formatSignedPercent, summarizePortfolio } from './src/format.js';
+import {
+  formatCurrency,
+  formatCurrencyTotals,
+  formatDateOnly,
+  formatDateTime,
+  formatPercent,
+  formatSignedPercent,
+  summarizeDividendCalendar,
+  summarizePortfolio
+} from './src/format.js';
 import { registerForPushNotificationsAsync } from './src/pushNotifications.js';
 import {
   ALERT_TYPE_OPTIONS,
@@ -45,6 +54,7 @@ export default function App() {
   const [deviceInfo, setDeviceInfo] = useState(null);
   const [stocks, setStocks] = useState([]);
   const [alerts, setAlerts] = useState([]);
+  const [dividendCalendar, setDividendCalendar] = useState(null);
   const [health, setHealth] = useState(null);
   const [message, setMessage] = useState('서버 주소를 확인하세요.');
   const [loading, setLoading] = useState(false);
@@ -142,6 +152,7 @@ export default function App() {
     setDeviceInfo(snapshot.device || null);
     setStocks(Array.isArray(snapshot.stocks) ? snapshot.stocks : []);
     setAlerts(Array.isArray(snapshot.alerts) ? snapshot.alerts : []);
+    setDividendCalendar(snapshot.dividendCalendar || null);
     await saveBaseUrl(baseUrl);
 
     if (!silent) {
@@ -169,6 +180,7 @@ export default function App() {
     setDeviceInfo(null);
     setStocks([]);
     setAlerts([]);
+    setDividendCalendar(null);
     setStockFormOpen(false);
     setEditingStockId('');
     setStockForm(createEmptyStockForm());
@@ -362,6 +374,8 @@ export default function App() {
             loading
           }),
           e(PortfolioPanel, { portfolio, alertsCount: alerts.length }),
+          connected ? e(DividendCalendarPanel, { calendar: dividendCalendar }) : null,
+          connected ? e(AlertHistoryPanel, { alerts }) : null,
           connected
             ? e(StockFormPanel, {
               open: stockFormOpen,
@@ -468,6 +482,129 @@ function PortfolioPanel({ portfolio, alertsCount }) {
     e(MetricItem, { label: '활성', value: String(portfolio.active) }),
     e(MetricItem, { label: '위험', value: String(portfolio.triggered) }),
     e(MetricItem, { label: '알림', value: String(alertsCount) })
+  );
+}
+
+function DividendCalendarPanel({ calendar }) {
+  const summary = summarizeDividendCalendar(calendar);
+  const months = (Array.isArray(calendar?.months) ? calendar.months : [])
+    .map((month) => ({
+      ...month,
+      events: Array.isArray(month.events) ? month.events : []
+    }))
+    .filter((month) => month.events.length)
+    .slice(0, 4);
+
+  return e(View, { style: styles.panel },
+    e(View, { style: styles.panelHeader },
+      e(View, null,
+        e(Text, { style: styles.panelTitle }, '배당 캘린더'),
+        e(Text, { style: styles.panelSubtitle },
+          summary.stocksWithDividends
+            ? `${summary.stocksWithDividends}개 배당 종목 · 향후 ${summary.monthsAhead || 0}개월`
+            : '배당 정보가 있는 종목을 등록하면 표시됩니다.'
+        )
+      )
+    ),
+    e(View, { style: styles.compactMetricGrid },
+      e(CompactMetric, { label: '연 배당', value: summary.annualDividendText }),
+      e(CompactMetric, { label: '일정', value: `${summary.eventCount}건` }),
+      e(CompactMetric, { label: '지급', value: `${summary.paymentEventCount}건` }),
+      e(CompactMetric, { label: '배당락', value: `${summary.exDividendEventCount}건` })
+    ),
+    months.length
+      ? e(View, { style: styles.dividendMonthList },
+        ...months.map((month) => e(DividendMonth, { key: month.key, month }))
+      )
+      : e(Text, { style: styles.emptyPanelText },
+        summary.stocksWithDividends
+          ? '지급월 또는 지급일이 있는 배당 일정이 아직 없습니다.'
+          : '주당 배당금과 지급월을 입력하면 캘린더가 채워집니다.'
+      ),
+    summary.pendingScheduleCount
+      ? e(Text, { style: styles.panelNote }, `${summary.pendingScheduleCount}개 종목은 지급월이 없어 일정에 배치되지 않았습니다.`)
+      : null
+  );
+}
+
+function DividendMonth({ month }) {
+  const totalText = formatCurrencyTotals(month.totals);
+  const count = Number(month.eventCounts?.total || month.events.length || 0);
+
+  return e(View, { style: styles.dividendMonth },
+    e(View, { style: styles.dividendMonthHead },
+      e(Text, { style: styles.dividendMonthTitle }, month.label || `${month.month}월`),
+      e(Text, { style: styles.dividendMonthMeta }, totalText === '-' ? `${count}건` : `${totalText} · ${count}건`)
+    ),
+    ...month.events.slice(0, 3).map((event, index) => e(DividendEventRow, {
+      key: `${event.stockId || event.symbol}-${event.paymentDate || event.exDividendDate || index}`,
+      event
+    })),
+    month.events.length > 3
+      ? e(Text, { style: styles.moreText }, `외 ${month.events.length - 3}건`)
+      : null
+  );
+}
+
+function DividendEventRow({ event }) {
+  const amount = event.amount === null || event.amount === undefined
+    ? '-'
+    : formatCurrency(event.amount, event.currency || 'KRW');
+  const dateText = event.paymentDate
+    ? `지급 ${formatDateOnly(event.paymentDate)}`
+    : event.exDividendDate
+      ? `배당락 ${formatDateOnly(event.exDividendDate)}`
+      : event.frequencyLabel || '예상';
+  const typeText = getDividendEventTypeLabel(event);
+
+  return e(View, { style: styles.dividendEventRow },
+    e(View, { style: styles.dividendEventMain },
+      e(Text, { style: styles.dividendEventStock }, event.displayName || event.symbol),
+      e(Text, { style: styles.dividendEventMeta }, `${event.symbol || '-'} · ${dateText} · ${typeText}`)
+    ),
+    e(Text, { style: styles.dividendEventAmount }, amount)
+  );
+}
+
+function AlertHistoryPanel({ alerts }) {
+  const recentAlerts = (Array.isArray(alerts) ? alerts : []).slice(0, 5);
+
+  return e(View, { style: styles.panel },
+    e(View, { style: styles.panelHeader },
+      e(View, null,
+        e(Text, { style: styles.panelTitle }, '알림 기록'),
+        e(Text, { style: styles.panelSubtitle }, recentAlerts.length ? `최근 ${recentAlerts.length}건` : '전송된 알림이 없습니다.')
+      )
+    ),
+    recentAlerts.length
+      ? e(View, { style: styles.alertHistoryList },
+        ...recentAlerts.map((alert, index) => e(AlertHistoryRow, { key: alert.id || `${alert.symbol}-${index}`, alert }))
+      )
+      : e(Text, { style: styles.emptyPanelText }, '가격 조건 또는 배당 일정 알림이 전송되면 여기에 표시됩니다.')
+  );
+}
+
+function AlertHistoryRow({ alert }) {
+  const isDividendEvent = alert.alertType === 'dividend_event';
+  const detailText = isDividendEvent ? getDividendAlertDetail(alert) : getPriceAlertDetail(alert);
+
+  return e(View, { style: styles.alertHistoryRow },
+    e(View, { style: styles.alertHistoryMain },
+      e(Text, { style: styles.alertHistoryStock }, alert.displayName || alert.symbol || '-'),
+      e(Text, { style: styles.alertHistoryMeta }, detailText),
+      e(Text, { style: styles.alertHistoryTime }, formatDateTime(alert.createdAt))
+    ),
+    e(View, { style: styles.alertHistorySide },
+      e(Text, { style: [styles.alertHistoryMetric, isDividendEvent ? null : styles.dangerText] }, getAlertMetricText(alert)),
+      e(Text, { style: styles.deliveryText }, getDeliveryStatusLabel(alert.deliveryStatus))
+    )
+  );
+}
+
+function CompactMetric({ label, value }) {
+  return e(View, { style: styles.compactMetricItem },
+    e(Text, { style: styles.metricLabel }, label),
+    e(Text, { style: styles.compactMetricValue }, value || '-')
   );
 }
 
@@ -807,6 +944,73 @@ function formatAlertType(value) {
   return option ? option.label : '최고가';
 }
 
+function getDividendEventTypeLabel(event) {
+  if (event.type === 'confirmed' || event.type === 'payment' || event.certainty === 'confirmed') {
+    return '확정 지급';
+  }
+
+  if (event.type === 'ex_dividend' || event.eventKind === 'ex_dividend') {
+    return '배당락';
+  }
+
+  return '예상 지급';
+}
+
+function getAlertMetricText(alert) {
+  if (alert.alertType === 'dividend_event') {
+    return alert.dividendEventOffsetLabel || alert.metricLabel || '배당';
+  }
+
+  const value = Number(alert.drawdownPercent);
+
+  if (!Number.isFinite(value)) {
+    return '-';
+  }
+
+  const prefix = alert.alertType === 'profit_retracement' ? '' : '-';
+  return `${prefix}${Math.abs(value).toFixed(2)}%`;
+}
+
+function getDividendAlertDetail(alert) {
+  const parts = [
+    alert.alertTypeLabel || alert.metricLabel || '배당 일정',
+    alert.dividendEventDate ? formatDateOnly(alert.dividendEventDate) : '',
+    alert.expectedDividendAmount !== null && alert.expectedDividendAmount !== undefined
+      ? `예상 ${formatCurrency(alert.expectedDividendAmount, alert.currency || 'KRW')}`
+      : ''
+  ].filter(Boolean);
+
+  return parts.join(' · ') || '배당 일정 알림';
+}
+
+function getPriceAlertDetail(alert) {
+  const parts = [
+    alert.alertTypeLabel || alert.metricLabel || '가격 알림',
+    alert.price !== null && alert.price !== undefined ? `현재 ${formatCurrency(alert.price, alert.currency || 'KRW')}` : '',
+    alert.thresholdPrice !== null && alert.thresholdPrice !== undefined
+      ? `기준 ${formatCurrency(alert.thresholdPrice, alert.currency || 'KRW')}`
+      : '',
+    alert.alertRepeatCount ? `${Number(alert.alertRepeatCount)}회차` : ''
+  ].filter(Boolean);
+
+  if (alert.alertType === 'profit_retracement' && alert.maximumProfitAmount !== null && alert.maximumProfitAmount !== undefined) {
+    parts.push(`최대 ${formatCurrency(alert.maximumProfitAmount, alert.currency || 'KRW')}`);
+  }
+
+  return parts.join(' · ') || '가격 조건 알림';
+}
+
+function getDeliveryStatusLabel(value) {
+  const labels = {
+    sent: '전송됨',
+    partial: '일부 전송',
+    failed: '실패',
+    not_configured: '미설정'
+  };
+
+  return labels[value] || value || '-';
+}
+
 const colors = {
   bg: '#0d1117',
   surface: '#161b22',
@@ -1067,6 +1271,143 @@ const styles = StyleSheet.create({
     fontSize: 22,
     fontWeight: '900',
     marginTop: 3
+  },
+  compactMetricGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8
+  },
+  compactMetricItem: {
+    backgroundColor: colors.bg,
+    borderColor: colors.border,
+    borderRadius: 6,
+    borderWidth: 1,
+    flexBasis: '48%',
+    flexGrow: 1,
+    padding: 10
+  },
+  compactMetricValue: {
+    color: colors.text,
+    fontSize: 14,
+    fontWeight: '900',
+    marginTop: 4
+  },
+  dividendMonthList: {
+    gap: 10
+  },
+  dividendMonth: {
+    borderTopColor: colors.border,
+    borderTopWidth: 1,
+    gap: 8,
+    paddingTop: 10
+  },
+  dividendMonthHead: {
+    alignItems: 'center',
+    flexDirection: 'row',
+    gap: 8,
+    justifyContent: 'space-between'
+  },
+  dividendMonthTitle: {
+    color: colors.text,
+    fontSize: 13,
+    fontWeight: '900'
+  },
+  dividendMonthMeta: {
+    color: colors.muted,
+    flexShrink: 1,
+    fontSize: 11,
+    textAlign: 'right'
+  },
+  dividendEventRow: {
+    alignItems: 'center',
+    backgroundColor: colors.bg,
+    borderColor: colors.border,
+    borderRadius: 6,
+    borderWidth: 1,
+    flexDirection: 'row',
+    gap: 10,
+    justifyContent: 'space-between',
+    padding: 10
+  },
+  dividendEventMain: {
+    flex: 1
+  },
+  dividendEventStock: {
+    color: colors.text,
+    fontSize: 13,
+    fontWeight: '800'
+  },
+  dividendEventMeta: {
+    color: colors.muted,
+    fontSize: 11,
+    marginTop: 3
+  },
+  dividendEventAmount: {
+    color: colors.accent,
+    flexShrink: 0,
+    fontSize: 12,
+    fontWeight: '900'
+  },
+  alertHistoryList: {
+    gap: 8
+  },
+  alertHistoryRow: {
+    alignItems: 'flex-start',
+    backgroundColor: colors.bg,
+    borderColor: colors.border,
+    borderRadius: 6,
+    borderWidth: 1,
+    flexDirection: 'row',
+    gap: 10,
+    justifyContent: 'space-between',
+    padding: 10
+  },
+  alertHistoryMain: {
+    flex: 1,
+    gap: 3
+  },
+  alertHistoryStock: {
+    color: colors.text,
+    fontSize: 13,
+    fontWeight: '900'
+  },
+  alertHistoryMeta: {
+    color: colors.muted,
+    fontSize: 11
+  },
+  alertHistoryTime: {
+    color: colors.dim,
+    fontSize: 10
+  },
+  alertHistorySide: {
+    alignItems: 'flex-end',
+    flexShrink: 0,
+    gap: 4
+  },
+  alertHistoryMetric: {
+    color: colors.text,
+    fontSize: 13,
+    fontWeight: '900'
+  },
+  deliveryText: {
+    color: colors.muted,
+    fontSize: 10,
+    fontWeight: '800'
+  },
+  emptyPanelText: {
+    color: colors.muted,
+    fontSize: 12,
+    lineHeight: 18
+  },
+  panelNote: {
+    color: colors.dim,
+    fontSize: 11,
+    lineHeight: 16
+  },
+  moreText: {
+    color: colors.dim,
+    fontSize: 11,
+    textAlign: 'right'
   },
   statusLine: {
     alignItems: 'center',
