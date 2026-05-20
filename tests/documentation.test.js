@@ -58,7 +58,9 @@ test('app review documents cover privacy, store metadata, and review blockers', 
   assert.match(reviewMarkdown, /Google Play preview assets/);
   assert.match(reviewMarkdown, /HTTPS 데모 서버/);
   assert.match(reviewMarkdown, /check:demo/);
+  assert.match(reviewMarkdown, /check:store-assets/);
   assert.match(reviewMarkdown, /store-screenshots\.md/);
+  assert.match(reviewMarkdown, /store-submission-assets\.md/);
   assert.match(reviewMarkdown, /투자 자문/);
   assert.match(reviewMarkdown, /데이터 삭제/);
 
@@ -101,6 +103,20 @@ test('store screenshot guide documents capture sets, copy, and demo data rules',
   assert.match(markdown, /테스트 푸시/);
   assert.match(markdown, /대체 텍스트/);
   assert.match(markdown, /33626L/);
+});
+
+test('store submission assets guide documents final app store readiness checks', async () => {
+  const markdown = await fs.readFile(
+    new URL('../docs/store-submission-assets.md', import.meta.url),
+    'utf8'
+  );
+
+  assert.match(markdown, /스토어 제출 자산 최종 점검/);
+  assert.match(markdown, /npm run check:store-assets/);
+  assert.match(markdown, /STORE_SCREENSHOT_DIR/);
+  assert.match(markdown, /PRIVACY_POLICY_URL/);
+  assert.match(markdown, /SUPPORT_URL/);
+  assert.match(markdown, /실제 PNG\/JPEG/);
 });
 
 test('HTTPS demo server guide documents review readiness checks', async () => {

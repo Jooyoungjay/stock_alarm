@@ -221,6 +221,7 @@ stock_alarm/
 │  ├─ app-store-review-prep.md     # 앱 심사 준비 체크리스트
 │  ├─ https-demo-server.md         # HTTPS 데모 서버 준비와 점검 절차
 │  ├─ store-screenshots.md         # 스토어 스크린샷 화면/문구/대체 텍스트 가이드
+│  ├─ store-submission-assets.md   # 스토어 제출 자산 최종 점검
 │  ├─ privacy-policy-ko.md         # 개인정보 처리방침 초안
 │  └─ railway-deploy.md            # Railway 배포 가이드
 ├─ tests/                   # Node.js 테스트
@@ -300,6 +301,7 @@ EXPO_PUSH_ENDPOINT=https://exp.host/--/api/v2/push/send
 | `PRIVACY_POLICY_URL` | 빈 값 | 앱 심사용 공개 HTTPS 개인정보 처리방침 URL |
 | `SUPPORT_URL` | 빈 값 | 앱 심사용 공개 HTTPS 지원/문의 URL |
 | `REVIEW_NOTES_URL` | 빈 값 | 선택. 리뷰어 안내 문서 URL |
+| `STORE_SCREENSHOT_DIR` | `mobile/store-assets/screenshots` | 스토어 제출용 실제 스크린샷 PNG/JPEG 폴더 |
 | `POLL_INTERVAL_SECONDS` | `60` | 시세 자동 확인 주기 |
 | `TELEGRAM_COMMAND_POLL_SECONDS` | `5` | 텔레그램 명령어 확인 주기 |
 | `DIVIDEND_REFRESH_INTERVAL_SECONDS` | `86400` | 배당 데이터 자동 보조 갱신 주기. 기본값은 하루 1회 |
@@ -416,6 +418,7 @@ npm run local:status
 npm run migrate:postgres:dry-run
 npm run mobile:install
 npm run mobile:start
+npm run check:store-assets
 ```
 
 가장 단순한 실행:
@@ -1124,6 +1127,7 @@ npm run local:phone
 - [앱 심사 준비 체크리스트](docs/app-store-review-prep.md)
 - [HTTPS 데모 서버 준비](docs/https-demo-server.md)
 - [스토어 스크린샷 제작 가이드](docs/store-screenshots.md)
+- [스토어 제출 자산 최종 점검](docs/store-submission-assets.md)
 - [개인정보 처리방침 초안](docs/privacy-policy-ko.md)
 - [한국어 스토어 등록 정보 초안](mobile/store-listing.ko.json)
 
@@ -1138,6 +1142,16 @@ npm run check:demo -- --fail-on-warn
 ```
 
 주요 점검 항목은 `REVIEW_DEMO_URL`, `PRIVACY_POLICY_URL`, `SUPPORT_URL`, `ADMIN_TOKEN`, 외부 서버용 `HOST=0.0.0.0`, 저장소 설정, 푸시/텔레그램 시연 설정입니다.
+
+스토어 제출 자산 점검:
+
+```powershell
+npm run check:store-assets
+npm run check:store-assets -- --json
+npm run check:store-assets -- --screenshot-dir mobile/store-assets/screenshots
+```
+
+주요 점검 항목은 앱 아이콘, 스토어 메타데이터, 공개 개인정보/지원 URL, 심사 메모, Data safety 초안, 실제 PNG/JPEG 스크린샷 파일입니다. 기본 로컬 환경에서는 실제 캡처 파일과 공개 URL이 없으면 `NOT READY`가 정상입니다.
 
 ## Railway 배포 준비
 
@@ -1214,7 +1228,7 @@ node --check scripts/local-server.js
 - 종목 검색
 - 모바일 익명 기기 API 저장소
 - 모바일 Expo Push 전송 헬퍼와 알림 경로 연결
-- 앱 심사 준비 문서와 스토어 메타데이터 초안
+- 앱 심사 준비 문서, 스토어 메타데이터 초안, 스토어 제출 자산 점검 CLI
 
 ## 문제 해결
 
@@ -1315,9 +1329,8 @@ Invoke-RestMethod http://127.0.0.1:3001/api/health
 - 운영/관리: 사용자/관리자 화면 분리, 관리자 보호, 백업/복구/삭제, 백업 스냅샷 계약, 데이터 모델 정리, 저장소 계약, JSON -> DB 이전 설계, WBS 상태 표준화, HTTPS 데모 서버 점검
 - 저장소: PostgresStore JSONB 쿼리 어댑터, DATABASE_URL 마스킹, 계약 테스트, JSON -> Postgres dry-run 마이그레이션 검증, 통합 테스트 데이터셋, 백업 스냅샷 계약 검증, Postgres 연결 리허설 CLI
 - 안정화: 시세/배당 실패 사유 표시와 종목별 재시도 UX
-- 모바일: Expo SDK 55 초기 앱, 서버 연결, 익명 기기 저장, 모바일 종목 조회/등록/편집/삭제, 배당 캘린더/알림 기록 상세, Expo Push 토큰 등록과 알림 전송, 앱 심사 준비 문서, HTTPS 데모 서버 준비, 스토어 메타데이터 초안, 스토어 스크린샷 화면/문구/대체 텍스트 가이드
+- 모바일: Expo SDK 55 초기 앱, 서버 연결, 익명 기기 저장, 모바일 종목 조회/등록/편집/삭제, 배당 캘린더/알림 기록 상세, Expo Push 토큰 등록과 알림 전송, 앱 심사 준비 문서, HTTPS 데모 서버 준비, 스토어 메타데이터 초안, 스토어 스크린샷 화면/문구/대체 텍스트 가이드, 스토어 제출 자산 점검 CLI
 
 우선순위가 높은 순서:
 
-1. 스토어 제출 자산 최종 점검
-2. NXT provider 추가(API 확인 시)
+1. NXT provider 추가(API 확인 시)
