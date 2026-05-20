@@ -1483,6 +1483,53 @@ select:focus {
   gap: 10px;
 }
 
+.kis-trend-recommendation {
+  display: grid;
+  gap: 8px;
+  padding: 10px 12px;
+  border: 1px solid var(--border-soft);
+  border-radius: var(--radius-sm);
+  background: var(--surface-2);
+}
+
+.kis-trend-recommendation.ok {
+  border-color: rgba(46, 168, 77, 0.32);
+  background: rgba(46, 168, 77, 0.08);
+}
+
+.kis-trend-recommendation.alert {
+  border-color: rgba(210, 153, 34, 0.36);
+  background: rgba(210, 153, 34, 0.1);
+}
+
+.kis-trend-recommendation.muted {
+  opacity: 0.88;
+}
+
+.kis-trend-recommendation-main {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.kis-trend-recommendation-main > div {
+  display: grid;
+  gap: 3px;
+}
+
+.kis-trend-recommendation-main strong {
+  color: var(--text);
+  font-size: 13px;
+}
+
+.kis-trend-recommendation-main span,
+.kis-trend-recommendation-reason {
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 700;
+}
+
 .kis-trend-card {
   display: grid;
   gap: 10px;
@@ -3261,6 +3308,10 @@ select:focus {
 
   .kis-smoke-counts {
     justify-content: flex-start;
+  }
+
+  .kis-trend-recommendation-main {
+    display: grid;
   }
 
   .kis-compare-trend-grid {

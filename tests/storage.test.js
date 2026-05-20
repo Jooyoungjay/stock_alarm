@@ -4,7 +4,11 @@ import fs from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import { DATA_SCHEMA_VERSION } from '../src/dataModel.js';
-import { buildKisNaverCompareTrendSnapshot, JsonStore } from '../src/storage.js';
+import {
+  buildKisNaverCompareTrendSnapshot,
+  buildKisNaverTrendRecommendation,
+  JsonStore
+} from '../src/storage.js';
 
 test('JsonStore creates and authenticates anonymous devices', async () => {
   const store = await createStore();
@@ -360,6 +364,84 @@ test('buildKisNaverCompareTrendSnapshot groups comparison history by market', ()
   assert.equal(nxt.abnormalCount, 2);
   assert.equal(nxt.repeatedAbnormal, true);
   assert.equal(nxt.status, 'critical');
+  assert.equal(trend.recommendation.market, 'J');
+  assert.equal(trend.recommendation.decision, 'apply');
+  assert.equal(trend.recommendation.canApply, true);
+});
+
+test('buildKisNaverTrendRecommendation asks for review when current and trend recommendations differ', () => {
+  const trend = {
+    markets: [
+      {
+        market: 'J',
+        marketLabel: 'KRX',
+        sampleCount: 4,
+        comparableCount: 4,
+        abnormalCount: 0,
+        recommendedCount: 3,
+        averageAbsoluteDifferencePercent: 0.25,
+        latestAbsoluteDifferencePercent: 0.3,
+        abnormalRatePercent: 0,
+        latestStatus: 'normal',
+        status: 'normal',
+        repeatedAbnormal: false
+      },
+      {
+        market: 'NX',
+        marketLabel: 'NXT',
+        sampleCount: 4,
+        comparableCount: 4,
+        abnormalCount: 2,
+        recommendedCount: 1,
+        averageAbsoluteDifferencePercent: 1.9,
+        latestAbsoluteDifferencePercent: 0.1,
+        abnormalRatePercent: 50,
+        latestStatus: 'normal',
+        status: 'warning',
+        repeatedAbnormal: true
+      }
+    ]
+  };
+
+  const recommendation = buildKisNaverTrendRecommendation(
+    trend,
+    { market: 'NX', marketLabel: 'NXT' },
+    { scope: 'symbol' }
+  );
+
+  assert.equal(recommendation.market, 'J');
+  assert.equal(recommendation.currentMarket, 'NX');
+  assert.equal(recommendation.scope, 'symbol');
+  assert.equal(recommendation.conflictsWithCurrent, true);
+  assert.equal(recommendation.decision, 'review');
+  assert.equal(recommendation.canApply, false);
+  assert.match(recommendation.reason, /추가 비교/);
+});
+
+test('buildKisNaverTrendRecommendation watches low confidence trend candidates', () => {
+  const recommendation = buildKisNaverTrendRecommendation({
+    markets: [
+      {
+        market: 'UN',
+        marketLabel: '통합',
+        sampleCount: 1,
+        comparableCount: 1,
+        abnormalCount: 1,
+        recommendedCount: 1,
+        averageAbsoluteDifferencePercent: 2.2,
+        latestAbsoluteDifferencePercent: 2.2,
+        abnormalRatePercent: 100,
+        latestStatus: 'warning',
+        status: 'warning',
+        repeatedAbnormal: false
+      }
+    ]
+  });
+
+  assert.equal(recommendation.market, 'UN');
+  assert.equal(recommendation.decision, 'watch');
+  assert.equal(recommendation.confidence, 'low');
+  assert.equal(recommendation.canApply, false);
 });
 
 test('JsonStore records quote provider success and failure stats', async () => {

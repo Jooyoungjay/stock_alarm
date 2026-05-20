@@ -167,6 +167,7 @@ test('broker API adapter guide documents quote-only checks and trading guard', a
   assert.match(markdown, /가격 차이 이상치/);
   assert.match(markdown, /가격 비교 이력/);
   assert.match(markdown, /가격 비교 추세/);
+  assert.match(markdown, /추세 기반 시장 추천/);
   assert.match(markdown, /KIS_MARKET_DIV_CODE/);
   assert.match(markdown, /KIS_TOKEN_AUTO_REFRESH/);
   assert.match(markdown, /KIS_SMOKE_SYMBOL/);
@@ -201,9 +202,12 @@ test('admin page exposes the KIS and Naver comparison controls', async () => {
   assert.match(script, /\/api\/kis\/naver-compare\/apply/);
   assert.match(script, /kisNaverCompareHistory/);
   assert.match(script, /kisNaverCompareTrend/);
+  assert.match(script, /kisNaverTrendRecommendation/);
   assert.match(script, /renderKisNaverCompareHistory/);
   assert.match(script, /renderKisNaverCompareTrend/);
+  assert.match(script, /renderKisNaverTrendRecommendation/);
   assert.match(script, /시장별 괴리 추세/);
+  assert.match(script, /추세 추천/);
   assert.match(script, /data-kis-apply-market/);
   assert.match(script, /driftThresholdPercent/);
   assert.match(script, /renderKisNaverCompareResult/);

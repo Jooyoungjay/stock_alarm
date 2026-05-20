@@ -1080,6 +1080,120 @@ function findKisNaverStableTrendMarket(markets) {
     })[0] || null;
 }
 
+function sortKisNaverTrendRecommendationCandidates(left, right) {
+  const leftAverage = left.averageAbsoluteDifferencePercent ?? Number.POSITIVE_INFINITY;
+  const rightAverage = right.averageAbsoluteDifferencePercent ?? Number.POSITIVE_INFINITY;
+  const leftAbnormalRate = left.abnormalRatePercent ?? Number.POSITIVE_INFINITY;
+  const rightAbnormalRate = right.abnormalRatePercent ?? Number.POSITIVE_INFINITY;
+  const leftLatest = left.latestAbsoluteDifferencePercent ?? Number.POSITIVE_INFINITY;
+  const rightLatest = right.latestAbsoluteDifferencePercent ?? Number.POSITIVE_INFINITY;
+
+  return (
+    leftAverage - rightAverage ||
+    leftAbnormalRate - rightAbnormalRate ||
+    leftLatest - rightLatest ||
+    right.recommendedCount - left.recommendedCount ||
+    right.comparableCount - left.comparableCount ||
+    sortKisNaverTrendMarkets(left, right)
+  );
+}
+
+function getKisNaverTrendRecommendationConfidence(market = {}) {
+  const comparableCount = normalizeNonNegativeInteger(market.comparableCount);
+  const abnormalCount = normalizeNonNegativeInteger(market.abnormalCount);
+  const abnormalRatePercent = normalizeOptionalStoredNumber(market.abnormalRatePercent) ?? 100;
+
+  if (
+    comparableCount >= 3 &&
+    abnormalCount === 0 &&
+    market.latestStatus === 'normal' &&
+    market.status === 'normal'
+  ) {
+    return 'high';
+  }
+
+  if (
+    comparableCount >= 2 &&
+    !market.repeatedAbnormal &&
+    market.status !== 'critical' &&
+    abnormalRatePercent <= 50
+  ) {
+    return 'medium';
+  }
+
+  return 'low';
+}
+
+function buildKisNaverTrendRecommendationReason({ market, current, confidence, conflictsWithCurrent }) {
+  if (conflictsWithCurrent) {
+    return `현재 1회 비교 추천(${current.marketLabel || current.market})과 추세 추천(${market.marketLabel || market.market})이 다릅니다. 바로 적용하기 전에 추가 비교가 필요합니다.`;
+  }
+
+  if (confidence === 'high') {
+    return '최근 비교 추세에서 평균 괴리율이 가장 낮고 반복 이상치가 없어 적용 후보입니다.';
+  }
+
+  if (confidence === 'medium') {
+    return '최근 비교 추세에서 가장 안정적인 시장이지만 표본이나 이상치 이력이 있어 적용 전 한 번 더 확인하는 것이 좋습니다.';
+  }
+
+  return '추세 표본이 적거나 이상치 이력이 있어 자동 적용보다는 관찰이 필요합니다.';
+}
+
+export function buildKisNaverTrendRecommendation(trend = {}, currentRecommendation = null, options = {}) {
+  const markets = Array.isArray(trend?.markets) ? trend.markets : [];
+  const candidates = markets
+    .filter((market) => market?.market && market.comparableCount > 0)
+    .sort(sortKisNaverTrendRecommendationCandidates);
+  const scope = String(options.scope || trend?.scope || 'global').trim() || 'global';
+
+  if (!candidates.length) {
+    return {
+      status: 'insufficient_data',
+      decision: 'none',
+      canApply: false,
+      confidence: 'none',
+      scope,
+      market: '',
+      marketLabel: '',
+      reason: '비교 가능한 가격 추세 표본이 부족합니다.'
+    };
+  }
+
+  const market = candidates[0];
+  const current = normalizeKisNaverCompareRecommendation(currentRecommendation);
+  const confidence = getKisNaverTrendRecommendationConfidence(market);
+  const conflictsWithCurrent = Boolean(current?.market && current.market !== market.market);
+  const canApply = !conflictsWithCurrent && confidence !== 'low';
+  const decision = conflictsWithCurrent ? 'review' : canApply ? 'apply' : 'watch';
+
+  return {
+    status: decision,
+    decision,
+    canApply,
+    confidence,
+    scope,
+    market: market.market,
+    marketLabel: market.marketLabel,
+    currentMarket: current?.market || '',
+    currentMarketLabel: current?.marketLabel || '',
+    conflictsWithCurrent,
+    sampleCount: market.sampleCount,
+    comparableCount: market.comparableCount,
+    abnormalCount: market.abnormalCount,
+    recommendedCount: market.recommendedCount,
+    averageAbsoluteDifferencePercent: market.averageAbsoluteDifferencePercent,
+    latestAbsoluteDifferencePercent: market.latestAbsoluteDifferencePercent,
+    abnormalRatePercent: market.abnormalRatePercent,
+    reason: buildKisNaverTrendRecommendationReason({
+      market,
+      current,
+      confidence,
+      conflictsWithCurrent
+    })
+  };
+}
+
 export function buildKisNaverCompareTrendSnapshot(value, limit = 100) {
   const history = buildKisNaverCompareHistorySnapshot(value, limit);
   const marketMap = new Map();
@@ -1152,8 +1266,7 @@ export function buildKisNaverCompareTrendSnapshot(value, limit = 100) {
     .map(finalizeKisNaverTrendMarket)
     .sort(sortKisNaverTrendMarkets);
   const stableMarket = findKisNaverStableTrendMarket(markets);
-
-  return {
+  const summary = {
     generatedAt: history[0]?.createdAt || history[0]?.generatedAt || null,
     historyCount: history.length,
     marketCount: markets.length,
@@ -1169,6 +1282,11 @@ export function buildKisNaverCompareTrendSnapshot(value, limit = 100) {
         }
       : null,
     markets
+  };
+
+  return {
+    ...summary,
+    recommendation: buildKisNaverTrendRecommendation(summary)
   };
 }
 

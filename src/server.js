@@ -28,7 +28,10 @@ import {
 } from './alertEngine.js';
 import { fetchHistoricalHighSince, fetchQuote } from './priceProvider.js';
 import { sendPushNotificationToDevice } from './pushNotifications.js';
-import { buildKisNaverCompareTrendSnapshot } from './storage.js';
+import {
+  buildKisNaverCompareTrendSnapshot,
+  buildKisNaverTrendRecommendation
+} from './storage.js';
 import {
   APP_DISPLAY_NAME,
   APP_NAME,
@@ -379,6 +382,19 @@ function findStocksByComparableSymbol(stocks, symbol) {
   return stocks.filter((stock) => normalizeStockSymbolForCompare(stock.symbol) === normalized);
 }
 
+function filterKisNaverCompareHistoryBySymbol(history = [], symbol) {
+  const normalized = normalizeStockSymbolForCompare(symbol);
+
+  if (!normalized) {
+    return [];
+  }
+
+  return history.filter((item) => {
+    const itemSymbol = normalizeStockSymbolForCompare(item.symbol || item.inputSymbol);
+    return itemSymbol === normalized;
+  });
+}
+
 async function applyKisMarketFromComparison(body = {}) {
   const market = normalizeKisMarketDivCode(body.market);
 
@@ -614,6 +630,8 @@ async function handleApi(request, response, url) {
     ]);
     const dividendCalendar = buildDividendCalendar(stocks);
     const kisNaverCompareTrend = buildKisNaverCompareTrendSnapshot(kisNaverCompareHistory);
+    const kisNaverTrendRecommendation =
+      kisNaverCompareTrend.recommendation || buildKisNaverTrendRecommendation(kisNaverCompareTrend);
 
     sendJson(response, 200, {
       stocks,
@@ -643,6 +661,7 @@ async function handleApi(request, response, url) {
       quoteProviderStats,
       kisNaverCompareHistory,
       kisNaverCompareTrend,
+      kisNaverTrendRecommendation,
       lastCheck
     });
     return;
@@ -951,12 +970,27 @@ async function handleApi(request, response, url) {
         ? await store.recordKisNaverCompareHistory(result, { returnLimit: 12 })
         : [];
     const kisNaverCompareTrend = buildKisNaverCompareTrendSnapshot(kisNaverCompareHistory);
+    const symbolKisNaverCompareTrend = buildKisNaverCompareTrendSnapshot(
+      filterKisNaverCompareHistoryBySymbol(
+        kisNaverCompareHistory,
+        result.symbol || result.inputSymbol
+      )
+    );
+    const kisNaverTrendRecommendation = buildKisNaverTrendRecommendation(
+      symbolKisNaverCompareTrend,
+      result.recommendation,
+      { scope: 'symbol' }
+    );
     const quoteProviderStats = await store.getQuoteProviderStats();
 
     sendJson(response, 200, {
-      kisNaverQuoteComparison: result,
+      kisNaverQuoteComparison: {
+        ...result,
+        trendRecommendation: kisNaverTrendRecommendation
+      },
       kisNaverCompareHistory,
       kisNaverCompareTrend,
+      kisNaverTrendRecommendation,
       quoteProviderStats
     });
     return;

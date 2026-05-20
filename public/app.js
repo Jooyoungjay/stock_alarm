@@ -31,6 +31,7 @@ const state = {
   kisNaverQuoteComparison: null,
   kisNaverCompareHistory: [],
   kisNaverCompareTrend: null,
+  kisNaverTrendRecommendation: null,
   adminAuthRequired: false,
   adminAuthenticated: false,
   backupRetention: 0,
@@ -468,6 +469,10 @@ async function loadData() {
       ? data.kisNaverCompareHistory
       : state.kisNaverCompareHistory;
     state.kisNaverCompareTrend = data.kisNaverCompareTrend || state.kisNaverCompareTrend;
+    state.kisNaverTrendRecommendation =
+      data.kisNaverTrendRecommendation ||
+      data.kisNaverCompareTrend?.recommendation ||
+      state.kisNaverTrendRecommendation;
     renderStatus(data);
     renderStocks();
     renderDividendCalendar(state.dividendCalendar);
@@ -553,6 +558,11 @@ async function runKisNaverCompare() {
       ? result.kisNaverCompareHistory
       : state.kisNaverCompareHistory;
     state.kisNaverCompareTrend = result.kisNaverCompareTrend || state.kisNaverCompareTrend;
+    state.kisNaverTrendRecommendation =
+      result.kisNaverTrendRecommendation ||
+      state.kisNaverQuoteComparison?.trendRecommendation ||
+      result.kisNaverCompareTrend?.recommendation ||
+      state.kisNaverTrendRecommendation;
     renderKisNaverCompareResult(state.kisNaverQuoteComparison);
     renderKisNaverCompareHistory(state.kisNaverCompareHistory, state.kisNaverCompareTrend);
     renderQuoteDiagnostics(state.quoteProviderStats);
@@ -1800,6 +1810,7 @@ function renderKisNaverCompareResult(result) {
     </div>
     ${renderNaverComparisonBaseline(result.naver)}
     ${renderKisNaverDriftSummary(drift)}
+    ${renderKisNaverTrendRecommendation(result.trendRecommendation || state.kisNaverTrendRecommendation)}
     ${
       result.message
         ? `<div class="kis-smoke-message ${statusClass}">${escapeHtml(result.message)}</div>`
@@ -1876,10 +1887,49 @@ function renderKisNaverCompareTrend(trend = null) {
             : ''
         }
       </div>
+      ${renderKisNaverTrendRecommendation(trend.recommendation || null, { compact: true })}
       <div class="kis-compare-trend-grid">
         ${markets.map(renderKisNaverCompareTrendCard).join('')}
       </div>
     </section>
+  `;
+}
+
+function renderKisNaverTrendRecommendation(recommendation = null, options = {}) {
+  if (!recommendation || recommendation.status === 'insufficient_data' || recommendation.decision === 'none') {
+    return '';
+  }
+
+  const statusClass = getKisNaverTrendRecommendationStatusClass(recommendation);
+  const statusLabel = getKisNaverTrendRecommendationStatusLabel(recommendation);
+  const scopeLabel = recommendation.scope === 'symbol' ? '종목 추세' : '전체 추세';
+  const metricParts = [
+    `평균 ${formatPercent(recommendation.averageAbsoluteDifferencePercent)}`,
+    `최근 ${formatPercent(recommendation.latestAbsoluteDifferencePercent)}`,
+    `이상치율 ${formatPercent(recommendation.abnormalRatePercent)}`,
+    `표본 ${recommendation.comparableCount || 0}개`
+  ];
+  const currentLabel =
+    recommendation.conflictsWithCurrent && recommendation.currentMarket
+      ? `현재 추천 ${recommendation.currentMarketLabel || recommendation.currentMarket}`
+      : '';
+  const compact = Boolean(options.compact);
+
+  return `
+    <div class="kis-trend-recommendation ${statusClass} ${compact ? 'compact' : ''}">
+      <div class="kis-trend-recommendation-main">
+        <div>
+          <strong>추세 추천 ${escapeHtml(recommendation.marketLabel || recommendation.market || '-')}</strong>
+          <span>${escapeHtml([scopeLabel, ...metricParts, currentLabel].filter(Boolean).join(' · '))}</span>
+        </div>
+        <span class="status-badge ${statusClass}">${escapeHtml(statusLabel)}</span>
+      </div>
+      ${
+        recommendation.reason
+          ? `<div class="kis-trend-recommendation-reason">${escapeHtml(recommendation.reason)}</div>`
+          : ''
+      }
+    </div>
   `;
 }
 
@@ -1890,12 +1940,15 @@ function renderKisNaverCompareTrendCard(market = {}) {
   const maximum = formatPercent(market.maxAbsoluteDifferencePercent);
   const latest = formatPercent(market.latestAbsoluteDifferencePercent);
   const abnormalRate = formatPercent(market.abnormalRatePercent);
+  const recommendation = state.kisNaverCompareTrend?.recommendation || null;
+  const isTrendRecommended = Boolean(recommendation?.market && recommendation.market === market.market);
 
   return `
     <article class="kis-trend-card ${statusClass}">
       <div class="kis-trend-card-head">
         <strong>${escapeHtml(market.marketLabel || market.market || '-')}</strong>
         <span class="status-badge ${statusClass}">${escapeHtml(statusLabel)}</span>
+        ${isTrendRecommended ? '<span class="status-badge ok">추천 후보</span>' : ''}
       </div>
       <div class="kis-trend-metrics">
         <span><b>평균</b>${escapeHtml(average)}</span>
@@ -1984,7 +2037,10 @@ function renderKisNaverCompareMarketResult(item) {
   const statusClass =
     item.ok && comparison.comparable ? getKisNaverDriftStatusClass(drift.status, true) : item.ok ? 'muted' : 'error';
   const recommendation = state.kisNaverQuoteComparison?.recommendation || null;
+  const trendRecommendation =
+    state.kisNaverQuoteComparison?.trendRecommendation || state.kisNaverTrendRecommendation || null;
   const isRecommended = Boolean(recommendation?.market && recommendation.market === item.market);
+  const isTrendRecommended = Boolean(trendRecommendation?.market && trendRecommendation.market === item.market);
   const quote = item.quote || {};
   const attempts = Array.isArray(item.attempts) ? item.attempts : [];
   const marketLabel = [item.market, item.marketLabel].filter(Boolean).join(' / ') || '-';
@@ -2009,6 +2065,7 @@ function renderKisNaverCompareMarketResult(item) {
         )}</span>
         ${drift.comparable ? `<span class="status-badge ${statusClass}">${escapeHtml(getKisNaverDriftStatusLabel(drift.status))}</span>` : ''}
         ${isRecommended ? '<span class="status-badge ok">추천</span>' : ''}
+        ${isTrendRecommended ? '<span class="status-badge ok">추세 추천</span>' : ''}
       </div>
       <div class="dividend-diagnostic-meta">
         <span>${escapeHtml(quoteTitle)}</span>
@@ -2018,6 +2075,11 @@ function renderKisNaverCompareMarketResult(item) {
       ${
         isRecommended && recommendation?.reason
           ? `<div class="dividend-diagnostic-meta kis-recommendation-detail">${escapeHtml(recommendation.reason)}</div>`
+          : ''
+      }
+      ${
+        isTrendRecommended && trendRecommendation?.reason
+          ? `<div class="dividend-diagnostic-meta kis-recommendation-detail">${escapeHtml(trendRecommendation.reason)}</div>`
           : ''
       }
       ${item.error ? `<div class="dividend-diagnostic-error">${escapeHtml(item.error)}</div>` : ''}
@@ -2139,6 +2201,38 @@ function getKisNaverTrendStatusLabel(market = {}) {
   }
 
   return '안정';
+}
+
+function getKisNaverTrendRecommendationStatusClass(recommendation = {}) {
+  if (recommendation.decision === 'apply' || recommendation.canApply) {
+    return 'ok';
+  }
+
+  if (recommendation.decision === 'review' || recommendation.conflictsWithCurrent) {
+    return 'alert';
+  }
+
+  if (recommendation.decision === 'watch') {
+    return 'muted';
+  }
+
+  return 'muted';
+}
+
+function getKisNaverTrendRecommendationStatusLabel(recommendation = {}) {
+  if (recommendation.decision === 'apply' || recommendation.canApply) {
+    return '적용 가능';
+  }
+
+  if (recommendation.decision === 'review' || recommendation.conflictsWithCurrent) {
+    return '추가 확인';
+  }
+
+  if (recommendation.decision === 'watch') {
+    return '관찰 필요';
+  }
+
+  return '판단 보류';
 }
 
 function getKisNaverDriftSummaryTitle(status) {
