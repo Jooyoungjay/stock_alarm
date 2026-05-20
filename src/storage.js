@@ -943,6 +943,235 @@ export function buildKisNaverCompareHistorySnapshot(value, limit = 20) {
   return normalizeKisNaverCompareHistory(value).slice(0, normalizeHistoryLimit(limit, 20));
 }
 
+function getKisNaverTrendStatusRank(status) {
+  if (status === 'critical') {
+    return 3;
+  }
+
+  if (status === 'warning') {
+    return 2;
+  }
+
+  if (status === 'normal') {
+    return 1;
+  }
+
+  return 0;
+}
+
+function getKisNaverTrendStatusFromRank(rank) {
+  if (rank >= 3) {
+    return 'critical';
+  }
+
+  if (rank >= 2) {
+    return 'warning';
+  }
+
+  if (rank >= 1) {
+    return 'normal';
+  }
+
+  return 'not_comparable';
+}
+
+function roundTrendMetric(value) {
+  const number = Number(value);
+
+  return Number.isFinite(number) ? Math.round(number * 100) / 100 : null;
+}
+
+function createKisNaverTrendAccumulator(market, marketLabel) {
+  return {
+    market,
+    marketLabel,
+    sampleCount: 0,
+    comparableCount: 0,
+    normalCount: 0,
+    warningCount: 0,
+    criticalCount: 0,
+    abnormalCount: 0,
+    recommendedCount: 0,
+    sumAbsoluteDifferencePercent: 0,
+    maxAbsoluteDifferencePercent: null,
+    minAbsoluteDifferencePercent: null,
+    latestAt: null,
+    latestStatus: 'not_comparable',
+    latestAbsoluteDifferencePercent: null,
+    latestDifferencePercent: null,
+    latestSymbol: ''
+  };
+}
+
+function finalizeKisNaverTrendMarket(accumulator) {
+  const comparableCount = accumulator.comparableCount;
+  const averageAbsoluteDifferencePercent =
+    comparableCount > 0
+      ? accumulator.sumAbsoluteDifferencePercent / comparableCount
+      : null;
+  const abnormalRatePercent =
+    comparableCount > 0 ? (accumulator.abnormalCount / comparableCount) * 100 : null;
+  const recommendationRatePercent =
+    accumulator.sampleCount > 0
+      ? (accumulator.recommendedCount / accumulator.sampleCount) * 100
+      : null;
+  const repeatedAbnormal = accumulator.abnormalCount >= 2;
+
+  return {
+    market: accumulator.market,
+    marketLabel: accumulator.marketLabel,
+    sampleCount: accumulator.sampleCount,
+    comparableCount,
+    normalCount: accumulator.normalCount,
+    warningCount: accumulator.warningCount,
+    criticalCount: accumulator.criticalCount,
+    abnormalCount: accumulator.abnormalCount,
+    repeatedAbnormal,
+    recommendedCount: accumulator.recommendedCount,
+    recommendationRatePercent: roundTrendMetric(recommendationRatePercent),
+    averageAbsoluteDifferencePercent: roundTrendMetric(averageAbsoluteDifferencePercent),
+    maxAbsoluteDifferencePercent: roundTrendMetric(accumulator.maxAbsoluteDifferencePercent),
+    minAbsoluteDifferencePercent: roundTrendMetric(accumulator.minAbsoluteDifferencePercent),
+    abnormalRatePercent: roundTrendMetric(abnormalRatePercent),
+    latestAt: accumulator.latestAt,
+    latestStatus: accumulator.latestStatus,
+    latestAbsoluteDifferencePercent: roundTrendMetric(
+      accumulator.latestAbsoluteDifferencePercent
+    ),
+    latestDifferencePercent: roundTrendMetric(accumulator.latestDifferencePercent),
+    latestSymbol: accumulator.latestSymbol,
+    status:
+      comparableCount === 0
+        ? 'not_comparable'
+        : repeatedAbnormal
+          ? 'critical'
+          : getKisNaverTrendStatusFromRank(
+              Math.max(
+                getKisNaverTrendStatusRank(accumulator.latestStatus),
+                accumulator.criticalCount > 0 ? 3 : accumulator.warningCount > 0 ? 2 : 1
+              )
+            )
+  };
+}
+
+function sortKisNaverTrendMarkets(left, right) {
+  const order = {
+    J: 1,
+    NX: 2,
+    UN: 3
+  };
+
+  return (order[left.market] || 99) - (order[right.market] || 99) || left.market.localeCompare(right.market);
+}
+
+function findKisNaverStableTrendMarket(markets) {
+  return markets
+    .filter((market) => market.comparableCount > 0)
+    .sort((left, right) => {
+      const leftAverage = left.averageAbsoluteDifferencePercent ?? Number.POSITIVE_INFINITY;
+      const rightAverage = right.averageAbsoluteDifferencePercent ?? Number.POSITIVE_INFINITY;
+
+      return (
+        leftAverage - rightAverage ||
+        left.abnormalCount - right.abnormalCount ||
+        right.recommendedCount - left.recommendedCount ||
+        sortKisNaverTrendMarkets(left, right)
+      );
+    })[0] || null;
+}
+
+export function buildKisNaverCompareTrendSnapshot(value, limit = 100) {
+  const history = buildKisNaverCompareHistorySnapshot(value, limit);
+  const marketMap = new Map();
+
+  for (const entry of history) {
+    const recommendationMarket = String(entry.recommendation?.market || '').trim().toUpperCase();
+    const createdAt = entry.createdAt || entry.generatedAt || null;
+
+    for (const result of entry.results || []) {
+      const market = String(result.market || '').trim().toUpperCase();
+
+      if (!market) {
+        continue;
+      }
+
+      const marketLabel = result.marketLabel || market;
+      const accumulator =
+        marketMap.get(market) || createKisNaverTrendAccumulator(market, marketLabel);
+      const differencePercent = normalizeOptionalStoredNumber(result.differencePercent);
+      const absoluteDifferencePercent =
+        normalizeOptionalStoredNumber(result.absoluteDifferencePercent) ??
+        (differencePercent === null ? null : Math.abs(differencePercent));
+      const status = normalizeKisNaverDriftStatus(result.driftStatus);
+
+      accumulator.marketLabel = accumulator.marketLabel || marketLabel;
+      accumulator.sampleCount += 1;
+
+      if (recommendationMarket === market) {
+        accumulator.recommendedCount += 1;
+      }
+
+      if (result.comparable && absoluteDifferencePercent !== null) {
+        accumulator.comparableCount += 1;
+        accumulator.sumAbsoluteDifferencePercent += absoluteDifferencePercent;
+        accumulator.maxAbsoluteDifferencePercent =
+          accumulator.maxAbsoluteDifferencePercent === null
+            ? absoluteDifferencePercent
+            : Math.max(accumulator.maxAbsoluteDifferencePercent, absoluteDifferencePercent);
+        accumulator.minAbsoluteDifferencePercent =
+          accumulator.minAbsoluteDifferencePercent === null
+            ? absoluteDifferencePercent
+            : Math.min(accumulator.minAbsoluteDifferencePercent, absoluteDifferencePercent);
+
+        if (status === 'critical') {
+          accumulator.criticalCount += 1;
+        } else if (status === 'warning') {
+          accumulator.warningCount += 1;
+        } else {
+          accumulator.normalCount += 1;
+        }
+
+        if (result.abnormal || status === 'warning' || status === 'critical') {
+          accumulator.abnormalCount += 1;
+        }
+
+        if (!accumulator.latestAt) {
+          accumulator.latestAt = createdAt;
+          accumulator.latestStatus = status;
+          accumulator.latestAbsoluteDifferencePercent = absoluteDifferencePercent;
+          accumulator.latestDifferencePercent = differencePercent;
+          accumulator.latestSymbol = entry.symbol || entry.inputSymbol || '';
+        }
+      }
+
+      marketMap.set(market, accumulator);
+    }
+  }
+
+  const markets = [...marketMap.values()]
+    .map(finalizeKisNaverTrendMarket)
+    .sort(sortKisNaverTrendMarkets);
+  const stableMarket = findKisNaverStableTrendMarket(markets);
+
+  return {
+    generatedAt: history[0]?.createdAt || history[0]?.generatedAt || null,
+    historyCount: history.length,
+    marketCount: markets.length,
+    comparableCount: markets.reduce((sum, market) => sum + market.comparableCount, 0),
+    repeatedAbnormalMarkets: markets.filter((market) => market.repeatedAbnormal).length,
+    stableMarket: stableMarket
+      ? {
+          market: stableMarket.market,
+          marketLabel: stableMarket.marketLabel,
+          averageAbsoluteDifferencePercent: stableMarket.averageAbsoluteDifferencePercent,
+          abnormalCount: stableMarket.abnormalCount,
+          recommendedCount: stableMarket.recommendedCount
+        }
+      : null,
+    markets
+  };
+}
+
 export function normalizeDeviceId(value) {
   const id = String(value || '').trim();
   return id || null;

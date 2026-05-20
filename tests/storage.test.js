@@ -4,7 +4,7 @@ import fs from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import { DATA_SCHEMA_VERSION } from '../src/dataModel.js';
-import { JsonStore } from '../src/storage.js';
+import { buildKisNaverCompareTrendSnapshot, JsonStore } from '../src/storage.js';
 
 test('JsonStore creates and authenticates anonymous devices', async () => {
   const store = await createStore();
@@ -283,6 +283,83 @@ test('JsonStore records recent KIS and Naver comparison history', async () => {
   const snapshot = await store.getKisNaverCompareHistory(1);
   assert.equal(snapshot.length, 1);
   assert.equal(snapshot[0].summary.comparable, 1);
+});
+
+test('buildKisNaverCompareTrendSnapshot groups comparison history by market', () => {
+  const trend = buildKisNaverCompareTrendSnapshot([
+    {
+      symbol: '336260',
+      inputSymbol: '336260',
+      ok: true,
+      createdAt: '2026-05-20T03:00:00.000Z',
+      generatedAt: '2026-05-20T03:00:00.000Z',
+      recommendation: { market: 'J', marketLabel: 'KRX' },
+      results: [
+        {
+          market: 'J',
+          marketLabel: 'KRX',
+          ok: true,
+          comparable: true,
+          differencePercent: 0.4,
+          absoluteDifferencePercent: 0.4,
+          driftStatus: 'normal'
+        },
+        {
+          market: 'NX',
+          marketLabel: 'NXT',
+          ok: true,
+          comparable: true,
+          differencePercent: 2.5,
+          absoluteDifferencePercent: 2.5,
+          driftStatus: 'warning',
+          abnormal: true
+        }
+      ]
+    },
+    {
+      symbol: '336260',
+      inputSymbol: '336260',
+      ok: true,
+      createdAt: '2026-05-20T02:00:00.000Z',
+      generatedAt: '2026-05-20T02:00:00.000Z',
+      recommendation: { market: 'J', marketLabel: 'KRX' },
+      results: [
+        {
+          market: 'J',
+          marketLabel: 'KRX',
+          ok: true,
+          comparable: true,
+          differencePercent: 0.2,
+          absoluteDifferencePercent: 0.2,
+          driftStatus: 'normal'
+        },
+        {
+          market: 'NX',
+          marketLabel: 'NXT',
+          ok: true,
+          comparable: true,
+          differencePercent: 4,
+          absoluteDifferencePercent: 4,
+          driftStatus: 'critical',
+          abnormal: true
+        }
+      ]
+    }
+  ]);
+
+  const krx = trend.markets.find((market) => market.market === 'J');
+  const nxt = trend.markets.find((market) => market.market === 'NX');
+
+  assert.equal(trend.historyCount, 2);
+  assert.equal(trend.comparableCount, 4);
+  assert.equal(trend.stableMarket.market, 'J');
+  assert.equal(krx.averageAbsoluteDifferencePercent, 0.3);
+  assert.equal(krx.recommendedCount, 2);
+  assert.equal(nxt.averageAbsoluteDifferencePercent, 3.25);
+  assert.equal(nxt.maxAbsoluteDifferencePercent, 4);
+  assert.equal(nxt.abnormalCount, 2);
+  assert.equal(nxt.repeatedAbnormal, true);
+  assert.equal(nxt.status, 'critical');
 });
 
 test('JsonStore records quote provider success and failure stats', async () => {

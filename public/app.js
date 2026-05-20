@@ -30,6 +30,7 @@ const state = {
   kisQuoteSmokeTest: null,
   kisNaverQuoteComparison: null,
   kisNaverCompareHistory: [],
+  kisNaverCompareTrend: null,
   adminAuthRequired: false,
   adminAuthenticated: false,
   backupRetention: 0,
@@ -125,7 +126,7 @@ renderRegistrationSummary();
 updateRegistrationStep(1);
 renderKisSmokeTestResult(null);
 renderKisNaverCompareResult(null);
-renderKisNaverCompareHistory([]);
+renderKisNaverCompareHistory([], null);
 
 elements.form.elements.alertType.addEventListener('change', () => {
   syncAlertTypeControls(elements.form);
@@ -466,6 +467,7 @@ async function loadData() {
     state.kisNaverCompareHistory = Array.isArray(data.kisNaverCompareHistory)
       ? data.kisNaverCompareHistory
       : state.kisNaverCompareHistory;
+    state.kisNaverCompareTrend = data.kisNaverCompareTrend || state.kisNaverCompareTrend;
     renderStatus(data);
     renderStocks();
     renderDividendCalendar(state.dividendCalendar);
@@ -473,7 +475,7 @@ async function loadData() {
     renderDividendDiagnostics(data.lastDividendRefresh);
     renderAlerts();
     renderKisNaverCompareResult(state.kisNaverQuoteComparison);
-    renderKisNaverCompareHistory(state.kisNaverCompareHistory);
+    renderKisNaverCompareHistory(state.kisNaverCompareHistory, state.kisNaverCompareTrend);
 
     if (isAdminMode() && roadmapResult.payload) {
       state.roadmap = roadmapResult.payload.roadmap || null;
@@ -550,8 +552,9 @@ async function runKisNaverCompare() {
     state.kisNaverCompareHistory = Array.isArray(result.kisNaverCompareHistory)
       ? result.kisNaverCompareHistory
       : state.kisNaverCompareHistory;
+    state.kisNaverCompareTrend = result.kisNaverCompareTrend || state.kisNaverCompareTrend;
     renderKisNaverCompareResult(state.kisNaverQuoteComparison);
-    renderKisNaverCompareHistory(state.kisNaverCompareHistory);
+    renderKisNaverCompareHistory(state.kisNaverCompareHistory, state.kisNaverCompareTrend);
     renderQuoteDiagnostics(state.quoteProviderStats);
     showMessage(
       state.kisNaverQuoteComparison?.ok
@@ -1810,14 +1813,15 @@ function renderKisNaverCompareResult(result) {
   `;
 }
 
-function renderKisNaverCompareHistory(history = []) {
+function renderKisNaverCompareHistory(history = [], trend = null) {
   if (!elements.kisNaverCompareHistoryPanel) {
     return;
   }
 
   const rows = Array.isArray(history) ? history.slice(0, 8) : [];
+  const trendMarkets = Array.isArray(trend?.markets) ? trend.markets : [];
 
-  if (!rows.length) {
+  if (!rows.length && !trendMarkets.length) {
     elements.kisNaverCompareHistoryPanel.innerHTML = `
       <div class="kis-smoke-empty">
         비교를 실행하면 최근 KIS/Naver 가격 차이와 이상치 판정 이력이 저장됩니다.
@@ -1827,16 +1831,85 @@ function renderKisNaverCompareHistory(history = []) {
   }
 
   elements.kisNaverCompareHistoryPanel.innerHTML = `
-    <div class="kis-compare-history-head">
-      <div>
-        <strong>최근 비교 이력</strong>
-        <span>최근 ${escapeHtml(rows.length)}개 비교 결과</span>
+    ${renderKisNaverCompareTrend(trend)}
+    ${
+      rows.length
+        ? `<div class="kis-compare-history-head">
+            <div>
+              <strong>최근 비교 이력</strong>
+              <span>최근 ${escapeHtml(rows.length)}개 비교 결과</span>
+            </div>
+            <span>${escapeHtml(formatDate(rows[0].createdAt || rows[0].generatedAt))}</span>
+          </div>
+          <div class="kis-smoke-market-list">
+            ${rows.map(renderKisNaverCompareHistoryRow).join('')}
+          </div>`
+        : ''
+    }
+  `;
+}
+
+function renderKisNaverCompareTrend(trend = null) {
+  const markets = Array.isArray(trend?.markets) ? trend.markets : [];
+
+  if (!markets.length) {
+    return '';
+  }
+
+  const stableMarket = trend.stableMarket || null;
+  const summaryParts = [
+    `이력 ${trend.historyCount || 0}개`,
+    `비교 표본 ${trend.comparableCount || 0}개`,
+    `반복 이상치 ${trend.repeatedAbnormalMarkets || 0}개 시장`
+  ];
+
+  return `
+    <section class="kis-compare-trend" aria-label="KIS Naver 시장별 가격 비교 추세">
+      <div class="kis-compare-history-head">
+        <div>
+          <strong>시장별 괴리 추세</strong>
+          <span>${escapeHtml(summaryParts.join(' · '))}</span>
+        </div>
+        ${
+          stableMarket
+            ? `<span class="status-badge ok">안정 ${escapeHtml(stableMarket.marketLabel || stableMarket.market)}</span>`
+            : ''
+        }
       </div>
-      <span>${escapeHtml(formatDate(rows[0].createdAt || rows[0].generatedAt))}</span>
-    </div>
-    <div class="kis-smoke-market-list">
-      ${rows.map(renderKisNaverCompareHistoryRow).join('')}
-    </div>
+      <div class="kis-compare-trend-grid">
+        ${markets.map(renderKisNaverCompareTrendCard).join('')}
+      </div>
+    </section>
+  `;
+}
+
+function renderKisNaverCompareTrendCard(market = {}) {
+  const statusClass = getKisNaverTrendStatusClass(market);
+  const statusLabel = getKisNaverTrendStatusLabel(market);
+  const average = formatPercent(market.averageAbsoluteDifferencePercent);
+  const maximum = formatPercent(market.maxAbsoluteDifferencePercent);
+  const latest = formatPercent(market.latestAbsoluteDifferencePercent);
+  const abnormalRate = formatPercent(market.abnormalRatePercent);
+
+  return `
+    <article class="kis-trend-card ${statusClass}">
+      <div class="kis-trend-card-head">
+        <strong>${escapeHtml(market.marketLabel || market.market || '-')}</strong>
+        <span class="status-badge ${statusClass}">${escapeHtml(statusLabel)}</span>
+      </div>
+      <div class="kis-trend-metrics">
+        <span><b>평균</b>${escapeHtml(average)}</span>
+        <span><b>최대</b>${escapeHtml(maximum)}</span>
+        <span><b>최근</b>${escapeHtml(latest)}</span>
+        <span><b>이상치율</b>${escapeHtml(abnormalRate)}</span>
+      </div>
+      <div class="kis-trend-card-meta">
+        <span>표본 ${escapeHtml(market.comparableCount || 0)}개</span>
+        <span>주의 ${escapeHtml(market.warningCount || 0)}개</span>
+        <span>경고 ${escapeHtml(market.criticalCount || 0)}개</span>
+        <span>추천 ${escapeHtml(market.recommendedCount || 0)}회</span>
+      </div>
+    </article>
   `;
 }
 
@@ -2030,6 +2103,42 @@ function getKisNaverDriftStatusLabel(status) {
   }
 
   return '정상';
+}
+
+function getKisNaverTrendStatusClass(market = {}) {
+  if (market.repeatedAbnormal || market.status === 'critical') {
+    return 'error';
+  }
+
+  if (market.status === 'warning' || market.warningCount > 0) {
+    return 'alert';
+  }
+
+  if (market.status === 'not_comparable') {
+    return 'muted';
+  }
+
+  return 'ok';
+}
+
+function getKisNaverTrendStatusLabel(market = {}) {
+  if (market.repeatedAbnormal) {
+    return '반복 이상치';
+  }
+
+  if (market.status === 'critical') {
+    return '경고 이력';
+  }
+
+  if (market.status === 'warning' || market.warningCount > 0) {
+    return '주의 이력';
+  }
+
+  if (market.status === 'not_comparable') {
+    return '비교 부족';
+  }
+
+  return '안정';
 }
 
 function getKisNaverDriftSummaryTitle(status) {

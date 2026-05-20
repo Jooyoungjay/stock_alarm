@@ -28,6 +28,7 @@ import {
 } from './alertEngine.js';
 import { fetchHistoricalHighSince, fetchQuote } from './priceProvider.js';
 import { sendPushNotificationToDevice } from './pushNotifications.js';
+import { buildKisNaverCompareTrendSnapshot } from './storage.js';
 import {
   APP_DISPLAY_NAME,
   APP_NAME,
@@ -612,6 +613,7 @@ async function handleApi(request, response, url) {
         : Promise.resolve([])
     ]);
     const dividendCalendar = buildDividendCalendar(stocks);
+    const kisNaverCompareTrend = buildKisNaverCompareTrendSnapshot(kisNaverCompareHistory);
 
     sendJson(response, 200, {
       stocks,
@@ -640,6 +642,7 @@ async function handleApi(request, response, url) {
       lastDividendEventAlert: dividendEventAlertSnapshot,
       quoteProviderStats,
       kisNaverCompareHistory,
+      kisNaverCompareTrend,
       lastCheck
     });
     return;
@@ -947,11 +950,13 @@ async function handleApi(request, response, url) {
       typeof store.recordKisNaverCompareHistory === 'function'
         ? await store.recordKisNaverCompareHistory(result, { returnLimit: 12 })
         : [];
+    const kisNaverCompareTrend = buildKisNaverCompareTrendSnapshot(kisNaverCompareHistory);
     const quoteProviderStats = await store.getQuoteProviderStats();
 
     sendJson(response, 200, {
       kisNaverQuoteComparison: result,
       kisNaverCompareHistory,
+      kisNaverCompareTrend,
       quoteProviderStats
     });
     return;
