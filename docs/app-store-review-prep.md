@@ -1,6 +1,6 @@
 # 앱 심사 준비 체크리스트
 
-날짜 기준: 2026-05-18
+날짜 기준: 2026-05-20
 
 이 문서는 Stock Alarm을 App Store와 Play Store에 올리기 전에 확인해야 하는 심사 준비 항목을 정리합니다. 현재 앱은 로컬 MVP와 Expo 모바일 앱 기반이며, 실제 제출 전에는 리뷰어가 접근 가능한 HTTPS 서버 또는 데모 환경이 필요합니다.
 
@@ -8,8 +8,10 @@
 
 - Apple App Store Review Guidelines: https://developer.apple.com/app-store/review/guidelines/
 - Apple App privacy details: https://developer.apple.com/app-store/app-privacy-details/
+- Apple Screenshot specifications: https://developer.apple.com/help/app-store-connect/reference/app-information/screenshot-specifications/
 - Google Play User Data policy: https://support.google.com/googleplay/android-developer/answer/10144311
 - Google Play Data safety section: https://support.google.com/googleplay/android-developer/answer/10787469
+- Google Play preview assets: https://support.google.com/googleplay/android-developer/answer/9866151
 
 ## 앱 성격
 
@@ -28,7 +30,7 @@
 | 지원 URL | 미정 | GitHub README, 별도 고객지원 페이지, 또는 문의 페이지 URL 확정 |
 | 지원 이메일 | `jumanz2@naver.com` | 실제 운영 문의 수신 가능 여부 확인 |
 | 앱 아이콘 | Expo asset 경로 존재 | iOS/Android 해상도별 실제 아이콘 렌더링 확인 |
-| 스크린샷 | 미작성 | iPhone, iPad, Android phone 기준 스크린샷 제작 |
+| 스크린샷 | 제작 가이드 작성 | [스토어 스크린샷 제작 가이드](store-screenshots.md) 기준으로 iPhone, iPad, Android phone 실제 캡처 파일 제작 |
 | 데이터 삭제 | 로컬 기기 연결 해제만 있음 | 클라우드/공용 서버 운영 시 서버 저장 데이터 삭제 기능 필요 |
 
 ## 권한 설명
@@ -105,12 +107,19 @@ npm run check:demo
 
 세부 기준은 [HTTPS 데모 서버 준비](https-demo-server.md)에 정리되어 있습니다.
 
+## 스토어 스크린샷 기준
+
+스크린샷 화면 후보, 데모 데이터, 제출용 문구, 대체 텍스트는 [스토어 스크린샷 제작 가이드](store-screenshots.md)에 정리했습니다.
+
+현재 `mobile/app.json`은 iPad 지원이 켜져 있으므로 App Store 제출 전 iPad 세트까지 준비해야 합니다. 실제 제출 전에는 모바일 앱에서 배당 캘린더와 알림 기록 상세 화면을 보강한 뒤 캡처합니다.
+
 ## 제출 전 남은 작업
 
 1. 개인정보 처리방침 초안을 공개 URL로 게시
 2. 지원 URL 확정
 3. 리뷰어가 접근 가능한 HTTPS 데모 서버 또는 내부 테스트 방식 확정
 4. 앱 아이콘과 스플래시 이미지 실제 기기 렌더링 확인
-5. 스토어 스크린샷 제작
-6. 서버 저장 데이터 삭제 API 또는 명확한 로컬 삭제 안내 확정
-7. 시세/배당 데이터의 지연 가능성과 투자 자문 아님 문구를 앱 내부에도 유지
+5. 모바일 배당 캘린더와 알림 기록 상세 화면 보강
+6. 스토어 스크린샷 실제 파일 캡처와 업로드
+7. 서버 저장 데이터 삭제 API 또는 명확한 로컬 삭제 안내 확정
+8. 시세/배당 데이터의 지연 가능성과 투자 자문 아님 문구를 앱 내부에도 유지

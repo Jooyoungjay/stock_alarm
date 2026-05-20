@@ -53,9 +53,12 @@ test('app review documents cover privacy, store metadata, and review blockers', 
   );
 
   assert.match(reviewMarkdown, /App Store Review Guidelines/);
+  assert.match(reviewMarkdown, /Apple Screenshot specifications/);
   assert.match(reviewMarkdown, /Google Play Data safety/);
+  assert.match(reviewMarkdown, /Google Play preview assets/);
   assert.match(reviewMarkdown, /HTTPS 데모 서버/);
   assert.match(reviewMarkdown, /check:demo/);
+  assert.match(reviewMarkdown, /store-screenshots\.md/);
   assert.match(reviewMarkdown, /투자 자문/);
   assert.match(reviewMarkdown, /데이터 삭제/);
 
@@ -69,8 +72,35 @@ test('app review documents cover privacy, store metadata, and review blockers', 
   assert.equal(listing.appName, 'Stock Alarm');
   assert.equal(listing.category, 'FINANCE');
   assert.equal(listing.dataSafety.accountCreation, 'notRequired');
+  assert.equal(listing.storeScreenshots.sourceDocument, '../docs/store-screenshots.md');
+  assert.ok(listing.storeScreenshots.screens.some((item) => item.id === 'dividend-calendar'));
+  assert.ok(listing.storeScreenshots.screens.some((item) => item.id === 'alert-toggle-push'));
+  assert.ok(listing.storeScreenshots.knownGapsBeforeSubmission.some((item) => item.includes('알림 기록')));
   assert.ok(listing.dataSafety.dataCollected.some((item) => item.type === 'Device identifiers'));
   assert.ok(listing.reviewNotes.some((item) => item.includes('HTTPS 서버')));
+});
+
+test('store screenshot guide documents capture sets, copy, and demo data rules', async () => {
+  const markdown = await fs.readFile(
+    new URL('../docs/store-screenshots.md', import.meta.url),
+    'utf8'
+  );
+
+  assert.match(markdown, /스토어 스크린샷 제작 가이드/);
+  assert.match(markdown, /App Store/);
+  assert.match(markdown, /Google Play/);
+  assert.match(markdown, /iPhone portrait/);
+  assert.match(markdown, /iPad portrait/);
+  assert.match(markdown, /Android phone portrait/);
+  assert.match(markdown, /데모 데이터 원칙/);
+  assert.match(markdown, /포트폴리오 요약/);
+  assert.match(markdown, /감시 종목 목록/);
+  assert.match(markdown, /종목 등록\/편집/);
+  assert.match(markdown, /배당 캘린더/);
+  assert.match(markdown, /알림 기록/);
+  assert.match(markdown, /테스트 푸시/);
+  assert.match(markdown, /대체 텍스트/);
+  assert.match(markdown, /33626L/);
 });
 
 test('HTTPS demo server guide documents review readiness checks', async () => {

@@ -118,7 +118,7 @@ stop-local.bat
 - 기기별 종목 격리와 푸시 토큰 저장, 가격 알림 발생 시 모바일 푸시 전송
 - Expo SDK 55 기반 모바일 앱 초기 프로젝트와 서버 연결 화면
 - 모바일 앱 내 종목 등록, 편집, 알림 ON/OFF, 삭제, 푸시 토큰 등록과 테스트
-- 앱스토어/플레이스토어 심사용 개인정보 처리방침 초안, 스토어 메타데이터, 제출 체크리스트
+- 앱스토어/플레이스토어 심사용 개인정보 처리방침 초안, 스토어 메타데이터, 제출 체크리스트, 스크린샷 제작 가이드
 - 로컬 JSON 파일 기반 데이터 저장, 스키마 버전, 데이터 모델 요약 API
 - PostgresStore JSONB 쿼리 어댑터와 저장소 계약 검증
 - JSON -> Postgres dry-run 마이그레이션 검증 스크립트
@@ -220,6 +220,7 @@ stock_alarm/
 │  ├─ nxt-market-data-review.md    # NXT 시세 API 검토
 │  ├─ app-store-review-prep.md     # 앱 심사 준비 체크리스트
 │  ├─ https-demo-server.md         # HTTPS 데모 서버 준비와 점검 절차
+│  ├─ store-screenshots.md         # 스토어 스크린샷 화면/문구/대체 텍스트 가이드
 │  ├─ privacy-policy-ko.md         # 개인정보 처리방침 초안
 │  └─ railway-deploy.md            # Railway 배포 가이드
 ├─ tests/                   # Node.js 테스트
@@ -1121,6 +1122,7 @@ npm run local:phone
 
 - [앱 심사 준비 체크리스트](docs/app-store-review-prep.md)
 - [HTTPS 데모 서버 준비](docs/https-demo-server.md)
+- [스토어 스크린샷 제작 가이드](docs/store-screenshots.md)
 - [개인정보 처리방침 초안](docs/privacy-policy-ko.md)
 - [한국어 스토어 등록 정보 초안](mobile/store-listing.ko.json)
 
@@ -1312,9 +1314,10 @@ Invoke-RestMethod http://127.0.0.1:3001/api/health
 - 운영/관리: 사용자/관리자 화면 분리, 관리자 보호, 백업/복구/삭제, 백업 스냅샷 계약, 데이터 모델 정리, 저장소 계약, JSON -> DB 이전 설계, WBS 상태 표준화, HTTPS 데모 서버 점검
 - 저장소: PostgresStore JSONB 쿼리 어댑터, DATABASE_URL 마스킹, 계약 테스트, JSON -> Postgres dry-run 마이그레이션 검증, 통합 테스트 데이터셋, 백업 스냅샷 계약 검증, Postgres 연결 리허설 CLI
 - 안정화: 시세/배당 실패 사유 표시와 종목별 재시도 UX
-- 모바일: Expo SDK 55 초기 앱, 서버 연결, 익명 기기 저장, 모바일 종목 조회/등록/편집/삭제, Expo Push 토큰 등록과 알림 전송, 앱 심사 준비 문서, HTTPS 데모 서버 준비, 스토어 메타데이터 초안
+- 모바일: Expo SDK 55 초기 앱, 서버 연결, 익명 기기 저장, 모바일 종목 조회/등록/편집/삭제, Expo Push 토큰 등록과 알림 전송, 앱 심사 준비 문서, HTTPS 데모 서버 준비, 스토어 메타데이터 초안, 스토어 스크린샷 화면/문구/대체 텍스트 가이드
 
 우선순위가 높은 순서:
 
-1. 스토어 스크린샷 제작
-2. NXT provider 추가(API 확인 시)
+1. 모바일 배당/알림 기록 화면 보강
+2. 스토어 제출 자산 최종 점검
+3. NXT provider 추가(API 확인 시)

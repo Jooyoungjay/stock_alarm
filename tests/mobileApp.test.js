@@ -224,6 +224,9 @@ test('Expo mobile scaffold declares SDK 55 and app store identifiers', async () 
   assert.match(appJson.expo.description, /계정 없이/);
   assert.equal(listing.privacyPolicyUrl.includes('TBD'), true);
   assert.ok(listing.permissions.some((permission) => permission.name === 'Push notifications'));
+  assert.equal(listing.storeScreenshots.sourceDocument, '../docs/store-screenshots.md');
+  assert.ok(listing.storeScreenshots.screens.some((screen) => screen.id === 'portfolio-summary'));
+  assert.ok(listing.storeScreenshots.screens.some((screen) => screen.id === 'dividend-calendar'));
   assert.ok(appJson.expo.plugins.some((plugin) => Array.isArray(plugin) && plugin[0] === 'expo-notifications'));
   assert.match(appSource, /createDevice/);
   assert.match(appSource, /getMobileSnapshot/);
