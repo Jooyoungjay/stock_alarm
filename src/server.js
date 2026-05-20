@@ -9,6 +9,10 @@ import { lastDividendEventAlertMetaKey, runDividendEventAlertCheck } from './div
 import { runDividendRefresh, runSingleDividendRefresh } from './dividendRefresh.js';
 import { formatKisMarketDivCode, normalizeKisMarketDivCode, resolveKisMarketDivCode } from './kisMarket.js';
 import { buildKisNaverQuoteComparison } from './kisNaverCompare.js';
+import {
+  lastKisNaverAutoCompareMetaKey,
+  runKisNaverAutoCompare
+} from './kisNaverAutoCompare.js';
 import { buildKisQuoteSmokeTest } from './kisQuoteSmokeTest.js';
 import {
   buildDailyBriefing,
@@ -56,11 +60,13 @@ let lastDividendRefresh = null;
 let lastDividendEventAlert = null;
 let lastDailyBriefing = null;
 let lastTelegramCommandPoll = null;
+let lastKisNaverAutoCompare = null;
 let isChecking = false;
 let isRefreshingDividends = false;
 let isCheckingDividendEvents = false;
 let isSendingDailyBriefing = false;
 let isPollingTelegramCommands = false;
+let isRunningKisNaverAutoCompare = false;
 let activePort = config.port;
 let server = null;
 const startedAt = new Date().toISOString();
@@ -257,6 +263,29 @@ async function runDailyBriefingOnce(options = {}) {
   }
 }
 
+async function runKisNaverAutoCompareOnce(options = {}) {
+  if (isRunningKisNaverAutoCompare) {
+    return {
+      checkedAt: new Date().toISOString(),
+      results: [],
+      skipped: true,
+      reason: 'kis_naver_auto_compare_already_running'
+    };
+  }
+
+  isRunningKisNaverAutoCompare = true;
+
+  try {
+    lastKisNaverAutoCompare = await runKisNaverAutoCompare(store, config, {
+      ...options,
+      compare: (body) => runKisNaverQuoteComparison(body)
+    });
+    return lastKisNaverAutoCompare;
+  } finally {
+    isRunningKisNaverAutoCompare = false;
+  }
+}
+
 async function getLastDividendEventAlertSnapshot() {
   if (lastDividendEventAlert) {
     return lastDividendEventAlert;
@@ -298,6 +327,18 @@ async function getLastDailyBriefingSnapshot() {
         deliveryStatus: 'sent'
       }
     : null;
+}
+
+async function getLastKisNaverAutoCompareSnapshot() {
+  if (lastKisNaverAutoCompare) {
+    return lastKisNaverAutoCompare.lastKisNaverAutoCompare || lastKisNaverAutoCompare;
+  }
+
+  if (typeof store.getMetaValue !== 'function') {
+    return null;
+  }
+
+  return store.getMetaValue(lastKisNaverAutoCompareMetaKey, null);
 }
 
 function recordQuoteProviderAttempt(attempt) {
@@ -365,6 +406,31 @@ async function runKisNaverQuoteComparison(body = {}) {
         source: 'kis_naver_compare'
       })
   });
+}
+
+async function recordKisNaverQuoteComparisonResult(result) {
+  const kisNaverCompareHistory =
+    typeof store.recordKisNaverCompareHistory === 'function'
+      ? await store.recordKisNaverCompareHistory(result, { returnLimit: 12 })
+      : [];
+  const kisNaverCompareTrend = buildKisNaverCompareTrendSnapshot(kisNaverCompareHistory);
+  const symbolKisNaverCompareTrend = buildKisNaverCompareTrendSnapshot(
+    filterKisNaverCompareHistoryBySymbol(
+      kisNaverCompareHistory,
+      result.symbol || result.inputSymbol
+    )
+  );
+  const kisNaverTrendRecommendation = buildKisNaverTrendRecommendation(
+    symbolKisNaverCompareTrend,
+    result.recommendation,
+    { scope: 'symbol' }
+  );
+
+  return {
+    kisNaverCompareHistory,
+    kisNaverCompareTrend,
+    kisNaverTrendRecommendation
+  };
 }
 
 function normalizeStockSymbolForCompare(value) {
@@ -542,12 +608,14 @@ async function handleApi(request, response, url) {
       dividendRefreshSnapshot,
       dividendEventAlertSnapshot,
       dailyBriefingSnapshot,
+      kisNaverAutoCompareSnapshot,
       quoteProviderStats,
       dataModelInfo
     ] = await Promise.all([
       getLastDividendRefreshSnapshot(),
       getLastDividendEventAlertSnapshot(),
       getLastDailyBriefingSnapshot(),
+      getLastKisNaverAutoCompareSnapshot(),
       store.getQuoteProviderStats(),
       store.getDataModelInfo()
     ]);
@@ -572,6 +640,12 @@ async function handleApi(request, response, url) {
       historicalQuoteProviders: config.historicalQuoteProviders,
       dividendProviders: config.dividendProviders,
       pollIntervalSeconds: config.pollIntervalSeconds,
+      kisNaverAutoCompareEnabled: config.kisNaverAutoCompareEnabled,
+      kisNaverAutoCompareIntervalSeconds: config.kisNaverAutoCompareIntervalSeconds,
+      kisNaverAutoCompareLimit: config.kisNaverAutoCompareLimit,
+      kisNaverAutoCompareMarkets: config.kisNaverAutoCompareMarkets,
+      kisNaverAutoCompareDriftThresholdPercent:
+        config.kisNaverAutoCompareDriftThresholdPercent,
       dividendRefreshIntervalSeconds: config.dividendRefreshIntervalSeconds,
       dividendEventAlertEnabled: config.dividendEventAlertEnabled,
       dividendEventAlertCheckIntervalSeconds: config.dividendEventAlertCheckIntervalSeconds,
@@ -584,6 +658,7 @@ async function handleApi(request, response, url) {
       dailyBriefingTopLimit: config.dailyBriefingTopLimit,
       telegramCommandPollSeconds: config.telegramCommandPollSeconds,
       lastTelegramCommandPoll,
+      lastKisNaverAutoCompare: kisNaverAutoCompareSnapshot,
       lastDividendRefresh: dividendRefreshSnapshot,
       lastDividendEventAlert: dividendEventAlertSnapshot,
       lastDailyBriefing: dailyBriefingSnapshot,
@@ -615,6 +690,7 @@ async function handleApi(request, response, url) {
       dividendRefreshSnapshot,
       dividendEventAlertSnapshot,
       dailyBriefingSnapshot,
+      kisNaverAutoCompareSnapshot,
       quoteProviderStats,
       kisNaverCompareHistory
     ] = await Promise.all([
@@ -623,6 +699,7 @@ async function handleApi(request, response, url) {
       canReadAdminDetails ? getLastDividendRefreshSnapshot() : Promise.resolve(null),
       canReadAdminDetails ? getLastDividendEventAlertSnapshot() : Promise.resolve(null),
       getLastDailyBriefingSnapshot(),
+      canReadAdminDetails ? getLastKisNaverAutoCompareSnapshot() : Promise.resolve(null),
       canReadAdminDetails ? store.getQuoteProviderStats() : Promise.resolve(null),
       canReadAdminDetails && typeof store.getKisNaverCompareHistory === 'function'
         ? store.getKisNaverCompareHistory(12)
@@ -646,6 +723,12 @@ async function handleApi(request, response, url) {
       historicalQuoteProviders: config.historicalQuoteProviders,
       dividendProviders: config.dividendProviders,
       pollIntervalSeconds: config.pollIntervalSeconds,
+      kisNaverAutoCompareEnabled: config.kisNaverAutoCompareEnabled,
+      kisNaverAutoCompareIntervalSeconds: config.kisNaverAutoCompareIntervalSeconds,
+      kisNaverAutoCompareLimit: config.kisNaverAutoCompareLimit,
+      kisNaverAutoCompareMarkets: config.kisNaverAutoCompareMarkets,
+      kisNaverAutoCompareDriftThresholdPercent:
+        config.kisNaverAutoCompareDriftThresholdPercent,
       dividendRefreshIntervalSeconds: config.dividendRefreshIntervalSeconds,
       dividendEventAlertEnabled: config.dividendEventAlertEnabled,
       dividendEventAlertCheckIntervalSeconds: config.dividendEventAlertCheckIntervalSeconds,
@@ -656,6 +739,7 @@ async function handleApi(request, response, url) {
       lastDailyBriefing: dailyBriefingSnapshot,
       telegramCommandPollSeconds: config.telegramCommandPollSeconds,
       lastTelegramCommandPoll,
+      lastKisNaverAutoCompare: kisNaverAutoCompareSnapshot,
       lastDividendRefresh: dividendRefreshSnapshot,
       lastDividendEventAlert: dividendEventAlertSnapshot,
       quoteProviderStats,
@@ -965,22 +1049,11 @@ async function handleApi(request, response, url) {
   if (request.method === 'POST' && url.pathname === '/api/kis/naver-compare') {
     const body = await readJsonBody(request);
     const result = await runKisNaverQuoteComparison(body);
-    const kisNaverCompareHistory =
-      typeof store.recordKisNaverCompareHistory === 'function'
-        ? await store.recordKisNaverCompareHistory(result, { returnLimit: 12 })
-        : [];
-    const kisNaverCompareTrend = buildKisNaverCompareTrendSnapshot(kisNaverCompareHistory);
-    const symbolKisNaverCompareTrend = buildKisNaverCompareTrendSnapshot(
-      filterKisNaverCompareHistoryBySymbol(
-        kisNaverCompareHistory,
-        result.symbol || result.inputSymbol
-      )
-    );
-    const kisNaverTrendRecommendation = buildKisNaverTrendRecommendation(
-      symbolKisNaverCompareTrend,
-      result.recommendation,
-      { scope: 'symbol' }
-    );
+    const {
+      kisNaverCompareHistory,
+      kisNaverCompareTrend,
+      kisNaverTrendRecommendation
+    } = await recordKisNaverQuoteComparisonResult(result);
     const quoteProviderStats = await store.getQuoteProviderStats();
 
     sendJson(response, 200, {
@@ -991,6 +1064,24 @@ async function handleApi(request, response, url) {
       kisNaverCompareHistory,
       kisNaverCompareTrend,
       kisNaverTrendRecommendation,
+      quoteProviderStats
+    });
+    return;
+  }
+
+  if (request.method === 'POST' && url.pathname === '/api/kis/naver-compare/auto-run') {
+    const result = await runKisNaverAutoCompareOnce({ force: true });
+    const quoteProviderStats = await store.getQuoteProviderStats();
+
+    sendJson(response, 200, {
+      kisNaverAutoCompare: result,
+      lastKisNaverAutoCompare: result.lastKisNaverAutoCompare || result,
+      kisNaverCompareHistory: result.kisNaverCompareHistory || [],
+      kisNaverCompareTrend: result.kisNaverCompareTrend || buildKisNaverCompareTrendSnapshot([]),
+      kisNaverTrendRecommendation:
+        result.kisNaverTrendRecommendation ||
+        result.kisNaverCompareTrend?.recommendation ||
+        buildKisNaverTrendRecommendation({}),
       quoteProviderStats
     });
     return;
@@ -1188,6 +1279,9 @@ function listen(port, remainingAttempts = 20) {
     console.log(
       `Daily briefing ${config.dailyBriefingEnabled ? `at ${normalizeBriefingTime(config.dailyBriefingTime)}` : 'disabled'}`
     );
+    console.log(
+      `KIS/Naver auto compare ${config.kisNaverAutoCompareEnabled ? `every ${config.kisNaverAutoCompareIntervalSeconds} seconds` : 'disabled'}`
+    );
   });
 }
 
@@ -1239,6 +1333,18 @@ const telegramCommandInterval = setInterval(() => {
   });
 }, config.telegramCommandPollSeconds * 1000);
 
+const kisNaverAutoCompareInterval = config.kisNaverAutoCompareEnabled
+  ? setInterval(() => {
+      runKisNaverAutoCompareOnce().catch((error) => {
+        lastKisNaverAutoCompare = {
+          checkedAt: new Date().toISOString(),
+          error: error.message
+        };
+        console.error('Scheduled KIS/Naver auto compare failed:', error);
+      });
+    }, config.kisNaverAutoCompareIntervalSeconds * 1000)
+  : null;
+
 runTelegramCommandPollOnce().catch((error) => {
   lastTelegramCommandPoll = {
     checkedAt: new Date().toISOString(),
@@ -1276,6 +1382,9 @@ async function shutdown() {
   clearInterval(dividendEventAlertInterval);
   clearInterval(dailyBriefingInterval);
   clearInterval(telegramCommandInterval);
+  if (kisNaverAutoCompareInterval) {
+    clearInterval(kisNaverAutoCompareInterval);
+  }
 
   try {
     await closeServer();

@@ -61,6 +61,8 @@ npm run check:kis-quote -- --symbol 005930 --market UN --json
 
 `/admin`의 `KIS/Naver 가격 비교` 카드에서는 `POST /api/kis/naver-compare`로 같은 종목의 Naver 기준가와 KIS KRX/NXT/통합 가격을 나란히 조회합니다. 결과에는 시장별 가격 차이, 차이율, 추천 시장, 가격 차이 이상치 주의/경고, 실패 사유, provider 진단 시도가 표시되며 관리자 API 보호 대상입니다. 비교 결과와 이상치 판정은 최근 이력으로 저장되고, 저장된 이력은 시장별 평균/최대/최근 괴리율과 반복 이상치 추세로 관리자 화면에서 확인할 수 있습니다. 저장된 추세 기반 추천은 현재 1회 비교 추천과 비교해 적용 가능, 추가 확인, 관찰 필요로 판단합니다. 등록된 같은 종목이 있으면 `POST /api/kis/naver-compare/apply`로 해당 시장을 종목의 KIS 기준에 바로 적용할 수 있습니다.
 
+자동 점검은 `KIS_NAVER_AUTO_COMPARE_ENABLED=true`일 때 등록된 활성 국내 종목을 대상으로 KIS/Naver 비교를 주기 실행합니다. 기본값은 실제 API 호출 반복을 막기 위해 꺼짐이며, 관리자 화면의 `자동 점검 실행` 버튼 또는 `POST /api/kis/naver-compare/auto-run`으로 강제 1회 실행할 수 있습니다.
+
 사용자 종목에는 `kisMarketDivCode`를 저장할 수 있습니다. 비어 있으면 `KIS_MARKET_DIV_CODE` 기본값을 사용하고, 값이 있으면 자동 가격 확인과 실패 종목 재시도에서 해당 종목의 KRX/NXT/통합 기준을 우선 적용합니다.
 
 키가 없거나 해외 종목이면 `kis` provider는 스킵되고 다음 provider로 넘어갑니다.
@@ -81,6 +83,11 @@ npm run check:kis-quote -- --symbol 005930 --market UN --json
 | `KIS_TOKEN_AUTO_REFRESH` | `true` | 접근 토큰 자동 발급/갱신 여부 |
 | `KIS_TOKEN_CACHE_PATH` | `data/kis-token.json` | 선택. 접근 토큰 캐시 파일 경로. 기본 경로는 Git 제외 |
 | `KIS_SMOKE_SYMBOL` | `336260` | 선택. `npm run check:kis-quote` 기본 점검 종목 |
+| `KIS_NAVER_AUTO_COMPARE_ENABLED` | `false` | 관심 국내 종목 KIS/Naver 비교 자동 점검 사용 여부 |
+| `KIS_NAVER_AUTO_COMPARE_INTERVAL_SECONDS` | `21600` | 자동 비교 점검 주기. 최소 300초 |
+| `KIS_NAVER_AUTO_COMPARE_LIMIT` | `5` | 한 번에 자동 비교할 관심 국내 종목 수 |
+| `KIS_NAVER_AUTO_COMPARE_MARKETS` | `all` | 자동 비교 대상 KIS 시장 |
+| `KIS_NAVER_AUTO_COMPARE_DRIFT_THRESHOLD_PERCENT` | `1` | 자동 비교 이상치 판정 기준 % |
 | `KIWOOM_API_BASE_URL` | `https://api.kiwoom.com` | 키움 REST API URL |
 | `KIWOOM_APP_KEY` | 빈 값 | 키움 앱 키 |
 | `KIWOOM_SECRET_KEY` | 빈 값 | 키움 시크릿 키 |

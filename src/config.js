@@ -192,6 +192,22 @@ export const config = {
   kisTokenAutoRefresh: toBoolean(process.env.KIS_TOKEN_AUTO_REFRESH, true),
   kisTokenCachePath: process.env.KIS_TOKEN_CACHE_PATH || path.join(configuredDataDir, 'kis-token.json'),
   kisSmokeSymbol: process.env.KIS_SMOKE_SYMBOL || '336260',
+  kisNaverAutoCompareEnabled: toBoolean(process.env.KIS_NAVER_AUTO_COMPARE_ENABLED, false),
+  kisNaverAutoCompareIntervalSeconds: toNumber(
+    process.env.KIS_NAVER_AUTO_COMPARE_INTERVAL_SECONDS,
+    21600,
+    { min: 300 }
+  ),
+  kisNaverAutoCompareLimit: toNumber(process.env.KIS_NAVER_AUTO_COMPARE_LIMIT, 5, {
+    min: 1,
+    max: 50
+  }),
+  kisNaverAutoCompareMarkets: process.env.KIS_NAVER_AUTO_COMPARE_MARKETS || 'all',
+  kisNaverAutoCompareDriftThresholdPercent: toNumber(
+    process.env.KIS_NAVER_AUTO_COMPARE_DRIFT_THRESHOLD_PERCENT,
+    1,
+    { min: 0.1, max: 100 }
+  ),
   telegramBotToken: process.env.TELEGRAM_BOT_TOKEN || '',
   telegramChatId: process.env.TELEGRAM_CHAT_ID || '',
   mobilePushEnabled: toBoolean(process.env.MOBILE_PUSH_ENABLED, true),

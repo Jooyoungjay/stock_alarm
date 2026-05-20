@@ -32,6 +32,7 @@ const state = {
   kisNaverCompareHistory: [],
   kisNaverCompareTrend: null,
   kisNaverTrendRecommendation: null,
+  lastKisNaverAutoCompare: null,
   adminAuthRequired: false,
   adminAuthenticated: false,
   backupRetention: 0,
@@ -110,6 +111,7 @@ const elements = {
   kisNaverCompareSymbolInput: document.querySelector('#kisNaverCompareSymbolInput'),
   kisNaverCompareMarketSelect: document.querySelector('#kisNaverCompareMarketSelect'),
   kisNaverCompareDriftThresholdInput: document.querySelector('#kisNaverCompareDriftThresholdInput'),
+  kisNaverAutoCompareRunButton: document.querySelector('#kisNaverAutoCompareRunButton'),
   kisNaverCompareRunButton: document.querySelector('#kisNaverCompareRunButton'),
   kisNaverCompareResult: document.querySelector('#kisNaverCompareResult'),
   kisNaverCompareHistoryPanel: document.querySelector('#kisNaverCompareHistoryPanel'),
@@ -127,7 +129,7 @@ renderRegistrationSummary();
 updateRegistrationStep(1);
 renderKisSmokeTestResult(null);
 renderKisNaverCompareResult(null);
-renderKisNaverCompareHistory([], null);
+renderKisNaverCompareHistory([], null, null);
 
 elements.form.elements.alertType.addEventListener('change', () => {
   syncAlertTypeControls(elements.form);
@@ -384,6 +386,10 @@ elements.kisNaverCompareForm?.addEventListener('submit', async (event) => {
   await runKisNaverCompare();
 });
 
+elements.kisNaverAutoCompareRunButton?.addEventListener('click', async () => {
+  await runKisNaverAutoCompare();
+});
+
 elements.kisNaverCompareResult?.addEventListener('click', async (event) => {
   const button = event.target?.closest?.('[data-kis-apply-market]');
 
@@ -442,6 +448,8 @@ async function loadHealth() {
   try {
     const health = await api('/api/health');
     state.health = health;
+    state.lastKisNaverAutoCompare =
+      health.lastKisNaverAutoCompare || state.lastKisNaverAutoCompare;
     renderServerStatus(health);
   } catch (error) {
     handleAdminAuthFailure(error);
@@ -473,6 +481,8 @@ async function loadData() {
       data.kisNaverTrendRecommendation ||
       data.kisNaverCompareTrend?.recommendation ||
       state.kisNaverTrendRecommendation;
+    state.lastKisNaverAutoCompare =
+      data.lastKisNaverAutoCompare || state.lastKisNaverAutoCompare;
     renderStatus(data);
     renderStocks();
     renderDividendCalendar(state.dividendCalendar);
@@ -480,7 +490,11 @@ async function loadData() {
     renderDividendDiagnostics(data.lastDividendRefresh);
     renderAlerts();
     renderKisNaverCompareResult(state.kisNaverQuoteComparison);
-    renderKisNaverCompareHistory(state.kisNaverCompareHistory, state.kisNaverCompareTrend);
+    renderKisNaverCompareHistory(
+      state.kisNaverCompareHistory,
+      state.kisNaverCompareTrend,
+      state.lastKisNaverAutoCompare
+    );
 
     if (isAdminMode() && roadmapResult.payload) {
       state.roadmap = roadmapResult.payload.roadmap || null;
@@ -564,13 +578,50 @@ async function runKisNaverCompare() {
       result.kisNaverCompareTrend?.recommendation ||
       state.kisNaverTrendRecommendation;
     renderKisNaverCompareResult(state.kisNaverQuoteComparison);
-    renderKisNaverCompareHistory(state.kisNaverCompareHistory, state.kisNaverCompareTrend);
+    renderKisNaverCompareHistory(
+      state.kisNaverCompareHistory,
+      state.kisNaverCompareTrend,
+      state.lastKisNaverAutoCompare
+    );
     renderQuoteDiagnostics(state.quoteProviderStats);
     showMessage(
       state.kisNaverQuoteComparison?.ok
         ? 'KIS/Naver 가격 비교가 완료됐습니다.'
         : 'KIS/Naver 가격 비교에서 확인할 항목이 있습니다.',
       !state.kisNaverQuoteComparison?.ok
+    );
+  });
+}
+
+async function runKisNaverAutoCompare() {
+  await withBusy(elements.kisNaverAutoCompareRunButton, async () => {
+    const result = await api('/api/kis/naver-compare/auto-run', {
+      method: 'POST'
+    });
+    const autoCompare = result.kisNaverAutoCompare || {};
+
+    state.lastKisNaverAutoCompare =
+      result.lastKisNaverAutoCompare ||
+      autoCompare.lastKisNaverAutoCompare ||
+      state.lastKisNaverAutoCompare;
+    state.quoteProviderStats = result.quoteProviderStats || state.quoteProviderStats;
+    state.kisNaverCompareHistory = Array.isArray(result.kisNaverCompareHistory)
+      ? result.kisNaverCompareHistory
+      : state.kisNaverCompareHistory;
+    state.kisNaverCompareTrend = result.kisNaverCompareTrend || state.kisNaverCompareTrend;
+    state.kisNaverTrendRecommendation =
+      result.kisNaverTrendRecommendation ||
+      result.kisNaverCompareTrend?.recommendation ||
+      state.kisNaverTrendRecommendation;
+    renderKisNaverCompareHistory(
+      state.kisNaverCompareHistory,
+      state.kisNaverCompareTrend,
+      state.lastKisNaverAutoCompare
+    );
+    renderQuoteDiagnostics(state.quoteProviderStats);
+    showMessage(
+      formatKisNaverAutoCompareMessage(state.lastKisNaverAutoCompare),
+      hasKisNaverAutoCompareFailures(state.lastKisNaverAutoCompare)
     );
   });
 }
@@ -1592,7 +1643,7 @@ function renderStatus(data) {
   elements.telegramStatus.className = `status-chip ${data.telegramConfigured ? 'connected' : 'warn'}`;
   elements.quoteStatus.textContent = `시세 ${formatProviderList(data.quoteProviders)}`;
   elements.quoteStatus.className = 'status-chip pipeline';
-  elements.pollStatus.textContent = `시세 ${data.pollIntervalSeconds || 60}초 · 배당 ${formatInterval(data.dividendRefreshIntervalSeconds || 86400)} · 배당알림 ${formatDividendEventAlertSetting(data)}`;
+  elements.pollStatus.textContent = `시세 ${data.pollIntervalSeconds || 60}초 · 배당 ${formatInterval(data.dividendRefreshIntervalSeconds || 86400)} · 배당알림 ${formatDividendEventAlertSetting(data)} · 비교 ${formatKisNaverAutoCompareSetting(data)}`;
   elements.pollStatus.className = 'status-chip timer';
 }
 
@@ -1614,6 +1665,7 @@ function renderServerStatus(health) {
       ${renderServerMetric('배당', formatProviderList(health.dividendProviders), `${formatInterval(health.dividendRefreshIntervalSeconds || 86400)} 주기`)}
       ${renderServerMetric('배당 알림', formatDividendEventAlertSetting(health), getLastDividendEventAlertDetail(health.lastDividendEventAlert))}
       ${renderServerMetric('브리핑', formatDailyBriefingSetting(health), getLastDailyBriefingDetail(health.lastDailyBriefing))}
+      ${renderServerMetric('가격 비교', formatKisNaverAutoCompareSetting(health), getLastKisNaverAutoCompareDetail(health.lastKisNaverAutoCompare))}
       ${renderServerMetric('명령', formatDate(health.lastTelegramCommandPoll?.checkedAt), `${health.telegramCommandPollSeconds || 5}초 주기`)}
       ${renderServerMetric('마지막 확인', formatDate(health.lastCheck?.checkedAt), getLastCheckDetail(health.lastCheck))}
       ${renderServerMetric('배당 갱신', formatDate(health.lastDividendRefresh?.checkedAt), getLastDividendRefreshDetail(health.lastDividendRefresh))}
@@ -1824,15 +1876,16 @@ function renderKisNaverCompareResult(result) {
   `;
 }
 
-function renderKisNaverCompareHistory(history = [], trend = null) {
+function renderKisNaverCompareHistory(history = [], trend = null, autoCompare = null) {
   if (!elements.kisNaverCompareHistoryPanel) {
     return;
   }
 
   const rows = Array.isArray(history) ? history.slice(0, 8) : [];
   const trendMarkets = Array.isArray(trend?.markets) ? trend.markets : [];
+  const autoCompareSummary = renderKisNaverAutoCompareSummary(autoCompare);
 
-  if (!rows.length && !trendMarkets.length) {
+  if (!rows.length && !trendMarkets.length && !autoCompareSummary) {
     elements.kisNaverCompareHistoryPanel.innerHTML = `
       <div class="kis-smoke-empty">
         비교를 실행하면 최근 KIS/Naver 가격 차이와 이상치 판정 이력이 저장됩니다.
@@ -1842,6 +1895,7 @@ function renderKisNaverCompareHistory(history = [], trend = null) {
   }
 
   elements.kisNaverCompareHistoryPanel.innerHTML = `
+    ${autoCompareSummary}
     ${renderKisNaverCompareTrend(trend)}
     ${
       rows.length
@@ -1857,6 +1911,40 @@ function renderKisNaverCompareHistory(history = [], trend = null) {
           </div>`
         : ''
     }
+  `;
+}
+
+function renderKisNaverAutoCompareSummary(autoCompare = null) {
+  if (!autoCompare) {
+    return '';
+  }
+
+  const summary = autoCompare.summary || {};
+  const failed = Number(summary.failed || 0) + Number(summary.error || 0);
+  const statusClass = autoCompare.skipped ? 'muted' : failed ? 'alert' : 'ok';
+  const statusLabel = autoCompare.skipped ? '건너뜀' : failed ? '확인 필요' : '자동 점검 완료';
+  const detail = autoCompare.skipped
+    ? autoCompare.reason || '건너뜀'
+    : [
+        `대상 ${summary.checked || 0}개`,
+        `성공 ${summary.success || 0}개`,
+        `실패 ${failed}개`
+      ].join(' · ');
+
+  return `
+    <section class="kis-compare-trend" aria-label="KIS Naver 자동 가격 비교 점검">
+      <div class="kis-compare-history-head">
+        <div>
+          <strong>자동 가격 비교</strong>
+          <span>${escapeHtml(detail)}</span>
+        </div>
+        <span class="status-badge ${statusClass}">${escapeHtml(statusLabel)}</span>
+      </div>
+      <div class="dividend-diagnostic-meta">
+        <span>마지막 실행 ${escapeHtml(formatDate(autoCompare.checkedAt))}</span>
+        <span>${autoCompare.forced ? '관리자 수동 실행' : '스케줄 실행'}</span>
+      </div>
+    </section>
   `;
 }
 
@@ -2591,6 +2679,52 @@ function formatDividendEventAlertSetting(data) {
   }
 
   return formatInterval(data.dividendEventAlertCheckIntervalSeconds || 3600);
+}
+
+function formatKisNaverAutoCompareSetting(data) {
+  if (!data?.kisNaverAutoCompareEnabled) {
+    return '꺼짐';
+  }
+
+  return `${formatInterval(data.kisNaverAutoCompareIntervalSeconds || 21600)} 주기`;
+}
+
+function getLastKisNaverAutoCompareDetail(lastCompare) {
+  if (!lastCompare) {
+    return '아직 실행 전';
+  }
+
+  if (lastCompare.error) {
+    return lastCompare.error;
+  }
+
+  if (lastCompare.skipped) {
+    return lastCompare.reason || '건너뜀';
+  }
+
+  const summary = lastCompare.summary || {};
+  return `확인 ${summary.checked || 0}개 · 성공 ${summary.success || 0}개 · 실패 ${summary.failed || 0}개`;
+}
+
+function hasKisNaverAutoCompareFailures(lastCompare) {
+  const summary = lastCompare?.summary || {};
+  return Boolean(lastCompare?.error || Number(summary.failed || 0) + Number(summary.error || 0) > 0);
+}
+
+function formatKisNaverAutoCompareMessage(lastCompare) {
+  if (!lastCompare) {
+    return '자동 가격 비교 결과를 확인하지 못했습니다.';
+  }
+
+  if (lastCompare.skipped) {
+    return `자동 가격 비교를 건너뛰었습니다: ${lastCompare.reason || '조건 없음'}`;
+  }
+
+  const summary = lastCompare.summary || {};
+  const failed = Number(summary.failed || 0) + Number(summary.error || 0);
+  return failed
+    ? `자동 가격 비교 완료: 성공 ${summary.success || 0}개, 실패 ${failed}개`
+    : `자동 가격 비교 완료: ${summary.success || 0}개 종목 점검`;
 }
 
 function getLastDividendEventAlertDetail(lastAlert) {

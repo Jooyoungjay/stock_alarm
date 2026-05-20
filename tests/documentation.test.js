@@ -163,6 +163,7 @@ test('broker API adapter guide documents quote-only checks and trading guard', a
   assert.match(markdown, /npm run check:kis-quote/);
   assert.match(markdown, /\/api\/kis\/quote-smoke-test/);
   assert.match(markdown, /\/api\/kis\/naver-compare/);
+  assert.match(markdown, /\/api\/kis\/naver-compare\/auto-run/);
   assert.match(markdown, /\/api\/kis\/naver-compare\/apply/);
   assert.match(markdown, /가격 차이 이상치/);
   assert.match(markdown, /가격 비교 이력/);
@@ -171,6 +172,7 @@ test('broker API adapter guide documents quote-only checks and trading guard', a
   assert.match(markdown, /KIS_MARKET_DIV_CODE/);
   assert.match(markdown, /KIS_TOKEN_AUTO_REFRESH/);
   assert.match(markdown, /KIS_SMOKE_SYMBOL/);
+  assert.match(markdown, /KIS_NAVER_AUTO_COMPARE_ENABLED/);
   assert.match(markdown, /한국투자증권/);
   assert.match(markdown, /키움/);
   assert.match(markdown, /주문/);
@@ -196,13 +198,17 @@ test('admin page exposes the KIS and Naver comparison controls', async () => {
   assert.match(html, /kisNaverCompareForm/);
   assert.match(html, /kisNaverCompareMarketSelect/);
   assert.match(html, /kisNaverCompareDriftThresholdInput/);
+  assert.match(html, /kisNaverAutoCompareRunButton/);
   assert.match(html, /kisNaverCompareHistoryPanel/);
   assert.match(html, /이상치 기준/);
   assert.match(script, /\/api\/kis\/naver-compare/);
+  assert.match(script, /\/api\/kis\/naver-compare\/auto-run/);
   assert.match(script, /\/api\/kis\/naver-compare\/apply/);
   assert.match(script, /kisNaverCompareHistory/);
   assert.match(script, /kisNaverCompareTrend/);
   assert.match(script, /kisNaverTrendRecommendation/);
+  assert.match(script, /lastKisNaverAutoCompare/);
+  assert.match(script, /자동 가격 비교/);
   assert.match(script, /renderKisNaverCompareHistory/);
   assert.match(script, /renderKisNaverCompareTrend/);
   assert.match(script, /renderKisNaverTrendRecommendation/);
