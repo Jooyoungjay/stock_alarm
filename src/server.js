@@ -323,6 +323,8 @@ async function initializePurchaseHigh(stock) {
       kisAccessToken: config.kisAccessToken,
       kisMarketDivCode: config.kisMarketDivCode,
       kisCustType: config.kisCustType,
+      kisTokenAutoRefresh: config.kisTokenAutoRefresh,
+      kisTokenCachePath: config.kisTokenCachePath,
       onProviderAttempt: (attempt) =>
         recordQuoteProviderAttempt({
           ...attempt,
@@ -673,6 +675,8 @@ async function handleApi(request, response, url) {
       kisAccessToken: config.kisAccessToken,
       kisMarketDivCode: config.kisMarketDivCode,
       kisCustType: config.kisCustType,
+      kisTokenAutoRefresh: config.kisTokenAutoRefresh,
+      kisTokenCachePath: config.kisTokenCachePath,
       onProviderAttempt: (attempt) =>
         recordQuoteProviderAttempt({
           ...attempt,

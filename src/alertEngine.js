@@ -897,6 +897,8 @@ export async function runAlertCheck(store, config, options = {}) {
         kisAccessToken: config.kisAccessToken,
         kisMarketDivCode: config.kisMarketDivCode,
         kisCustType: config.kisCustType,
+        kisTokenAutoRefresh: config.kisTokenAutoRefresh,
+        kisTokenCachePath: config.kisTokenCachePath,
         onProviderAttempt: (attempt) =>
           recordQuoteProviderAttempt(store, {
             ...attempt,
@@ -964,6 +966,8 @@ export async function runStockQuoteRetry(store, config, stockId, options = {}) {
       kisAccessToken: config.kisAccessToken,
       kisMarketDivCode: config.kisMarketDivCode,
       kisCustType: config.kisCustType,
+      kisTokenAutoRefresh: config.kisTokenAutoRefresh,
+      kisTokenCachePath: config.kisTokenCachePath,
       onProviderAttempt: (attempt) =>
         recordQuoteProviderAttempt(store, {
           ...attempt,

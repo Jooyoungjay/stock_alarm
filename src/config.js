@@ -118,11 +118,12 @@ const isRailwayRuntime = Boolean(
 
 const defaultHost = isRailwayRuntime ? '0.0.0.0' : '127.0.0.1';
 const defaultDataDir = process.env.RAILWAY_VOLUME_MOUNT_PATH || path.join(rootDir, 'data');
+const configuredDataDir = process.env.DATA_DIR || defaultDataDir;
 
 export const config = {
   rootDir,
   publicDir: path.join(rootDir, 'public'),
-  dataDir: process.env.DATA_DIR || defaultDataDir,
+  dataDir: configuredDataDir,
   storageEngine: process.env.STORAGE_ENGINE || 'json',
   databaseUrl: process.env.DATABASE_URL || '',
   adminToken: process.env.ADMIN_TOKEN || '',
@@ -188,6 +189,8 @@ export const config = {
   kisAccessToken: process.env.KIS_ACCESS_TOKEN || '',
   kisMarketDivCode: process.env.KIS_MARKET_DIV_CODE || 'J',
   kisCustType: process.env.KIS_CUST_TYPE || 'P',
+  kisTokenAutoRefresh: toBoolean(process.env.KIS_TOKEN_AUTO_REFRESH, true),
+  kisTokenCachePath: process.env.KIS_TOKEN_CACHE_PATH || path.join(configuredDataDir, 'kis-token.json'),
   telegramBotToken: process.env.TELEGRAM_BOT_TOKEN || '',
   telegramChatId: process.env.TELEGRAM_CHAT_ID || '',
   mobilePushEnabled: toBoolean(process.env.MOBILE_PUSH_ENABLED, true),

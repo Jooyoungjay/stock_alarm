@@ -1,5 +1,8 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import fs from 'node:fs/promises';
+import os from 'node:os';
+import path from 'node:path';
 import {
   fetchHistoricalHighSince,
   fetchQuote,
@@ -102,6 +105,47 @@ test('KIS quote provider is skipped until broker credentials are configured', as
     attempts.map((attempt) => [attempt.provider, attempt.status, attempt.reason]),
     [['kis', 'skipped', 'missing_kis_credentials']]
   );
+});
+
+test('KIS quote provider can issue a token automatically before quote lookup', async () => {
+  const calls = [];
+  const dir = await fs.mkdtemp(path.join(os.tmpdir(), 'stock-alarm-kis-quote-'));
+  const quote = await fetchQuote('005930.KS', {
+    providers: 'kis',
+    kisApiBaseUrl: 'https://openapi.koreainvestment.com:9443',
+    kisAppKey: 'app-key',
+    kisAppSecret: 'app-secret',
+    kisTokenAutoRefresh: true,
+    kisTokenCachePath: path.join(dir, 'kis-token.json'),
+    fetch: async (url, request) => {
+      calls.push(String(url));
+
+      if (String(url).endsWith('/oauth2/tokenP')) {
+        assert.equal(request.method, 'POST');
+        return textJsonResponse({
+          access_token: 'auto-issued-token',
+          token_type: 'Bearer',
+          expires_in: 86400
+        });
+      }
+
+      assert.equal(request.headers.authorization, 'Bearer auto-issued-token');
+      return jsonResponse({
+        rt_cd: '0',
+        output: {
+          stck_shrn_iscd: '005930',
+          hts_kor_isnm: '삼성전자',
+          stck_prpr: '68500'
+        }
+      });
+    }
+  });
+
+  assert.deepEqual(calls, [
+    'https://openapi.koreainvestment.com:9443/oauth2/tokenP',
+    'https://openapi.koreainvestment.com:9443/uapi/domestic-stock/v1/quotations/inquire-price?FID_COND_MRKT_DIV_CODE=J&FID_INPUT_ISCD=005930'
+  ]);
+  assert.equal(quote.price, 68500);
 });
 
 test('publicdata historical high reports a missing key as a skipped attempt', async () => {
@@ -460,6 +504,16 @@ function jsonResponse(payload) {
     status: 200,
     async arrayBuffer() {
       return new TextEncoder().encode(JSON.stringify(payload)).buffer;
+    }
+  };
+}
+
+function textJsonResponse(payload) {
+  return {
+    ok: true,
+    status: 200,
+    async text() {
+      return JSON.stringify(payload);
     }
   };
 }

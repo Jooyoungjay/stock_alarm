@@ -45,8 +45,24 @@ test('KIS provider is ready when quote-only credentials are present', () => {
   assert.equal(result.values.provider, 'kis');
   assert.equal(result.values.kisMarketDivCode, 'UN');
   assert.equal(result.summary.error, 0);
-  assert.ok(result.checks.some((check) => check.name === 'kis_access_token_present' && check.ok));
+  assert.ok(result.checks.some((check) => check.name === 'kis_access_token_or_auto_refresh' && check.ok));
   assert.ok(result.checks.some((check) => check.name === 'kis_market_div_code_supported' && check.ok));
+});
+
+test('KIS provider is ready with app credentials and automatic token refresh', () => {
+  const result = buildBrokerApiAdapterReview({
+    env: {
+      BROKER_QUOTE_PROVIDER: 'kis',
+      KIS_APP_KEY: 'app-key',
+      KIS_APP_SECRET: 'app-secret',
+      KIS_TOKEN_AUTO_REFRESH: 'true'
+    }
+  });
+
+  assert.equal(result.ready, true);
+  assert.equal(result.values.hasKisAccessToken, false);
+  assert.equal(result.values.kisTokenAutoRefresh, true);
+  assert.ok(result.checks.some((check) => check.name === 'kis_access_token_or_auto_refresh' && check.ok));
 });
 
 test('KIS provider fails when credentials are missing or trading is enabled', () => {
@@ -59,7 +75,7 @@ test('KIS provider fails when credentials are missing or trading is enabled', ()
   });
 
   assert.equal(result.ready, false);
-  assert.ok(result.summary.error >= 5);
+  assert.ok(result.summary.error >= 4);
   assert.ok(result.checks.some((check) => check.name === 'trading_disabled' && !check.ok));
   assert.ok(result.checks.some((check) => check.name === 'kis_base_url_https' && !check.ok));
   assert.ok(result.checks.some((check) => check.name === 'kis_app_key_present' && !check.ok));

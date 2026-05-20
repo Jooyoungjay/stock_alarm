@@ -16,6 +16,7 @@
     "check:store-assets": "node scripts/check-store-assets.js",
     "check:broker-api": "node scripts/check-broker-api.js",
     "check:publicdata-price": "node scripts/check-publicdata-price.js",
+    "kis:token": "node scripts/kis-token.js",
     "migrate:postgres:dry-run": "node scripts/json-to-postgres-dry-run.js",
     "migrate:postgres:rehearsal": "node scripts/postgres-connection-rehearsal.js",
     "mobile:install": "npm --prefix mobile install",

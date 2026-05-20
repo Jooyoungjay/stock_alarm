@@ -295,6 +295,8 @@ KIS_ACCESS_TOKEN=
 KIS_ACCOUNT_NUMBER=
 KIS_MARKET_DIV_CODE=J
 KIS_CUST_TYPE=P
+KIS_TOKEN_AUTO_REFRESH=true
+KIS_TOKEN_CACHE_PATH=
 KIWOOM_API_BASE_URL=https://api.kiwoom.com
 KIWOOM_APP_KEY=
 KIWOOM_SECRET_KEY=
@@ -355,6 +357,8 @@ EXPO_PUSH_ENDPOINT=https://exp.host/--/api/v2/push/send
 | `KIS_ACCOUNT_NUMBER` | 빈 값 | 선택. 향후 계좌 기반 기능 점검용 |
 | `KIS_MARKET_DIV_CODE` | `J` | 한국투자증권 현재가 시장 구분. `J` KRX, `NX` NXT, `UN` 통합 |
 | `KIS_CUST_TYPE` | `P` | 한국투자증권 고객 구분. 기본값 `P` 개인 |
+| `KIS_TOKEN_AUTO_REFRESH` | `true` | `KIS_ACCESS_TOKEN`이 없거나 캐시가 만료되면 앱 키/시크릿으로 접근 토큰 자동 발급 |
+| `KIS_TOKEN_CACHE_PATH` | `data/kis-token.json` | 선택. KIS 접근 토큰 캐시 파일 경로. 기본 경로는 Git 제외 |
 | `KIWOOM_API_BASE_URL` | `https://api.kiwoom.com` | 키움 REST API URL |
 | `KIWOOM_APP_KEY` | 빈 값 | 키움 앱 키 |
 | `KIWOOM_SECRET_KEY` | 빈 값 | 키움 시크릿 키 |
@@ -457,6 +461,7 @@ npm run mobile:install
 npm run mobile:start
 npm run check:store-assets
 npm run check:broker-api
+npm run kis:token
 ```
 
 가장 단순한 실행:
@@ -789,8 +794,16 @@ QUOTE_PROVIDERS=kis,naver,stooq,alphavantage,yahoo
 KIS_API_BASE_URL=https://openapi.koreainvestment.com:9443
 KIS_APP_KEY=한국투자증권_앱키
 KIS_APP_SECRET=한국투자증권_앱시크릿
-KIS_ACCESS_TOKEN=한국투자증권_접근토큰
+KIS_TOKEN_AUTO_REFRESH=true
 KIS_MARKET_DIV_CODE=J
+```
+
+`KIS_ACCESS_TOKEN`을 직접 넣어도 되지만, 기본값은 앱키/시크릿으로 접근 토큰을 발급받아 `data/kis-token.json`에 캐시하는 방식입니다. 토큰 원문은 CLI 출력에 표시하지 않습니다.
+
+```powershell
+npm run kis:token
+npm run kis:token -- --json
+npm run kis:token -- --force
 ```
 
 `kis` provider는 국내 종목에만 적용됩니다. 키가 없거나 해외 종목이면 스킵하고 다음 provider로 넘어갑니다. 시장 구분은 한국투자증권 샘플 기준으로 `J`는 KRX, `NX`는 NXT, `UN`은 통합입니다.
@@ -1404,7 +1417,7 @@ Invoke-RestMethod http://127.0.0.1:3001/api/health
 - 알림/포트폴리오: 이익금 반납률 알림, 최대 수익금/반납 금액, 계좌 총 반납률, 종목별 알림 토글
 - 배당: 배당 API provider 진단, 텔레그램 배당 진단 명령, 국내 종목 매칭 보정, 배당락일/지급일/변경 이력, 배당 성장률, 배당 캘린더 필터/월별 합계, 배당락일/지급일 전후 알림
 - 시세: provider 진단, 시세 출처/데이터 성격 표시, 공공데이터포털 일봉 provider 실험, NXT/공식 API 검토, NXT 계약 API adapter 골격
-- 증권사 API: 한국투자증권/키움 quote-only adapter 점검 CLI, 주문 기능 차단 가드, KIS 현재가 provider, 환경변수 문서화
+- 증권사 API: 한국투자증권/키움 quote-only adapter 점검 CLI, 주문 기능 차단 가드, KIS 현재가 provider, KIS 토큰 자동 발급/캐시, 환경변수 문서화
 - 운영/관리: 사용자/관리자 화면 분리, 관리자 보호, 백업/복구/삭제, 백업 스냅샷 계약, 데이터 모델 정리, 저장소 계약, JSON -> DB 이전 설계, WBS 상태 표준화, HTTPS 데모 서버 점검
 - 저장소: PostgresStore JSONB 쿼리 어댑터, DATABASE_URL 마스킹, 계약 테스트, JSON -> Postgres dry-run 마이그레이션 검증, 통합 테스트 데이터셋, 백업 스냅샷 계약 검증, Postgres 연결 리허설 CLI
 - 안정화: 시세/배당 실패 사유 표시와 종목별 재시도 UX
@@ -1412,4 +1425,4 @@ Invoke-RestMethod http://127.0.0.1:3001/api/health
 
 우선순위가 높은 순서:
 
-1. KIS 토큰 자동 발급/갱신
+1. KIS 실계정 현재가 smoke test CLI

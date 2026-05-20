@@ -20,11 +20,12 @@ Stock Alarm은 현재 로컬 웹앱 MVP 단계이며, 무료/공개 provider 체
 4. NXT 계약 API adapter 골격: 완료
 5. 증권사 API adapter 검토: 완료
 6. KIS quote provider 구현: 완료
+7. KIS 토큰 자동 발급/갱신: 완료
 
 남은 추천 순서:
 
-7. KIS 토큰 자동 발급/갱신
-8. NXT 실계약 endpoint 확보 시 운영 검증
+8. KIS 실계정 현재가 smoke test CLI
+9. NXT 실계약 endpoint 확보 시 운영 검증
 
 ## 후보 비교
 
@@ -183,24 +184,24 @@ BROKER_TRADING_ENABLED=false
 QUOTE_PROVIDERS=kis,naver,stooq,alphavantage,yahoo
 KIS_APP_KEY=...
 KIS_APP_SECRET=...
-KIS_ACCESS_TOKEN=...
+KIS_TOKEN_AUTO_REFRESH=true
 KIS_MARKET_DIV_CODE=J
 ```
 
-공식 샘플의 시장 구분 코드 기준으로 `J`는 KRX, `NX`는 NXT, `UN`은 통합입니다.
+공식 샘플의 시장 구분 코드 기준으로 `J`는 KRX, `NX`는 NXT, `UN`은 통합입니다. 접근 토큰은 `/oauth2/tokenP`로 발급하고 `data/kis-token.json`에 캐시합니다.
 
 상세 내용은 [증권사 API adapter 검토](broker-api-adapter-review.md)에 정리했습니다.
 
 ## 다음 개발로 넘길 항목
 
-현재 provider 실패율 기록, 시세 출처 표시, 공식 일봉 provider 실험, NXT 계약 API adapter 골격, 증권사 API adapter 검토, KIS quote provider 구현은 완료했습니다. 다음 구현 후보는 `KIS 토큰 자동 발급/갱신`입니다.
+현재 provider 실패율 기록, 시세 출처 표시, 공식 일봉 provider 실험, NXT 계약 API adapter 골격, 증권사 API adapter 검토, KIS quote provider 구현, KIS 토큰 자동 발급/갱신은 완료했습니다. 다음 구현 후보는 `KIS 실계정 현재가 smoke test CLI`입니다.
 
-KIS 토큰 자동 발급/갱신을 진행할 때 먼저 저장할 값:
+KIS 실계정 현재가 smoke test CLI를 진행할 때 먼저 보여줄 값:
 
-- 접근 토큰 만료/재발급 필요 여부
-- 마지막 토큰 발급 시각
-- 토큰 발급 실패 사유
-- 토큰 원문을 Git이나 로그에 남기지 않는 마스킹 기준
+- 요청 종목코드와 시장 구분
+- provider 성공/실패 여부
+- 실패 사유와 HTTP 상태
+- 토큰 출처(env/cache/issued)와 만료 시각
 
 ## 참고 링크
 

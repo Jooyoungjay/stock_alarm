@@ -36,8 +36,16 @@ QUOTE_PROVIDERS=kis,naver,stooq,alphavantage,yahoo
 KIS_API_BASE_URL=https://openapi.koreainvestment.com:9443
 KIS_APP_KEY=한국투자증권_앱키
 KIS_APP_SECRET=한국투자증권_앱시크릿
-KIS_ACCESS_TOKEN=한국투자증권_접근토큰
+KIS_TOKEN_AUTO_REFRESH=true
 KIS_MARKET_DIV_CODE=J
+```
+
+`KIS_ACCESS_TOKEN`을 직접 넣어도 되지만, 기본값은 앱키/시크릿으로 접근 토큰을 발급받아 `data/kis-token.json`에 캐시하는 방식입니다. 토큰 원문은 CLI 출력에 표시하지 않습니다.
+
+```powershell
+npm run kis:token
+npm run kis:token -- --json
+npm run kis:token -- --force
 ```
 
 키가 없거나 해외 종목이면 `kis` provider는 스킵되고 다음 provider로 넘어갑니다.
@@ -55,6 +63,8 @@ KIS_MARKET_DIV_CODE=J
 | `KIS_ACCOUNT_NUMBER` | 빈 값 | 선택. 향후 계좌 기반 기능 점검용 |
 | `KIS_MARKET_DIV_CODE` | `J` | 한국투자증권 현재가 시장 구분. `J` KRX, `NX` NXT, `UN` 통합 |
 | `KIS_CUST_TYPE` | `P` | 한국투자증권 고객 구분. 기본값 `P` 개인 |
+| `KIS_TOKEN_AUTO_REFRESH` | `true` | 접근 토큰 자동 발급/갱신 여부 |
+| `KIS_TOKEN_CACHE_PATH` | `data/kis-token.json` | 선택. 접근 토큰 캐시 파일 경로. 기본 경로는 Git 제외 |
 | `KIWOOM_API_BASE_URL` | `https://api.kiwoom.com` | 키움 REST API URL |
 | `KIWOOM_APP_KEY` | 빈 값 | 키움 앱 키 |
 | `KIWOOM_SECRET_KEY` | 빈 값 | 키움 시크릿 키 |
@@ -91,12 +101,12 @@ KIS_MARKET_DIV_CODE=J
 
 ## 다음 구현 조건
 
-다음 단계는 KIS 접근 토큰 자동 발급/갱신입니다. 현재 구현은 사용자가 `KIS_ACCESS_TOKEN`을 `.env`에 넣는 방식을 기준으로 합니다.
+KIS 접근 토큰 자동 발급/갱신은 구현했습니다. 다음 단계는 실제 KIS 키가 준비된 환경에서 현재가 smoke test CLI로 실계정 응답을 확인하는 것입니다.
 
 실제 운영 전에 확인할 항목:
 
 - 사용자가 한국투자증권 API 신청을 완료
-- 앱 키, 시크릿, 접근 토큰을 `.env`에 준비
+- 앱 키와 시크릿을 `.env`에 준비
 - 현재가 조회 호출 제한을 실제 계정으로 확인
 - 주문 API를 호출하지 않는다는 제품 범위 유지
 

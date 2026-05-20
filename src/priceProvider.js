@@ -1,3 +1,5 @@
+import { getKisAccessToken } from './kisToken.js';
+
 const yahooQuoteUrl = 'https://query1.finance.yahoo.com/v7/finance/quote';
 const stooqQuoteUrl = 'https://stooq.com/q/l/';
 const naverRealtimeUrl = 'https://polling.finance.naver.com/api/realtime';
@@ -741,11 +743,12 @@ async function fetchNxtQuote(symbol, options = {}) {
 async function fetchKisQuote(symbol, options = {}) {
   const marketDivCode = normalizeKisMarketDivCode(options.kisMarketDivCode);
   const url = buildKisQuoteUrl(options.kisApiBaseUrl, symbol, marketDivCode);
+  const token = await getKisAccessToken(options);
   const payload = await fetchJson(url, {
     ...options,
     headers: {
       ...options.headers,
-      ...buildKisHeaders(options)
+      ...buildKisHeaders(options, token.accessToken)
     }
   });
 
@@ -1045,11 +1048,9 @@ function buildKisQuoteUrl(baseUrl, symbol, marketDivCode) {
   return url;
 }
 
-function buildKisHeaders(options = {}) {
-  const token = String(options.kisAccessToken || '').trim().replace(/^Bearer\s+/i, '');
-
+function buildKisHeaders(options = {}, accessToken) {
   return {
-    authorization: `Bearer ${token}`,
+    authorization: `Bearer ${String(accessToken || '').trim().replace(/^Bearer\s+/i, '')}`,
     appkey: options.kisAppKey,
     appsecret: options.kisAppSecret,
     tr_id: options.kisTrId || kisQuoteTrId,
@@ -1058,7 +1059,11 @@ function buildKisHeaders(options = {}) {
 }
 
 function hasKisCredentials(options = {}) {
-  return Boolean(options.kisAppKey && options.kisAppSecret && options.kisAccessToken);
+  return Boolean(
+    options.kisAppKey &&
+      options.kisAppSecret &&
+      (options.kisAccessToken || options.kisTokenAutoRefresh)
+  );
 }
 
 function normalizeKisMarketDivCode(value) {

@@ -27,6 +27,8 @@ export function buildBrokerApiAdapterReview(input = {}) {
       hasKisAccessToken: Boolean(values.kisAccessToken),
       hasKisAccountNumber: Boolean(values.kisAccountNumber),
       kisMarketDivCode: values.kisMarketDivCode,
+      kisTokenAutoRefresh: values.kisTokenAutoRefresh,
+      hasKisTokenCachePath: Boolean(values.kisTokenCachePath),
       kiwoomBaseUrl: values.kiwoomBaseUrl,
       hasKiwoomAppKey: Boolean(values.kiwoomAppKey),
       hasKiwoomSecretKey: Boolean(values.kiwoomSecretKey),
@@ -56,6 +58,7 @@ export function formatBrokerApiAdapterReviewReport(result) {
     `- KIS_APP_SECRET: ${result.values.hasKisAppSecret ? '설정됨' : '미설정'}`,
     `- KIS_ACCESS_TOKEN: ${result.values.hasKisAccessToken ? '설정됨' : '미설정'}`,
     `- KIS_MARKET_DIV_CODE: ${result.values.kisMarketDivCode}`,
+    `- KIS_TOKEN_AUTO_REFRESH: ${result.values.kisTokenAutoRefresh ? 'true' : 'false'}`,
     `- KIWOOM_API_BASE_URL: ${result.values.kiwoomBaseUrl}`,
     `- KIWOOM_APP_KEY: ${result.values.hasKiwoomAppKey ? '설정됨' : '미설정'}`,
     `- KIWOOM_SECRET_KEY: ${result.values.hasKiwoomSecretKey ? '설정됨' : '미설정'}`,
@@ -137,6 +140,8 @@ export function getBrokerApiAdapterReviewHelp() {
     '  KIS_APP_SECRET                한국투자증권 앱 시크릿',
     '  KIS_ACCESS_TOKEN              한국투자증권 접근 토큰',
     '  KIS_MARKET_DIV_CODE           J:KRX, NX:NXT, UN:통합. 기본값 J',
+    '  KIS_TOKEN_AUTO_REFRESH        접근 토큰 자동 발급/갱신 여부. 기본값 true',
+    '  KIS_TOKEN_CACHE_PATH          선택. 접근 토큰 캐시 파일 경로',
     '  KIWOOM_API_BASE_URL           키움 REST API URL',
     '  KIWOOM_APP_KEY                키움 앱 키',
     '  KIWOOM_SECRET_KEY             키움 시크릿 키',
@@ -156,6 +161,8 @@ function normalizeBrokerApiValues(env) {
     kisAccessToken: firstValue(env.KIS_ACCESS_TOKEN),
     kisAccountNumber: firstValue(env.KIS_ACCOUNT_NUMBER),
     kisMarketDivCode: (firstValue(env.KIS_MARKET_DIV_CODE) || 'J').toUpperCase(),
+    kisTokenAutoRefresh: normalizeBoolean(firstValue(env.KIS_TOKEN_AUTO_REFRESH), true),
+    kisTokenCachePath: firstValue(env.KIS_TOKEN_CACHE_PATH),
     kiwoomBaseUrl: firstValue(env.KIWOOM_API_BASE_URL) || 'https://api.kiwoom.com',
     kiwoomAppKey: firstValue(env.KIWOOM_APP_KEY),
     kiwoomSecretKey: firstValue(env.KIWOOM_SECRET_KEY),
@@ -217,10 +224,10 @@ function buildChecks(values) {
         message: 'KIS_APP_SECRET이 필요합니다.'
       }),
       createPresenceCheck({
-        name: 'kis_access_token_present',
-        label: 'KIS 접근 토큰',
-        value: values.kisAccessToken,
-        message: '현재 앱에서 직접 현재가를 호출하려면 KIS_ACCESS_TOKEN이 필요합니다.'
+        name: 'kis_access_token_or_auto_refresh',
+        label: 'KIS 접근 토큰 또는 자동 발급',
+        value: values.kisAccessToken || values.kisTokenAutoRefresh,
+        message: '현재 앱에서 직접 현재가를 호출하려면 KIS_ACCESS_TOKEN 또는 KIS_TOKEN_AUTO_REFRESH=true가 필요합니다.'
       }),
       createOptionalAccountCheck({
         name: 'kis_account_number_present',
