@@ -343,6 +343,7 @@ async function runKisNaverQuoteComparison(body = {}) {
   return buildKisNaverQuoteComparison({
     symbol: body.symbol || config.kisSmokeSymbol,
     market: body.market || 'all',
+    driftThresholdPercent: body.driftThresholdPercent,
     timeoutMs: config.quoteTimeoutMs,
     dataGoKrServiceKey: config.dataGoKrServiceKey,
     alphaVantageApiKey: config.alphaVantageApiKey,

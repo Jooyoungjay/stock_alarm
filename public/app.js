@@ -106,6 +106,7 @@ const elements = {
   kisNaverCompareForm: document.querySelector('#kisNaverCompareForm'),
   kisNaverCompareSymbolInput: document.querySelector('#kisNaverCompareSymbolInput'),
   kisNaverCompareMarketSelect: document.querySelector('#kisNaverCompareMarketSelect'),
+  kisNaverCompareDriftThresholdInput: document.querySelector('#kisNaverCompareDriftThresholdInput'),
   kisNaverCompareRunButton: document.querySelector('#kisNaverCompareRunButton'),
   kisNaverCompareResult: document.querySelector('#kisNaverCompareResult'),
   tabSections: document.querySelectorAll('.tab-section'),
@@ -532,7 +533,8 @@ async function runKisNaverCompare() {
       method: 'POST',
       body: JSON.stringify({
         symbol: elements.kisNaverCompareSymbolInput?.value || '',
-        market: elements.kisNaverCompareMarketSelect?.value || 'all'
+        market: elements.kisNaverCompareMarketSelect?.value || 'all',
+        driftThresholdPercent: elements.kisNaverCompareDriftThresholdInput?.value || 1
       })
     });
 
@@ -1743,8 +1745,16 @@ function renderKisNaverCompareResult(result) {
     return;
   }
 
-  const statusClass = result.ok ? 'ok' : 'error';
-  const statusLabel = result.ok ? '비교 완료' : '확인 필요';
+  const drift = result.drift || {};
+  const statusClass = getKisNaverDriftStatusClass(drift.status, result.ok);
+  const statusLabel =
+    drift.status === 'critical'
+      ? '이상치 경고'
+      : drift.status === 'warning'
+        ? '주의 필요'
+        : result.ok
+          ? '비교 완료'
+          : '확인 필요';
   const summary = result.summary || {};
   const rows = Array.isArray(result.results) ? result.results : [];
 
@@ -1763,6 +1773,7 @@ function renderKisNaverCompareResult(result) {
               ? `<span>추천 ${escapeHtml(result.recommendation.marketLabel || result.recommendation.market || '-')}</span>`
               : ''
           }
+          <span>이상치 기준 ${escapeHtml(formatPercent(drift.thresholdPercent))}</span>
           <span>생성 ${escapeHtml(formatDate(result.generatedAt))}</span>
         </div>
       </div>
@@ -1770,9 +1781,11 @@ function renderKisNaverCompareResult(result) {
         <span>KIS 성공 ${escapeHtml(summary.kisSuccess || 0)}</span>
         <span>실패 ${escapeHtml(summary.kisFailed || 0)}</span>
         <span>비교 ${escapeHtml(summary.comparable || 0)}</span>
+        <span>이상치 ${escapeHtml(drift.abnormal || 0)}</span>
       </div>
     </div>
     ${renderNaverComparisonBaseline(result.naver)}
+    ${renderKisNaverDriftSummary(drift)}
     ${
       result.message
         ? `<div class="kis-smoke-message ${statusClass}">${escapeHtml(result.message)}</div>`
@@ -1820,7 +1833,9 @@ function renderNaverComparisonBaseline(item = {}) {
 
 function renderKisNaverCompareMarketResult(item) {
   const comparison = item.comparison || {};
-  const statusClass = item.ok && comparison.comparable ? 'ok' : item.ok ? 'muted' : 'error';
+  const drift = item.drift || {};
+  const statusClass =
+    item.ok && comparison.comparable ? getKisNaverDriftStatusClass(drift.status, true) : item.ok ? 'muted' : 'error';
   const recommendation = state.kisNaverQuoteComparison?.recommendation || null;
   const isRecommended = Boolean(recommendation?.market && recommendation.market === item.market);
   const quote = item.quote || {};
@@ -1845,12 +1860,14 @@ function renderKisNaverCompareMarketResult(item) {
         <span class="status-badge ${statusClass}">${escapeHtml(
           item.ok && comparison.comparable ? '비교됨' : item.ok ? '비교 불가' : '실패'
         )}</span>
+        ${drift.comparable ? `<span class="status-badge ${statusClass}">${escapeHtml(getKisNaverDriftStatusLabel(drift.status))}</span>` : ''}
         ${isRecommended ? '<span class="status-badge ok">추천</span>' : ''}
       </div>
       <div class="dividend-diagnostic-meta">
         <span>${escapeHtml(quoteTitle)}</span>
         ${comparisonMeta.map((part) => `<span>${escapeHtml(part)}</span>`).join('')}
       </div>
+      ${renderKisNaverDriftDetail(drift)}
       ${
         isRecommended && recommendation?.reason
           ? `<div class="dividend-diagnostic-meta kis-recommendation-detail">${escapeHtml(recommendation.reason)}</div>`
@@ -1865,6 +1882,84 @@ function renderKisNaverCompareMarketResult(item) {
       }
     </div>
   `;
+}
+
+function renderKisNaverDriftSummary(drift = {}) {
+  if (!drift || drift.status === 'not_comparable') {
+    return '';
+  }
+
+  const statusClass = getKisNaverDriftStatusClass(drift.status, true);
+  const detail = [
+    `기준 ${formatPercent(drift.thresholdPercent)}`,
+    `주의 ${drift.warning || 0}개`,
+    `경고 ${drift.critical || 0}개`,
+    drift.worstMarket
+      ? `최대 괴리 ${drift.worstMarketLabel || drift.worstMarket} ${formatPercent(drift.maxAbsoluteDifferencePercent)}`
+      : ''
+  ].filter(Boolean);
+
+  return `
+    <div class="kis-smoke-message ${statusClass}">
+      <strong>${escapeHtml(getKisNaverDriftSummaryTitle(drift.status))}</strong>
+      <span>${escapeHtml(drift.message || '')}</span>
+      <span>${escapeHtml(detail.join(' · '))}</span>
+    </div>
+  `;
+}
+
+function renderKisNaverDriftDetail(drift = {}) {
+  if (!drift?.comparable) {
+    return '';
+  }
+
+  const statusClass = getKisNaverDriftStatusClass(drift.status, true);
+  const text =
+    drift.status === 'normal'
+      ? `괴리율 ${formatPercent(drift.absoluteDifferencePercent)} · 기준 ${formatPercent(drift.thresholdPercent)} 미만`
+      : `괴리율 ${formatPercent(drift.absoluteDifferencePercent)} · 기준 ${formatPercent(drift.thresholdPercent)} 이상`;
+
+  return `<div class="dividend-diagnostic-meta kis-drift-detail ${statusClass}">${escapeHtml(text)}</div>`;
+}
+
+function getKisNaverDriftStatusClass(status, comparisonOk = true) {
+  if (!comparisonOk) {
+    return 'error';
+  }
+
+  if (status === 'critical') {
+    return 'error';
+  }
+
+  if (status === 'warning') {
+    return 'alert';
+  }
+
+  return 'ok';
+}
+
+function getKisNaverDriftStatusLabel(status) {
+  if (status === 'critical') {
+    return '경고';
+  }
+
+  if (status === 'warning') {
+    return '주의';
+  }
+
+  return '정상';
+}
+
+function getKisNaverDriftSummaryTitle(status) {
+  if (status === 'critical') {
+    return '가격 차이 경고';
+  }
+
+  if (status === 'warning') {
+    return '가격 차이 주의';
+  }
+
+  return '가격 차이 정상';
 }
 
 function renderKisNaverApplyActions(item) {

@@ -20,7 +20,7 @@
       href="https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=Noto+Sans+KR:wght@300;400;500;600;700&display=swap"
       rel="stylesheet"
     />
-    <link rel="stylesheet" href="/styles.css?v=20260520-kis-apply" />
+    <link rel="stylesheet" href="/styles.css?v=20260520-kis-drift" />
   </head>
   <body data-register-modal="closed">
     <header class="app-header">
@@ -507,6 +507,25 @@
                 </select>
               </label>
             </div>
+            <div class="form-row kis-compare-options">
+              <label class="form-group">
+                <span class="form-label">이상치 기준 %</span>
+                <input
+                  id="kisNaverCompareDriftThresholdInput"
+                  class="form-input"
+                  type="number"
+                  min="0.1"
+                  max="100"
+                  step="0.1"
+                  value="1"
+                  placeholder="1"
+                  required
+                />
+              </label>
+              <div class="form-help">
+                절대 괴리율이 기준 이상이면 주의, 기준의 2배 이상이면 경고로 표시합니다.
+              </div>
+            </div>
           </form>
 
           <div id="kisNaverCompareResult" class="kis-smoke-result" aria-live="polite"></div>
@@ -597,6 +616,6 @@
       </div>
     </nav>
 
-    <script src="/app.js?v=20260520-kis-apply" type="module"></script>
+    <script src="/app.js?v=20260520-kis-drift" type="module"></script>
   </body>
 </html>

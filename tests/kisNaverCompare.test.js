@@ -55,11 +55,19 @@ test('KIS/Naver quote comparison calculates market price differences', async () 
   assert.equal(result.summary.kisSuccess, 2);
   assert.equal(result.summary.comparable, 2);
   assert.equal(result.naver.quote.price, 10000);
+  assert.equal(result.drift.thresholdPercent, 1);
+  assert.equal(result.drift.abnormal, 1);
+  assert.equal(result.drift.warning, 1);
+  assert.equal(result.drift.critical, 0);
+  assert.equal(result.drift.status, 'warning');
+  assert.equal(result.drift.worstMarket, 'NX');
   assert.equal(result.results[0].market, 'J');
   assert.equal(result.results[0].comparison.difference, -50);
+  assert.equal(result.results[0].drift.status, 'normal');
   assert.equal(result.results[1].market, 'NX');
   assert.equal(result.results[1].comparison.difference, 150);
   assert.equal(result.results[1].comparison.differencePercent, 1.5);
+  assert.equal(result.results[1].drift.status, 'warning');
   assert.equal(result.recommendation.market, 'J');
   assert.equal(result.recommendation.absoluteDifference, 50);
   assert.match(result.recommendation.reason, /가격 차이/);
@@ -105,6 +113,38 @@ test('KIS/Naver quote comparison reports partial market failures', async () => {
   assert.match(result.message, /1개 KIS 시장 조회가 실패/);
   assert.equal(result.results.find((item) => item.market === 'NX').ok, false);
   assert.doesNotMatch(result.results.find((item) => item.market === 'NX').error, /very-secret-value/);
+});
+
+test('KIS/Naver quote comparison marks critical price drift with a custom threshold', async () => {
+  const result = await buildKisNaverQuoteComparison({
+    symbol: '336260',
+    market: 'J',
+    driftThresholdPercent: 1,
+    fetchQuote: async (symbol, options) => {
+      if (options.providers === 'naver') {
+        return {
+          symbol,
+          price: 10000,
+          currency: 'KRW',
+          provider: 'naver'
+        };
+      }
+
+      return {
+        symbol,
+        price: 10300,
+        currency: 'KRW',
+        provider: 'kis'
+      };
+    }
+  });
+
+  assert.equal(result.ok, true);
+  assert.equal(result.drift.status, 'critical');
+  assert.equal(result.drift.critical, 1);
+  assert.equal(result.drift.maxAbsoluteDifferencePercent, 3);
+  assert.equal(result.results[0].drift.status, 'critical');
+  assert.match(result.drift.message, /경고 1개/);
 });
 
 test('normalizeComparisonMarkets supports aliases and rejects invalid markets', () => {

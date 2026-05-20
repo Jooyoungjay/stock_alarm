@@ -481,6 +481,19 @@ body[data-register-modal="open"] .registration-modal {
   gap: 10px;
 }
 
+.kis-compare-options {
+  grid-template-columns: minmax(140px, 220px) 1fr;
+  align-items: end;
+}
+
+.form-help {
+  align-self: center;
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 700;
+  line-height: 1.45;
+}
+
 .form-input,
 .form-textarea,
 input,
@@ -1459,6 +1472,16 @@ select:focus {
   border-color: rgba(46, 168, 77, 0.28);
 }
 
+.kis-smoke-summary.alert,
+.kis-smoke-message.alert {
+  border-color: rgba(210, 153, 34, 0.34);
+}
+
+.kis-smoke-message.alert {
+  background: rgba(210, 153, 34, 0.12);
+  color: var(--warning);
+}
+
 .kis-smoke-summary.error,
 .kis-smoke-message.error {
   border-color: rgba(224, 92, 92, 0.34);
@@ -1515,6 +1538,10 @@ select:focus {
   border-color: rgba(46, 168, 77, 0.28);
 }
 
+.dividend-diagnostic-row.alert {
+  border-color: rgba(210, 153, 34, 0.34);
+}
+
 .dividend-diagnostic-row.error {
   border-color: rgba(224, 92, 92, 0.34);
 }
@@ -1548,6 +1575,14 @@ select:focus {
 
 .dividend-diagnostic-error {
   overflow-wrap: anywhere;
+  color: var(--danger);
+}
+
+.kis-drift-detail.alert {
+  color: var(--warning);
+}
+
+.kis-drift-detail.error {
   color: var(--danger);
 }
 

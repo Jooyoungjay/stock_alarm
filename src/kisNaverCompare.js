@@ -7,11 +7,13 @@ const marketLabels = {
   NX: 'NXT',
   UN: '통합'
 };
+const defaultDriftThresholdPercent = 1;
 
 export async function buildKisNaverQuoteComparison(options = {}) {
   const generatedAt = normalizeNow(options.now).toISOString();
   const secrets = [options.kisAppKey, options.kisAppSecret, options.kisAccessToken].filter(Boolean);
   const quoteFetcher = options.fetchQuote || defaultFetchQuote;
+  const driftThresholdPercent = normalizeDriftThresholdPercent(options.driftThresholdPercent);
   let symbol = '';
   let inputSymbol = '';
   let markets = [];
@@ -29,6 +31,7 @@ export async function buildKisNaverQuoteComparison(options = {}) {
       provider: 'kis_naver_compare',
       markets,
       naver: null,
+      drift: buildDriftSummary([], driftThresholdPercent),
       results: [],
       summary: {
         kisTotal: 0,
@@ -66,11 +69,16 @@ export async function buildKisNaverQuoteComparison(options = {}) {
       secrets
     });
 
+    const comparison = compareQuotes(naver.quote, item.quote);
+
     results.push({
       ...item,
       market,
       marketLabel: marketLabels[market],
-      comparison: compareQuotes(naver.quote, item.quote)
+      comparison,
+      drift: analyzePriceDrift(comparison, {
+        thresholdPercent: driftThresholdPercent
+      })
     });
   }
 
@@ -79,6 +87,7 @@ export async function buildKisNaverQuoteComparison(options = {}) {
   const comparable = results.filter((item) => item.comparison?.comparable).length;
   const ok = Boolean(naver.ok && comparable && kisFailed === 0);
   const recommendation = buildMarketRecommendation(results);
+  const drift = buildDriftSummary(results, driftThresholdPercent);
 
   return {
     ok,
@@ -89,6 +98,7 @@ export async function buildKisNaverQuoteComparison(options = {}) {
     markets: markets.map(toMarketInfo),
     naver,
     recommendation,
+    drift,
     results,
     summary: {
       kisTotal: results.length,
@@ -243,6 +253,112 @@ function buildMarketRecommendation(results = []) {
   };
 }
 
+function analyzePriceDrift(comparison = {}, options = {}) {
+  const thresholdPercent = normalizeDriftThresholdPercent(options.thresholdPercent);
+
+  if (!comparison.comparable) {
+    return {
+      comparable: false,
+      thresholdPercent,
+      status: 'not_comparable',
+      abnormal: false,
+      reason: comparison.reason || '비교할 수 있는 가격이 없습니다.'
+    };
+  }
+
+  const absoluteDifferencePercent = Math.abs(Number(comparison.differencePercent));
+
+  if (!Number.isFinite(absoluteDifferencePercent)) {
+    return {
+      comparable: false,
+      thresholdPercent,
+      status: 'not_comparable',
+      abnormal: false,
+      reason: '괴리율을 계산할 수 없습니다.'
+    };
+  }
+
+  const status =
+    absoluteDifferencePercent >= thresholdPercent * 2
+      ? 'critical'
+      : absoluteDifferencePercent >= thresholdPercent
+        ? 'warning'
+        : 'normal';
+
+  return {
+    comparable: true,
+    thresholdPercent,
+    absoluteDifferencePercent,
+    status,
+    abnormal: status !== 'normal',
+    reason:
+      status === 'normal'
+        ? `괴리율이 기준 ${formatPercentValue(thresholdPercent)} 미만입니다.`
+        : `괴리율이 기준 ${formatPercentValue(thresholdPercent)} 이상입니다.`
+  };
+}
+
+function buildDriftSummary(results = [], thresholdPercent = defaultDriftThresholdPercent) {
+  const normalizedThreshold = normalizeDriftThresholdPercent(thresholdPercent);
+  const comparable = results.filter((item) => item.drift?.comparable);
+  const abnormal = comparable.filter((item) => item.drift.abnormal);
+  const warning = abnormal.filter((item) => item.drift.status === 'warning').length;
+  const critical = abnormal.filter((item) => item.drift.status === 'critical').length;
+  const worst = comparable.reduce((currentWorst, item) => {
+    if (!currentWorst) {
+      return item;
+    }
+
+    return item.drift.absoluteDifferencePercent > currentWorst.drift.absoluteDifferencePercent
+      ? item
+      : currentWorst;
+  }, null);
+  const status = critical ? 'critical' : warning ? 'warning' : comparable.length ? 'normal' : 'not_comparable';
+
+  return {
+    thresholdPercent: normalizedThreshold,
+    total: results.length,
+    comparable: comparable.length,
+    normal: comparable.length - abnormal.length,
+    warning,
+    critical,
+    abnormal: abnormal.length,
+    status,
+    worstMarket: worst?.market || '',
+    worstMarketLabel: worst?.marketLabel || '',
+    maxAbsoluteDifferencePercent: worst?.drift?.absoluteDifferencePercent ?? null,
+    message: buildDriftMessage({ abnormal: abnormal.length, critical, warning, thresholdPercent: normalizedThreshold })
+  };
+}
+
+function buildDriftMessage({ abnormal, critical, warning, thresholdPercent }) {
+  if (!abnormal) {
+    return `모든 비교 가능 시장의 괴리율이 기준 ${formatPercentValue(thresholdPercent)} 미만입니다.`;
+  }
+
+  const parts = [];
+
+  if (critical) {
+    parts.push(`경고 ${critical}개`);
+  }
+
+  if (warning) {
+    parts.push(`주의 ${warning}개`);
+  }
+
+  return `괴리율 기준 ${formatPercentValue(thresholdPercent)} 이상 시장이 있습니다: ${parts.join(', ')}`;
+}
+
+function normalizeDriftThresholdPercent(value) {
+  const number = Number(value);
+
+  if (!Number.isFinite(number) || number <= 0) {
+    return defaultDriftThresholdPercent;
+  }
+
+  return Math.min(number, 100);
+}
+
 function normalizeComparisonSymbol(value) {
   const symbol = String(value || '').trim().toUpperCase();
 
@@ -252,6 +368,16 @@ function normalizeComparisonSymbol(value) {
 
   toNaverSymbol(symbol);
   return symbol;
+}
+
+function formatPercentValue(value) {
+  const number = Number(value);
+
+  if (!Number.isFinite(number)) {
+    return '-';
+  }
+
+  return `${Number.isInteger(number) ? number : number.toFixed(2).replace(/0+$/, '').replace(/\.$/, '')}%`;
 }
 
 function normalizeMarketAlias(value) {
