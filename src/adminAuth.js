@@ -61,6 +61,10 @@ export function isAdminApiPath(method, pathname) {
     return true;
   }
 
+  if (pathname === '/api/kis/naver-compare' && method === 'POST') {
+    return true;
+  }
+
   if (pathname === '/api/check-now' && method === 'POST') {
     return true;
   }

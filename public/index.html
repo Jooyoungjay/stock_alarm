@@ -467,6 +467,54 @@
         <div class="card" data-page-scope="admin" data-admin-protected="true">
           <div class="card-header">
             <div>
+              <h2 id="kisNaverCompareTitle" class="card-title">KIS/Naver 가격 비교</h2>
+              <p class="card-subtitle">같은 종목의 Naver 가격과 KIS KRX/NXT/통합 가격 차이를 확인합니다.</p>
+            </div>
+            <div class="watch-actions">
+              <button
+                id="kisNaverCompareRunButton"
+                type="submit"
+                form="kisNaverCompareForm"
+                class="btn btn-primary btn-sm primary-button"
+              >
+                비교 실행
+              </button>
+            </div>
+          </div>
+
+          <form id="kisNaverCompareForm" class="kis-smoke-form">
+            <div class="form-row">
+              <label class="form-group">
+                <span class="form-label">종목 코드</span>
+                <input
+                  id="kisNaverCompareSymbolInput"
+                  class="form-input"
+                  type="text"
+                  value="336260"
+                  placeholder="336260, 33626L"
+                  autocomplete="off"
+                  required
+                />
+              </label>
+
+              <label class="form-group">
+                <span class="form-label">KIS 시장</span>
+                <select id="kisNaverCompareMarketSelect" class="form-input">
+                  <option value="all">전체</option>
+                  <option value="J">KRX</option>
+                  <option value="NX">NXT</option>
+                  <option value="UN">통합</option>
+                </select>
+              </label>
+            </div>
+          </form>
+
+          <div id="kisNaverCompareResult" class="kis-smoke-result" aria-live="polite"></div>
+        </div>
+
+        <div class="card" data-page-scope="admin" data-admin-protected="true">
+          <div class="card-header">
+            <div>
               <h2 id="diagnosticsTitle" class="card-title">운영 진단</h2>
               <p class="card-subtitle">시세와 배당 provider 상태를 확인합니다.</p>
             </div>
@@ -549,6 +597,6 @@
       </div>
     </nav>
 
-    <script src="/app.js?v=20260520-kis-market" type="module"></script>
+    <script src="/app.js?v=20260520-kis-compare" type="module"></script>
   </body>
 </html>

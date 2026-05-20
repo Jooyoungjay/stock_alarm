@@ -8,6 +8,7 @@ import { buildDividendCalendar } from './dividendCalendar.js';
 import { lastDividendEventAlertMetaKey, runDividendEventAlertCheck } from './dividendEventAlerts.js';
 import { runDividendRefresh, runSingleDividendRefresh } from './dividendRefresh.js';
 import { normalizeKisMarketDivCode, resolveKisMarketDivCode } from './kisMarket.js';
+import { buildKisNaverQuoteComparison } from './kisNaverCompare.js';
 import { buildKisQuoteSmokeTest } from './kisQuoteSmokeTest.js';
 import {
   buildDailyBriefing,
@@ -334,6 +335,29 @@ async function runKisQuoteSmokeTest(body = {}) {
       recordQuoteProviderAttempt({
         ...attempt,
         source: 'kis_smoke_test'
+      })
+  });
+}
+
+async function runKisNaverQuoteComparison(body = {}) {
+  return buildKisNaverQuoteComparison({
+    symbol: body.symbol || config.kisSmokeSymbol,
+    market: body.market || 'all',
+    timeoutMs: config.quoteTimeoutMs,
+    dataGoKrServiceKey: config.dataGoKrServiceKey,
+    alphaVantageApiKey: config.alphaVantageApiKey,
+    kisApiBaseUrl: config.kisApiBaseUrl,
+    kisAppKey: config.kisAppKey,
+    kisAppSecret: config.kisAppSecret,
+    kisAccessToken: config.kisAccessToken,
+    kisMarketDivCode: config.kisMarketDivCode,
+    kisCustType: config.kisCustType,
+    kisTokenAutoRefresh: config.kisTokenAutoRefresh,
+    kisTokenCachePath: config.kisTokenCachePath,
+    onProviderAttempt: (attempt) =>
+      recordQuoteProviderAttempt({
+        ...attempt,
+        source: 'kis_naver_compare'
       })
   });
 }
@@ -840,6 +864,18 @@ async function handleApi(request, response, url) {
 
     sendJson(response, 200, {
       kisQuoteSmokeTest: result,
+      quoteProviderStats
+    });
+    return;
+  }
+
+  if (request.method === 'POST' && url.pathname === '/api/kis/naver-compare') {
+    const body = await readJsonBody(request);
+    const result = await runKisNaverQuoteComparison(body);
+    const quoteProviderStats = await store.getQuoteProviderStats();
+
+    sendJson(response, 200, {
+      kisNaverQuoteComparison: result,
       quoteProviderStats
     });
     return;

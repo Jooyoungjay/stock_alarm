@@ -161,6 +161,7 @@ test('broker API adapter guide documents quote-only checks and trading guard', a
   assert.match(markdown, /npm run kis:token/);
   assert.match(markdown, /npm run check:kis-quote/);
   assert.match(markdown, /\/api\/kis\/quote-smoke-test/);
+  assert.match(markdown, /\/api\/kis\/naver-compare/);
   assert.match(markdown, /KIS_MARKET_DIV_CODE/);
   assert.match(markdown, /KIS_TOKEN_AUTO_REFRESH/);
   assert.match(markdown, /KIS_SMOKE_SYMBOL/);
@@ -179,6 +180,17 @@ test('admin page exposes the KIS quote smoke test controls', async () => {
   assert.match(html, /kisSmokeForceTokenInput/);
   assert.match(script, /\/api\/kis\/quote-smoke-test/);
   assert.match(script, /renderKisSmokeTestResult/);
+});
+
+test('admin page exposes the KIS and Naver comparison controls', async () => {
+  const html = await fs.readFile(new URL('../public/index.html', import.meta.url), 'utf8');
+  const script = await fs.readFile(new URL('../public/app.js', import.meta.url), 'utf8');
+
+  assert.match(html, /KIS\/Naver 가격 비교/);
+  assert.match(html, /kisNaverCompareForm/);
+  assert.match(html, /kisNaverCompareMarketSelect/);
+  assert.match(script, /\/api\/kis\/naver-compare/);
+  assert.match(script, /renderKisNaverCompareResult/);
 });
 
 test('user stock forms expose per-stock KIS market settings', async () => {

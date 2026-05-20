@@ -59,6 +59,8 @@ npm run check:kis-quote -- --symbol 005930 --market UN --json
 
 관리자 화면에서도 같은 점검을 실행할 수 있습니다. `/admin`의 `KIS 현재가 점검` 카드에서 종목코드와 `KRX`, `NXT`, `통합`, `전체` 시장을 선택하면 `POST /api/kis/quote-smoke-test`가 실행되고, 토큰 출처와 시장별 성공/실패가 표시됩니다.
 
+`/admin`의 `KIS/Naver 가격 비교` 카드에서는 `POST /api/kis/naver-compare`로 같은 종목의 Naver 기준가와 KIS KRX/NXT/통합 가격을 나란히 조회합니다. 결과에는 시장별 가격 차이, 차이율, 실패 사유, provider 진단 시도가 표시되며 관리자 API 보호 대상입니다.
+
 사용자 종목에는 `kisMarketDivCode`를 저장할 수 있습니다. 비어 있으면 `KIS_MARKET_DIV_CODE` 기본값을 사용하고, 값이 있으면 자동 가격 확인과 실패 종목 재시도에서 해당 종목의 KRX/NXT/통합 기준을 우선 적용합니다.
 
 키가 없거나 해외 종목이면 `kis` provider는 스킵되고 다음 provider로 넘어갑니다.
@@ -115,7 +117,7 @@ npm run check:kis-quote -- --symbol 005930 --market UN --json
 
 ## 다음 구현 조건
 
-KIS 접근 토큰 자동 발급/갱신, 현재가 smoke test CLI, 관리자 화면 점검 버튼은 구현했습니다. 다음 단계는 실제 알림 확인에 사용할 KIS 시장 구분을 종목별로 저장하는 것입니다.
+KIS 접근 토큰 자동 발급/갱신, 현재가 smoke test CLI, 관리자 화면 점검 버튼, 종목별 KIS 시장 설정, KIS/Naver 가격 비교 진단은 구현했습니다. 다음 단계는 비교 결과를 바탕으로 종목별 KIS 시장 기준을 추천하거나 바로 적용하는 UX입니다.
 
 실제 운영 전에 확인할 항목:
 

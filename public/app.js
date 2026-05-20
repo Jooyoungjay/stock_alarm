@@ -28,6 +28,7 @@ const state = {
   dividendCalendar: null,
   quoteProviderStats: null,
   kisQuoteSmokeTest: null,
+  kisNaverQuoteComparison: null,
   adminAuthRequired: false,
   adminAuthenticated: false,
   backupRetention: 0,
@@ -102,6 +103,11 @@ const elements = {
   kisSmokeForceTokenInput: document.querySelector('#kisSmokeForceTokenInput'),
   kisSmokeRunButton: document.querySelector('#kisSmokeRunButton'),
   kisSmokeTestResult: document.querySelector('#kisSmokeTestResult'),
+  kisNaverCompareForm: document.querySelector('#kisNaverCompareForm'),
+  kisNaverCompareSymbolInput: document.querySelector('#kisNaverCompareSymbolInput'),
+  kisNaverCompareMarketSelect: document.querySelector('#kisNaverCompareMarketSelect'),
+  kisNaverCompareRunButton: document.querySelector('#kisNaverCompareRunButton'),
+  kisNaverCompareResult: document.querySelector('#kisNaverCompareResult'),
   tabSections: document.querySelectorAll('.tab-section'),
   mobileNavButtons: document.querySelectorAll('.nav-item')
 };
@@ -115,6 +121,7 @@ syncAlertTypeControls(elements.form);
 renderRegistrationSummary();
 updateRegistrationStep(1);
 renderKisSmokeTestResult(null);
+renderKisNaverCompareResult(null);
 
 elements.form.elements.alertType.addEventListener('change', () => {
   syncAlertTypeControls(elements.form);
@@ -366,6 +373,11 @@ elements.kisSmokeTestForm?.addEventListener('submit', async (event) => {
   await runKisSmokeTest();
 });
 
+elements.kisNaverCompareForm?.addEventListener('submit', async (event) => {
+  event.preventDefault();
+  await runKisNaverCompare();
+});
+
 elements.watchFilterButtons.forEach((button) => {
   button.addEventListener('click', () => {
     state.watchFilter = button.dataset.watchFilter || 'all';
@@ -499,6 +511,29 @@ async function runKisSmokeTest() {
         ? 'KIS 현재가 점검이 성공했습니다.'
         : 'KIS 현재가 점검에서 실패 항목이 있습니다.',
       !state.kisQuoteSmokeTest?.ok
+    );
+  });
+}
+
+async function runKisNaverCompare() {
+  await withBusy(elements.kisNaverCompareRunButton, async () => {
+    const result = await api('/api/kis/naver-compare', {
+      method: 'POST',
+      body: JSON.stringify({
+        symbol: elements.kisNaverCompareSymbolInput?.value || '',
+        market: elements.kisNaverCompareMarketSelect?.value || 'all'
+      })
+    });
+
+    state.kisNaverQuoteComparison = result.kisNaverQuoteComparison || null;
+    state.quoteProviderStats = result.quoteProviderStats || state.quoteProviderStats;
+    renderKisNaverCompareResult(state.kisNaverQuoteComparison);
+    renderQuoteDiagnostics(state.quoteProviderStats);
+    showMessage(
+      state.kisNaverQuoteComparison?.ok
+        ? 'KIS/Naver 가격 비교가 완료됐습니다.'
+        : 'KIS/Naver 가격 비교에서 확인할 항목이 있습니다.',
+      !state.kisNaverQuoteComparison?.ok
     );
   });
 }
@@ -1661,6 +1696,130 @@ function renderKisSmokeAttempt(attempt) {
       <strong>${escapeHtml(getProviderLabel(attempt.provider))}</strong>
       <span>${escapeHtml(detail)}</span>
     </span>
+  `;
+}
+
+function renderKisNaverCompareResult(result) {
+  if (!elements.kisNaverCompareResult) {
+    return;
+  }
+
+  if (!result) {
+    elements.kisNaverCompareResult.innerHTML = `
+      <div class="kis-smoke-empty">
+        KIS 키를 설정한 뒤 비교를 실행하면 Naver 기준 가격과 KIS 시장별 가격 차이가 표시됩니다.
+      </div>
+    `;
+    return;
+  }
+
+  const statusClass = result.ok ? 'ok' : 'error';
+  const statusLabel = result.ok ? '비교 완료' : '확인 필요';
+  const summary = result.summary || {};
+  const rows = Array.isArray(result.results) ? result.results : [];
+
+  elements.kisNaverCompareResult.innerHTML = `
+    <div class="kis-smoke-summary ${statusClass}">
+      <div>
+        <div class="kis-smoke-heading">
+          <strong>${escapeHtml(result.symbol || '-')}</strong>
+          <span class="status-badge ${statusClass}">${escapeHtml(statusLabel)}</span>
+        </div>
+        <div class="kis-smoke-meta">
+          <span>Naver 입력 ${escapeHtml(result.inputSymbol || '-')}</span>
+          <span>KIS 시장 ${escapeHtml(formatKisSmokeMarketList(result.markets))}</span>
+          <span>생성 ${escapeHtml(formatDate(result.generatedAt))}</span>
+        </div>
+      </div>
+      <div class="kis-smoke-counts">
+        <span>KIS 성공 ${escapeHtml(summary.kisSuccess || 0)}</span>
+        <span>실패 ${escapeHtml(summary.kisFailed || 0)}</span>
+        <span>비교 ${escapeHtml(summary.comparable || 0)}</span>
+      </div>
+    </div>
+    ${renderNaverComparisonBaseline(result.naver)}
+    ${
+      result.message
+        ? `<div class="kis-smoke-message ${statusClass}">${escapeHtml(result.message)}</div>`
+        : ''
+    }
+    ${
+      rows.length
+        ? `<div class="kis-smoke-market-list">${rows.map(renderKisNaverCompareMarketResult).join('')}</div>`
+        : ''
+    }
+  `;
+}
+
+function renderNaverComparisonBaseline(item = {}) {
+  const statusClass = item?.ok ? 'ok' : 'error';
+  const quote = item?.quote || {};
+  const attempts = Array.isArray(item?.attempts) ? item.attempts : [];
+  const quoteMeta = item?.ok
+    ? [
+        formatMoney(quote.price, quote.currency),
+        quote.exchange || quote.providerLabel || getProviderLabel(quote.provider),
+        quote.regularMarketTime ? formatDate(quote.regularMarketTime) : ''
+      ].filter(Boolean)
+    : [item?.error || 'Naver 가격 조회 실패'];
+
+  return `
+    <div class="dividend-diagnostic-row ${statusClass}">
+      <div class="dividend-diagnostic-main">
+        <span class="dividend-diagnostic-stock">Naver 기준가</span>
+        <span class="status-badge ${statusClass}">${escapeHtml(item?.ok ? '성공' : '실패')}</span>
+      </div>
+      <div class="dividend-diagnostic-meta">
+        <span>${escapeHtml(quote.name || quote.symbol || '-')}</span>
+        ${quoteMeta.map((part) => `<span>${escapeHtml(part)}</span>`).join('')}
+      </div>
+      ${item?.error ? `<div class="dividend-diagnostic-error">${escapeHtml(item.error)}</div>` : ''}
+      ${
+        attempts.length
+          ? `<div class="dividend-attempt-list">${attempts.map(renderKisSmokeAttempt).join('')}</div>`
+          : ''
+      }
+    </div>
+  `;
+}
+
+function renderKisNaverCompareMarketResult(item) {
+  const comparison = item.comparison || {};
+  const statusClass = item.ok && comparison.comparable ? 'ok' : item.ok ? 'muted' : 'error';
+  const quote = item.quote || {};
+  const attempts = Array.isArray(item.attempts) ? item.attempts : [];
+  const marketLabel = [item.market, item.marketLabel].filter(Boolean).join(' / ') || '-';
+  const quoteTitle = quote.name || quote.symbol || '-';
+  const comparisonMeta =
+    item.ok && comparison.comparable
+      ? [
+          `KIS ${formatMoney(quote.price, quote.currency)}`,
+          `Naver 대비 ${formatSignedMoney(comparison.difference, quote.currency)} (${formatSignedPercent(
+            comparison.differencePercent
+          )})`,
+          quote.regularMarketTime ? formatDate(quote.regularMarketTime) : ''
+        ].filter(Boolean)
+      : [item.error || comparison.reason || '비교 불가'];
+
+  return `
+    <div class="dividend-diagnostic-row ${statusClass}">
+      <div class="dividend-diagnostic-main">
+        <span class="dividend-diagnostic-stock">${escapeHtml(marketLabel)}</span>
+        <span class="status-badge ${statusClass}">${escapeHtml(
+          item.ok && comparison.comparable ? '비교됨' : item.ok ? '비교 불가' : '실패'
+        )}</span>
+      </div>
+      <div class="dividend-diagnostic-meta">
+        <span>${escapeHtml(quoteTitle)}</span>
+        ${comparisonMeta.map((part) => `<span>${escapeHtml(part)}</span>`).join('')}
+      </div>
+      ${item.error ? `<div class="dividend-diagnostic-error">${escapeHtml(item.error)}</div>` : ''}
+      ${
+        attempts.length
+          ? `<div class="dividend-attempt-list">${attempts.map(renderKisSmokeAttempt).join('')}</div>`
+          : ''
+      }
+    </div>
   `;
 }
 
