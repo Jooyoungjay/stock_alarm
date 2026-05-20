@@ -218,6 +218,7 @@ stock_alarm/
 │  ├─ user-admin-page-split.md     # 사용자/관리자 화면 분리 전략
 │  ├─ market-data-api-candidates.md # 공식/유료 시세 API 후보 검토
 │  ├─ nxt-market-data-review.md    # NXT 시세 API 검토
+│  ├─ broker-api-adapter-review.md # 증권사 API adapter 검토
 │  ├─ app-store-review-prep.md     # 앱 심사 준비 체크리스트
 │  ├─ https-demo-server.md         # HTTPS 데모 서버 준비와 점검 절차
 │  ├─ store-screenshots.md         # 스토어 스크린샷 화면/문구/대체 텍스트 가이드
@@ -285,6 +286,18 @@ NXT_QUOTE_ENDPOINT_TEMPLATE=
 NXT_API_KEY=
 NXT_API_KEY_HEADER=Authorization
 NXT_API_KEY_SCHEME=Bearer
+BROKER_QUOTE_PROVIDER=none
+BROKER_TRADING_ENABLED=false
+KIS_API_BASE_URL=https://openapi.koreainvestment.com:9443
+KIS_APP_KEY=
+KIS_APP_SECRET=
+KIS_ACCESS_TOKEN=
+KIS_ACCOUNT_NUMBER=
+KIWOOM_API_BASE_URL=https://api.kiwoom.com
+KIWOOM_APP_KEY=
+KIWOOM_SECRET_KEY=
+KIWOOM_ACCESS_TOKEN=
+KIWOOM_ACCOUNT_NUMBER=
 TELEGRAM_BOT_TOKEN=
 TELEGRAM_CHAT_ID=
 MOBILE_PUSH_ENABLED=true
@@ -331,6 +344,18 @@ EXPO_PUSH_ENDPOINT=https://exp.host/--/api/v2/push/send
 | `NXT_API_KEY` | 빈 값 | 선택. NXT 계약 API 인증 키 |
 | `NXT_API_KEY_HEADER` | `Authorization` | 선택. NXT API 키를 보낼 헤더 이름 |
 | `NXT_API_KEY_SCHEME` | `Bearer` | 선택. `Authorization` 헤더 사용 시 키 앞에 붙일 scheme |
+| `BROKER_QUOTE_PROVIDER` | `none` | 선택. 증권사 API adapter 점검 대상. `none`, `kis`, `kiwoom` 중 하나 |
+| `BROKER_TRADING_ENABLED` | `false` | 주문 기능 사용 여부. 이 앱은 알림 전용이므로 `false`만 허용 |
+| `KIS_API_BASE_URL` | `https://openapi.koreainvestment.com:9443` | 한국투자증권 Open API URL |
+| `KIS_APP_KEY` | 빈 값 | 한국투자증권 앱 키 |
+| `KIS_APP_SECRET` | 빈 값 | 한국투자증권 앱 시크릿 |
+| `KIS_ACCESS_TOKEN` | 빈 값 | 한국투자증권 접근 토큰 |
+| `KIS_ACCOUNT_NUMBER` | 빈 값 | 선택. 향후 계좌 기반 기능 점검용 |
+| `KIWOOM_API_BASE_URL` | `https://api.kiwoom.com` | 키움 REST API URL |
+| `KIWOOM_APP_KEY` | 빈 값 | 키움 앱 키 |
+| `KIWOOM_SECRET_KEY` | 빈 값 | 키움 시크릿 키 |
+| `KIWOOM_ACCESS_TOKEN` | 빈 값 | 키움 접근 토큰 |
+| `KIWOOM_ACCOUNT_NUMBER` | 빈 값 | 선택. 향후 계좌 기반 기능 점검용 |
 | `TELEGRAM_BOT_TOKEN` | 빈 값 | 텔레그램 봇 토큰 |
 | `TELEGRAM_CHAT_ID` | 빈 값 | 알림을 받을 텔레그램 채팅 ID |
 | `MOBILE_PUSH_ENABLED` | `true` | 모바일 Expo Push 전송 여부 |
@@ -427,6 +452,7 @@ npm run migrate:postgres:dry-run
 npm run mobile:install
 npm run mobile:start
 npm run check:store-assets
+npm run check:broker-api
 ```
 
 가장 단순한 실행:
@@ -737,11 +763,26 @@ NXT_API_KEY=계약_API_키
 
 상세 검토 내용은 [NXT 시세 API 검토](docs/nxt-market-data-review.md)에 정리했습니다.
 
+### 증권사 API adapter 검토 현황
+
+2026-05-20 기준으로 한국투자증권 Open API와 키움 REST API를 개인 로컬용 시세 provider 후보로 검토했습니다. 이번 단계에서는 실제 현재가 provider를 붙이지 않고, 증권사 API 사용 전에 필요한 환경변수와 주문 기능 차단 조건을 점검하는 CLI를 추가했습니다.
+
+```powershell
+npm run check:broker-api
+npm run check:broker-api -- --provider kis
+npm run check:broker-api -- --provider kiwoom
+npm run check:broker-api -- --json
+```
+
+기본값은 `BROKER_QUOTE_PROVIDER=none`입니다. 이 상태에서는 기존 무료 시세 provider 체인을 그대로 사용합니다. `BROKER_TRADING_ENABLED=true`는 알림 앱 범위를 벗어나므로 점검 실패로 처리합니다.
+
+상세 검토 내용은 [증권사 API adapter 검토](docs/broker-api-adapter-review.md)에 정리했습니다.
+
 ### 공식/유료 시세 API 검토 현황
 
-2026-05-14 기준으로 KRX Open API, 공공데이터포털 주식시세정보, 한국투자증권 Open API, 키움 REST API, 코스콤 오픈API플랫폼, ICE NexTrade ATS를 비교했습니다.
+2026-05-20 기준으로 KRX Open API, 공공데이터포털 주식시세정보, 한국투자증권 Open API, 키움 REST API, 코스콤 오픈API플랫폼, ICE NexTrade ATS를 비교했습니다.
 
-결론은 당장 provider를 교체하지 않고, 먼저 현재 무료 provider의 실패율과 실패 사유를 기록하는 것입니다. 공공데이터포털과 KRX Open API는 공식 일봉/기준일 데이터 보강에는 유용하지만, 장중 60초 매도 알림용 실시간 시세 provider로는 부족합니다. 실시간 안정성이 필요해지면 한국투자증권/키움 같은 증권사 API를 개인 로컬용 후보로 검토하고, NXT 분리 시세는 코스콤/ICE 같은 계약형 데이터 확인 뒤 진행합니다.
+결론은 당장 provider를 교체하지 않고, 먼저 현재 무료 provider의 실패율과 실패 사유를 기록하는 것입니다. 공공데이터포털과 KRX Open API는 공식 일봉/기준일 데이터 보강에는 유용하지만, 장중 60초 매도 알림용 실시간 시세 provider로는 부족합니다. 실시간 안정성이 필요해지면 한국투자증권/키움 같은 증권사 API를 개인 로컬용 후보로 붙이되, 주문 기능은 제외합니다. NXT 분리 시세는 코스콤/ICE 같은 계약형 데이터 확인 뒤 진행합니다.
 
 상세 비교는 [공식/유료 시세 API 후보 검토](docs/market-data-api-candidates.md)에 정리했습니다.
 
@@ -1346,6 +1387,7 @@ Invoke-RestMethod http://127.0.0.1:3001/api/health
 - 알림/포트폴리오: 이익금 반납률 알림, 최대 수익금/반납 금액, 계좌 총 반납률, 종목별 알림 토글
 - 배당: 배당 API provider 진단, 텔레그램 배당 진단 명령, 국내 종목 매칭 보정, 배당락일/지급일/변경 이력, 배당 성장률, 배당 캘린더 필터/월별 합계, 배당락일/지급일 전후 알림
 - 시세: provider 진단, 시세 출처/데이터 성격 표시, 공공데이터포털 일봉 provider 실험, NXT/공식 API 검토, NXT 계약 API adapter 골격
+- 증권사 API: 한국투자증권/키움 quote-only adapter 점검 CLI, 주문 기능 차단 가드, 환경변수 문서화
 - 운영/관리: 사용자/관리자 화면 분리, 관리자 보호, 백업/복구/삭제, 백업 스냅샷 계약, 데이터 모델 정리, 저장소 계약, JSON -> DB 이전 설계, WBS 상태 표준화, HTTPS 데모 서버 점검
 - 저장소: PostgresStore JSONB 쿼리 어댑터, DATABASE_URL 마스킹, 계약 테스트, JSON -> Postgres dry-run 마이그레이션 검증, 통합 테스트 데이터셋, 백업 스냅샷 계약 검증, Postgres 연결 리허설 CLI
 - 안정화: 시세/배당 실패 사유 표시와 종목별 재시도 UX
@@ -1353,4 +1395,4 @@ Invoke-RestMethod http://127.0.0.1:3001/api/health
 
 우선순위가 높은 순서:
 
-1. 증권사 API adapter 검토
+1. KIS quote provider 구현(실제 키 확보 시)

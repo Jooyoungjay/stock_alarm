@@ -1,6 +1,6 @@
 # 공식/유료 시세 API 후보 검토
 
-자료 확인일: 2026-05-15
+자료 확인일: 2026-05-20
 
 ## 목적
 
@@ -18,11 +18,12 @@ Stock Alarm은 현재 로컬 웹앱 MVP 단계이며, 무료/공개 provider 체
 2. 시세 출처와 지연 여부 표시: 완료
 3. 공식 일봉 provider 실험: 완료
 4. NXT 계약 API adapter 골격: 완료
+5. 증권사 API adapter 검토: 완료
 
 남은 추천 순서:
 
-5. 증권사 API adapter 검토
-6. NXT 실계약 endpoint 확보 시 운영 검증
+6. KIS quote provider 구현(실제 키 확보 시)
+7. NXT 실계약 endpoint 확보 시 운영 검증
 
 ## 후보 비교
 
@@ -162,11 +163,26 @@ ICE Developer Portal에는 NexTrade ATS native data feed와 ICE Consolidated Fee
 
 이렇게 해두면 나중에 KRX, NXT, 증권사, 계약형 provider가 섞여도 사용자가 어떤 가격을 보고 있는지 알 수 있습니다.
 
+## 증권사 API adapter 검토 결과
+
+한국투자증권 Open API와 키움 REST API는 개인 로컬 환경에서 현재가 조회용 후보로 유지합니다. 다만 이번 앱은 알림 앱이므로 주문 기능은 제외합니다. 이를 위해 `npm run check:broker-api` 점검 CLI를 추가했고, `BROKER_TRADING_ENABLED=true`이면 실패하도록 했습니다.
+
+기본 설정은 아래와 같습니다.
+
+```text
+BROKER_QUOTE_PROVIDER=none
+BROKER_TRADING_ENABLED=false
+```
+
+`BROKER_QUOTE_PROVIDER=none`이면 현재 무료 provider 체인을 그대로 사용합니다. 실제 증권사 시세 호출은 한국투자증권 또는 키움 API 키, 시크릿, 접근 토큰을 확보한 뒤 별도 provider 구현으로 진행합니다.
+
+상세 내용은 [증권사 API adapter 검토](broker-api-adapter-review.md)에 정리했습니다.
+
 ## 다음 개발로 넘길 항목
 
-현재 provider 실패율 기록, 시세 출처 표시, 공식 일봉 provider 실험, NXT 계약 API adapter 골격은 완료했습니다. 다음 구현 후보는 `증권사 API adapter 검토`입니다.
+현재 provider 실패율 기록, 시세 출처 표시, 공식 일봉 provider 실험, NXT 계약 API adapter 골격, 증권사 API adapter 검토는 완료했습니다. 다음 구현 후보는 `KIS quote provider 구현(실제 키 확보 시)`입니다.
 
-증권사 API adapter를 진행할 때 먼저 저장할 값:
+KIS quote provider를 진행할 때 먼저 저장할 값:
 
 - provider 이름
 - 요청 종목코드
@@ -175,6 +191,7 @@ ICE Developer Portal에는 NexTrade ATS native data feed와 ICE Consolidated Fee
 - 응답 시간
 - 마지막 성공 시각
 - provider별 누적 성공/실패 횟수
+- 접근 토큰 만료/재발급 필요 여부
 
 ## 참고 링크
 
@@ -182,7 +199,10 @@ ICE Developer Portal에는 NexTrade ATS native data feed와 ICE Consolidated Fee
 - [KRX Open API 서비스 이용방법](https://openapi.krx.co.kr/contents/OPP/INFO/OPPINFO003.jsp)
 - [KRX Open API 서비스 목록](https://openapi.krx.co.kr/contents/OPP/INFO/service/OPPINFO004.cmd)
 - [한국투자증권 Open API 개발자센터](https://apiportal.koreainvestment.com/)
+- [한국투자증권 Open API 공식 GitHub 샘플](https://github.com/koreainvestment/open-trading-api)
 - [키움 REST API](https://openapi.kiwoom.com/main)
+- [키움 REST API 가이드](https://openapi.kiwoom.com/guide/apiguide)
 - [코스콤 오픈API플랫폼 API 서비스](https://koscom.gitbook.io/open-api/api)
 - [ICE NexTrade ATS](https://developer.ice.com/fixed-income-data-services/catalog/nextrade-ats)
 - [NXT 시세 API 검토](nxt-market-data-review.md)
+- [증권사 API adapter 검토](broker-api-adapter-review.md)

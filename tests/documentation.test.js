@@ -146,3 +146,18 @@ test('NXT market data guide documents contract adapter limits and settings', asy
   assert.match(markdown, /missing_nxt_quote_endpoint/);
   assert.match(markdown, /화면 scraping/);
 });
+
+test('broker API adapter guide documents quote-only checks and trading guard', async () => {
+  const markdown = await fs.readFile(
+    new URL('../docs/broker-api-adapter-review.md', import.meta.url),
+    'utf8'
+  );
+
+  assert.match(markdown, /증권사 API adapter 검토/);
+  assert.match(markdown, /npm run check:broker-api/);
+  assert.match(markdown, /BROKER_QUOTE_PROVIDER/);
+  assert.match(markdown, /BROKER_TRADING_ENABLED/);
+  assert.match(markdown, /한국투자증권/);
+  assert.match(markdown, /키움/);
+  assert.match(markdown, /주문/);
+});
