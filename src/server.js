@@ -7,7 +7,7 @@ import { config } from './config.js';
 import { buildDividendCalendar } from './dividendCalendar.js';
 import { lastDividendEventAlertMetaKey, runDividendEventAlertCheck } from './dividendEventAlerts.js';
 import { runDividendRefresh, runSingleDividendRefresh } from './dividendRefresh.js';
-import { normalizeKisMarketDivCode, resolveKisMarketDivCode } from './kisMarket.js';
+import { formatKisMarketDivCode, normalizeKisMarketDivCode, resolveKisMarketDivCode } from './kisMarket.js';
 import { buildKisNaverQuoteComparison } from './kisNaverCompare.js';
 import { buildKisQuoteSmokeTest } from './kisQuoteSmokeTest.js';
 import {
@@ -360,6 +360,71 @@ async function runKisNaverQuoteComparison(body = {}) {
         source: 'kis_naver_compare'
       })
   });
+}
+
+function normalizeStockSymbolForCompare(value) {
+  const normalized = normalizeSymbolInput(value) || String(value || '').trim().toUpperCase();
+  return normalized.replace(/\.(KS|KQ)$/i, '');
+}
+
+function findStocksByComparableSymbol(stocks, symbol) {
+  const normalized = normalizeStockSymbolForCompare(symbol);
+
+  if (!normalized) {
+    return [];
+  }
+
+  return stocks.filter((stock) => normalizeStockSymbolForCompare(stock.symbol) === normalized);
+}
+
+async function applyKisMarketFromComparison(body = {}) {
+  const market = normalizeKisMarketDivCode(body.market);
+
+  if (!market) {
+    throw new Error('적용할 KIS 시장을 J, NX, UN 중 하나로 입력하세요.');
+  }
+
+  const stocks = await store.listStocks();
+  const stockId = String(body.stockId || '').trim();
+  const comparedSymbol = normalizeStockSymbolForCompare(body.symbol);
+  let stock = null;
+
+  if (stockId) {
+    stock = stocks.find((item) => item.id === stockId) || null;
+
+    if (!stock) {
+      throw new Error('적용할 등록 종목을 찾을 수 없습니다.');
+    }
+
+    if (comparedSymbol && normalizeStockSymbolForCompare(stock.symbol) !== comparedSymbol) {
+      throw new Error('비교한 종목과 적용 대상 종목이 다릅니다.');
+    }
+  } else {
+    const matches = findStocksByComparableSymbol(stocks, comparedSymbol);
+
+    if (!matches.length) {
+      throw new Error('적용할 등록 종목을 찾을 수 없습니다.');
+    }
+
+    if (matches.length > 1) {
+      throw new Error('같은 종목이 여러 개 등록되어 있습니다. 적용할 종목을 선택하세요.');
+    }
+
+    stock = matches[0];
+  }
+
+  let updated = await store.updateStock(stock.id, {
+    kisMarketDivCode: market,
+    resetHighPrice: true
+  });
+  updated = await initializePurchaseHigh(updated);
+
+  return {
+    stock: updated,
+    appliedMarket: market,
+    appliedMarketLabel: formatKisMarketDivCode(market),
+    matchedSymbol: normalizeStockSymbolForCompare(updated.symbol)
+  };
 }
 
 async function initializePurchaseHigh(stock) {
@@ -877,6 +942,17 @@ async function handleApi(request, response, url) {
     sendJson(response, 200, {
       kisNaverQuoteComparison: result,
       quoteProviderStats
+    });
+    return;
+  }
+
+  if (request.method === 'POST' && url.pathname === '/api/kis/naver-compare/apply') {
+    const body = await readJsonBody(request);
+    const result = await applyKisMarketFromComparison(body);
+
+    sendJson(response, 200, {
+      applied: true,
+      ...result
     });
     return;
   }

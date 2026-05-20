@@ -60,6 +60,9 @@ test('KIS/Naver quote comparison calculates market price differences', async () 
   assert.equal(result.results[1].market, 'NX');
   assert.equal(result.results[1].comparison.difference, 150);
   assert.equal(result.results[1].comparison.differencePercent, 1.5);
+  assert.equal(result.recommendation.market, 'J');
+  assert.equal(result.recommendation.absoluteDifference, 50);
+  assert.match(result.recommendation.reason, /가격 차이/);
   assert.deepEqual(attempts, [
     { provider: 'naver', market: '' },
     { provider: 'kis', market: 'J' },

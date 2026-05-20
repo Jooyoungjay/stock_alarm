@@ -1551,6 +1551,18 @@ select:focus {
   color: var(--danger);
 }
 
+.kis-apply-actions {
+  display: flex;
+  justify-content: flex-start;
+  gap: 6px;
+  flex-wrap: wrap;
+  margin-top: 4px;
+}
+
+.kis-apply-actions .btn:disabled {
+  cursor: default;
+}
+
 .dividend-attempt {
   display: inline-flex;
   align-items: center;

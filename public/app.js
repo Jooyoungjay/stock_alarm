@@ -378,6 +378,16 @@ elements.kisNaverCompareForm?.addEventListener('submit', async (event) => {
   await runKisNaverCompare();
 });
 
+elements.kisNaverCompareResult?.addEventListener('click', async (event) => {
+  const button = event.target?.closest?.('[data-kis-apply-market]');
+
+  if (!button) {
+    return;
+  }
+
+  await applyKisMarketFromComparison(button);
+});
+
 elements.watchFilterButtons.forEach((button) => {
   button.addEventListener('click', () => {
     state.watchFilter = button.dataset.watchFilter || 'all';
@@ -455,6 +465,7 @@ async function loadData() {
     renderQuoteDiagnostics(data.quoteProviderStats);
     renderDividendDiagnostics(data.lastDividendRefresh);
     renderAlerts();
+    renderKisNaverCompareResult(state.kisNaverQuoteComparison);
 
     if (isAdminMode() && roadmapResult.payload) {
       state.roadmap = roadmapResult.payload.roadmap || null;
@@ -535,6 +546,25 @@ async function runKisNaverCompare() {
         : 'KIS/Naver 가격 비교에서 확인할 항목이 있습니다.',
       !state.kisNaverQuoteComparison?.ok
     );
+  });
+}
+
+async function applyKisMarketFromComparison(button) {
+  await withBusy(button, async () => {
+    const result = await api('/api/kis/naver-compare/apply', {
+      method: 'POST',
+      body: JSON.stringify({
+        stockId: button.dataset.kisApplyStockId || '',
+        symbol: button.dataset.kisApplySymbol || '',
+        market: button.dataset.kisApplyMarket || ''
+      })
+    });
+    const stock = result.stock || {};
+    const label = stock.displayName || stock.name || stock.symbol || '종목';
+    const marketLabel = result.appliedMarketLabel || formatKisMarketDivCodeLabel(result.appliedMarket);
+
+    showMessage(`${label} KIS 시장 기준을 ${marketLabel}로 적용했습니다.`);
+    await loadData();
   });
 }
 
@@ -1728,6 +1758,11 @@ function renderKisNaverCompareResult(result) {
         <div class="kis-smoke-meta">
           <span>Naver 입력 ${escapeHtml(result.inputSymbol || '-')}</span>
           <span>KIS 시장 ${escapeHtml(formatKisSmokeMarketList(result.markets))}</span>
+          ${
+            result.recommendation
+              ? `<span>추천 ${escapeHtml(result.recommendation.marketLabel || result.recommendation.market || '-')}</span>`
+              : ''
+          }
           <span>생성 ${escapeHtml(formatDate(result.generatedAt))}</span>
         </div>
       </div>
@@ -1786,6 +1821,8 @@ function renderNaverComparisonBaseline(item = {}) {
 function renderKisNaverCompareMarketResult(item) {
   const comparison = item.comparison || {};
   const statusClass = item.ok && comparison.comparable ? 'ok' : item.ok ? 'muted' : 'error';
+  const recommendation = state.kisNaverQuoteComparison?.recommendation || null;
+  const isRecommended = Boolean(recommendation?.market && recommendation.market === item.market);
   const quote = item.quote || {};
   const attempts = Array.isArray(item.attempts) ? item.attempts : [];
   const marketLabel = [item.market, item.marketLabel].filter(Boolean).join(' / ') || '-';
@@ -1808,12 +1845,19 @@ function renderKisNaverCompareMarketResult(item) {
         <span class="status-badge ${statusClass}">${escapeHtml(
           item.ok && comparison.comparable ? '비교됨' : item.ok ? '비교 불가' : '실패'
         )}</span>
+        ${isRecommended ? '<span class="status-badge ok">추천</span>' : ''}
       </div>
       <div class="dividend-diagnostic-meta">
         <span>${escapeHtml(quoteTitle)}</span>
         ${comparisonMeta.map((part) => `<span>${escapeHtml(part)}</span>`).join('')}
       </div>
+      ${
+        isRecommended && recommendation?.reason
+          ? `<div class="dividend-diagnostic-meta kis-recommendation-detail">${escapeHtml(recommendation.reason)}</div>`
+          : ''
+      }
       ${item.error ? `<div class="dividend-diagnostic-error">${escapeHtml(item.error)}</div>` : ''}
+      ${renderKisNaverApplyActions(item)}
       ${
         attempts.length
           ? `<div class="dividend-attempt-list">${attempts.map(renderKisSmokeAttempt).join('')}</div>`
@@ -1821,6 +1865,58 @@ function renderKisNaverCompareMarketResult(item) {
       }
     </div>
   `;
+}
+
+function renderKisNaverApplyActions(item) {
+  if (!item?.ok || !item.comparison?.comparable) {
+    return '';
+  }
+
+  const result = state.kisNaverQuoteComparison || {};
+  const symbol = normalizeSymbolForCompare(item.quote?.symbol || result.symbol || result.inputSymbol);
+  const market = normalizeKisMarketDivCode(item.market);
+  const matches = findStocksForKisComparison(symbol);
+
+  if (!market) {
+    return '';
+  }
+
+  if (!matches.length) {
+    return '<div class="dividend-diagnostic-error">등록된 종목이 없어 바로 적용할 수 없습니다.</div>';
+  }
+
+  return `
+    <div class="stock-btn-group kis-apply-actions">
+      ${matches.map((stock) => renderKisNaverApplyButton(stock, market, symbol)).join('')}
+    </div>
+  `;
+}
+
+function renderKisNaverApplyButton(stock, market, symbol) {
+  const label = getStockDisplayName(stock) || stock.name || stock.symbol || '종목';
+  const current = normalizeKisMarketDivCode(stock.kisMarketDivCode) === market;
+  const text = current ? `${label} 적용됨` : `${label}에 적용`;
+
+  return `
+    <button
+      type="button"
+      class="btn btn-outline btn-sm secondary-button"
+      data-kis-apply-market="${escapeHtml(market)}"
+      data-kis-apply-stock-id="${escapeHtml(stock.id)}"
+      data-kis-apply-symbol="${escapeHtml(symbol)}"
+      ${current ? 'disabled' : ''}
+    >${escapeHtml(text)}</button>
+  `;
+}
+
+function findStocksForKisComparison(symbol) {
+  const normalized = normalizeSymbolForCompare(symbol);
+
+  if (!normalized) {
+    return [];
+  }
+
+  return state.stocks.filter((stock) => normalizeSymbolForCompare(stock.symbol) === normalized);
 }
 
 function formatKisSmokeMarketList(markets = []) {

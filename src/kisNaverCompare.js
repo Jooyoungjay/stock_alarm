@@ -78,6 +78,7 @@ export async function buildKisNaverQuoteComparison(options = {}) {
   const kisFailed = results.length - kisSuccess;
   const comparable = results.filter((item) => item.comparison?.comparable).length;
   const ok = Boolean(naver.ok && comparable && kisFailed === 0);
+  const recommendation = buildMarketRecommendation(results);
 
   return {
     ok,
@@ -87,6 +88,7 @@ export async function buildKisNaverQuoteComparison(options = {}) {
     provider: 'kis_naver_compare',
     markets: markets.map(toMarketInfo),
     naver,
+    recommendation,
     results,
     summary: {
       kisTotal: results.length,
@@ -212,6 +214,33 @@ function buildComparisonMessage({ naver, kisFailed, comparable, total }) {
   }
 
   return `KIS/Naver 가격 비교가 완료됐습니다. ${comparable}/${total}개 시장을 비교했습니다.`;
+}
+
+function buildMarketRecommendation(results = []) {
+  const comparableResults = results.filter((item) => item.comparison?.comparable);
+
+  if (!comparableResults.length) {
+    return null;
+  }
+
+  const best = comparableResults.reduce((currentBest, item) => {
+    if (!currentBest) {
+      return item;
+    }
+
+    return item.comparison.absoluteDifference < currentBest.comparison.absoluteDifference
+      ? item
+      : currentBest;
+  }, null);
+
+  return {
+    market: best.market,
+    marketLabel: best.marketLabel,
+    difference: best.comparison.difference,
+    absoluteDifference: best.comparison.absoluteDifference,
+    differencePercent: best.comparison.differencePercent,
+    reason: 'Naver 기준가와 가격 차이가 가장 작은 KIS 시장입니다.'
+  };
 }
 
 function normalizeComparisonSymbol(value) {
