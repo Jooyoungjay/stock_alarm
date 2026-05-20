@@ -1406,6 +1406,102 @@ select:focus {
   gap: 8px;
 }
 
+.kis-smoke-form {
+  display: grid;
+  gap: 10px;
+  margin-bottom: 12px;
+}
+
+.kis-smoke-check {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  width: fit-content;
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.kis-smoke-check input {
+  width: auto;
+  accent-color: var(--accent);
+}
+
+.kis-smoke-result {
+  display: grid;
+  gap: 10px;
+}
+
+.kis-smoke-empty,
+.kis-smoke-token,
+.kis-smoke-message {
+  padding: 10px 12px;
+  border: 1px solid var(--border-soft);
+  border-radius: var(--radius-sm);
+  background: var(--surface-2);
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.kis-smoke-summary {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 12px;
+  border: 1px solid var(--border-soft);
+  border-radius: var(--radius-sm);
+  background: var(--surface-2);
+}
+
+.kis-smoke-summary.ok {
+  border-color: rgba(46, 168, 77, 0.28);
+}
+
+.kis-smoke-summary.error,
+.kis-smoke-message.error {
+  border-color: rgba(224, 92, 92, 0.34);
+}
+
+.kis-smoke-message.error {
+  background: var(--danger-soft);
+  color: var(--danger);
+}
+
+.kis-smoke-heading,
+.kis-smoke-counts,
+.kis-smoke-meta {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.kis-smoke-heading strong {
+  color: var(--text);
+  font-size: 14px;
+  font-weight: 900;
+}
+
+.kis-smoke-meta,
+.kis-smoke-counts {
+  margin-top: 5px;
+  color: var(--dim);
+  font-size: 11px;
+  font-weight: 800;
+}
+
+.kis-smoke-token {
+  display: grid;
+  gap: 4px;
+}
+
+.kis-smoke-market-list {
+  display: grid;
+  gap: 8px;
+}
+
 .dividend-diagnostic-row {
   display: grid;
   gap: 8px;
@@ -1481,6 +1577,11 @@ select:focus {
 .dividend-attempt.error {
   background: var(--danger-soft);
   color: var(--danger);
+}
+
+.dividend-attempt.muted {
+  background: var(--tag-bg);
+  color: var(--muted);
 }
 
 .watch-controls {
@@ -3005,6 +3106,14 @@ select:focus {
 
   .alert-comparison-row {
     grid-template-columns: 1fr;
+  }
+
+  .kis-smoke-summary {
+    display: grid;
+  }
+
+  .kis-smoke-counts {
+    justify-content: flex-start;
   }
 
   .alert-comparison-status {

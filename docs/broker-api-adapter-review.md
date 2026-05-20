@@ -57,6 +57,8 @@ npm run check:kis-quote -- --symbol 33626L --market all
 npm run check:kis-quote -- --symbol 005930 --market UN --json
 ```
 
+관리자 화면에서도 같은 점검을 실행할 수 있습니다. `/admin`의 `KIS 현재가 점검` 카드에서 종목코드와 `KRX`, `NXT`, `통합`, `전체` 시장을 선택하면 `POST /api/kis/quote-smoke-test`가 실행되고, 토큰 출처와 시장별 성공/실패가 표시됩니다.
+
 키가 없거나 해외 종목이면 `kis` provider는 스킵되고 다음 provider로 넘어갑니다.
 
 ## 환경변수
@@ -111,13 +113,13 @@ npm run check:kis-quote -- --symbol 005930 --market UN --json
 
 ## 다음 구현 조건
 
-KIS 접근 토큰 자동 발급/갱신과 현재가 smoke test CLI는 구현했습니다. 다음 단계는 터미널 명령을 모르는 사용자도 관리자 화면에서 안전하게 KIS 현재가 점검을 실행할 수 있게 하는 것입니다.
+KIS 접근 토큰 자동 발급/갱신, 현재가 smoke test CLI, 관리자 화면 점검 버튼은 구현했습니다. 다음 단계는 실제 알림 확인에 사용할 KIS 시장 구분을 종목별로 저장하는 것입니다.
 
 실제 운영 전에 확인할 항목:
 
 - 사용자가 한국투자증권 API 신청을 완료
 - 앱 키와 시크릿을 `.env`에 준비
-- `npm run check:kis-quote -- --symbol 336260 --market J`로 현재가 조회 호출 제한과 오류 메시지를 실제 계정으로 확인
+- `npm run check:kis-quote -- --symbol 336260 --market J` 또는 관리자 화면 점검 버튼으로 현재가 조회 호출 제한과 오류 메시지를 실제 계정으로 확인
 - 주문 API를 호출하지 않는다는 제품 범위 유지
 
 ## 참고 링크

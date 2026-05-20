@@ -20,7 +20,7 @@
       href="https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=Noto+Sans+KR:wght@300;400;500;600;700&display=swap"
       rel="stylesheet"
     />
-    <link rel="stylesheet" href="/styles.css" />
+    <link rel="stylesheet" href="/styles.css?v=20260520-kis-smoke" />
   </head>
   <body data-register-modal="closed">
     <header class="app-header">
@@ -404,6 +404,59 @@
         <div class="card" data-page-scope="admin" data-admin-protected="true">
           <div class="card-header">
             <div>
+              <h2 id="kisSmokeTitle" class="card-title">KIS 현재가 점검</h2>
+              <p class="card-subtitle">한국투자증권 Open API 현재가를 종목과 시장별로 확인합니다.</p>
+            </div>
+            <div class="watch-actions">
+              <button
+                id="kisSmokeRunButton"
+                type="submit"
+                form="kisSmokeTestForm"
+                class="btn btn-primary btn-sm primary-button"
+              >
+                점검 실행
+              </button>
+            </div>
+          </div>
+
+          <form id="kisSmokeTestForm" class="kis-smoke-form">
+            <div class="form-row">
+              <label class="form-group">
+                <span class="form-label">종목 코드</span>
+                <input
+                  id="kisSmokeSymbolInput"
+                  class="form-input"
+                  type="text"
+                  value="336260"
+                  placeholder="336260, 33626L"
+                  autocomplete="off"
+                  required
+                />
+              </label>
+
+              <label class="form-group">
+                <span class="form-label">시장 구분</span>
+                <select id="kisSmokeMarketSelect" class="form-input">
+                  <option value="J">KRX</option>
+                  <option value="NX">NXT</option>
+                  <option value="UN">통합</option>
+                  <option value="all">전체</option>
+                </select>
+              </label>
+            </div>
+
+            <label class="kis-smoke-check">
+              <input id="kisSmokeForceTokenInput" type="checkbox" />
+              <span>캐시가 유효해도 접근 토큰을 새로 발급</span>
+            </label>
+          </form>
+
+          <div id="kisSmokeTestResult" class="kis-smoke-result" aria-live="polite"></div>
+        </div>
+
+        <div class="card" data-page-scope="admin" data-admin-protected="true">
+          <div class="card-header">
+            <div>
               <h2 id="diagnosticsTitle" class="card-title">운영 진단</h2>
               <p class="card-subtitle">시세와 배당 provider 상태를 확인합니다.</p>
             </div>
@@ -486,6 +539,6 @@
       </div>
     </nav>
 
-    <script src="/app.js" type="module"></script>
+    <script src="/app.js?v=20260520-kis-smoke" type="module"></script>
   </body>
 </html>

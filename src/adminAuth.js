@@ -57,6 +57,10 @@ export function isAdminApiPath(method, pathname) {
     return true;
   }
 
+  if (pathname === '/api/kis/quote-smoke-test' && method === 'POST') {
+    return true;
+  }
+
   if (pathname === '/api/check-now' && method === 'POST') {
     return true;
   }

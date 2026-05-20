@@ -7,6 +7,7 @@ import { config } from './config.js';
 import { buildDividendCalendar } from './dividendCalendar.js';
 import { lastDividendEventAlertMetaKey, runDividendEventAlertCheck } from './dividendEventAlerts.js';
 import { runDividendRefresh, runSingleDividendRefresh } from './dividendRefresh.js';
+import { buildKisQuoteSmokeTest } from './kisQuoteSmokeTest.js';
 import {
   buildDailyBriefing,
   formatDailyBriefingMessage,
@@ -299,6 +300,30 @@ function recordQuoteProviderAttempt(attempt) {
   }
 
   return store.recordQuoteProviderAttempt(attempt);
+}
+
+async function runKisQuoteSmokeTest(body = {}) {
+  const forceToken = Boolean(body.forceToken);
+
+  return buildKisQuoteSmokeTest({
+    symbol: body.symbol || config.kisSmokeSymbol,
+    market: body.market || config.kisMarketDivCode,
+    timeoutMs: config.quoteTimeoutMs,
+    kisApiBaseUrl: config.kisApiBaseUrl,
+    kisAppKey: config.kisAppKey,
+    kisAppSecret: config.kisAppSecret,
+    kisAccessToken: forceToken ? '' : config.kisAccessToken,
+    kisMarketDivCode: config.kisMarketDivCode,
+    kisCustType: config.kisCustType,
+    kisTokenAutoRefresh: config.kisTokenAutoRefresh,
+    kisTokenCachePath: config.kisTokenCachePath,
+    forceRefresh: forceToken,
+    onProviderAttempt: (attempt) =>
+      recordQuoteProviderAttempt({
+        ...attempt,
+        source: 'kis_smoke_test'
+      })
+  });
 }
 
 async function initializePurchaseHigh(stock) {
@@ -792,6 +817,18 @@ async function handleApi(request, response, url) {
   if (request.method === 'GET' && url.pathname === '/api/quote-provider-stats') {
     sendJson(response, 200, {
       quoteProviderStats: await store.getQuoteProviderStats()
+    });
+    return;
+  }
+
+  if (request.method === 'POST' && url.pathname === '/api/kis/quote-smoke-test') {
+    const body = await readJsonBody(request);
+    const result = await runKisQuoteSmokeTest(body);
+    const quoteProviderStats = await store.getQuoteProviderStats();
+
+    sendJson(response, 200, {
+      kisQuoteSmokeTest: result,
+      quoteProviderStats
     });
     return;
   }

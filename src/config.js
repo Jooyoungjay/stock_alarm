@@ -191,6 +191,7 @@ export const config = {
   kisCustType: process.env.KIS_CUST_TYPE || 'P',
   kisTokenAutoRefresh: toBoolean(process.env.KIS_TOKEN_AUTO_REFRESH, true),
   kisTokenCachePath: process.env.KIS_TOKEN_CACHE_PATH || path.join(configuredDataDir, 'kis-token.json'),
+  kisSmokeSymbol: process.env.KIS_SMOKE_SYMBOL || '336260',
   telegramBotToken: process.env.TELEGRAM_BOT_TOKEN || '',
   telegramChatId: process.env.TELEGRAM_CHAT_ID || '',
   mobilePushEnabled: toBoolean(process.env.MOBILE_PUSH_ENABLED, true),

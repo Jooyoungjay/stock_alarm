@@ -21,6 +21,7 @@ const state = {
   roadmap: null,
   dividendCalendar: null,
   quoteProviderStats: null,
+  kisQuoteSmokeTest: null,
   adminAuthRequired: false,
   adminAuthenticated: false,
   backupRetention: 0,
@@ -89,6 +90,12 @@ const elements = {
   refreshBackupsButton: document.querySelector('#refreshBackupsButton'),
   refreshServerStatusButton: document.querySelector('#refreshServerStatusButton'),
   refreshRoadmapButton: document.querySelector('#refreshRoadmapButton'),
+  kisSmokeTestForm: document.querySelector('#kisSmokeTestForm'),
+  kisSmokeSymbolInput: document.querySelector('#kisSmokeSymbolInput'),
+  kisSmokeMarketSelect: document.querySelector('#kisSmokeMarketSelect'),
+  kisSmokeForceTokenInput: document.querySelector('#kisSmokeForceTokenInput'),
+  kisSmokeRunButton: document.querySelector('#kisSmokeRunButton'),
+  kisSmokeTestResult: document.querySelector('#kisSmokeTestResult'),
   tabSections: document.querySelectorAll('.tab-section'),
   mobileNavButtons: document.querySelectorAll('.nav-item')
 };
@@ -101,6 +108,7 @@ elements.form.elements.purchaseDate.max = getTodayInputValue();
 syncAlertTypeControls(elements.form);
 renderRegistrationSummary();
 updateRegistrationStep(1);
+renderKisSmokeTestResult(null);
 
 elements.form.elements.alertType.addEventListener('change', () => {
   syncAlertTypeControls(elements.form);
@@ -342,6 +350,11 @@ elements.refreshRoadmapButton.addEventListener('click', async () => {
   await withBusy(elements.refreshRoadmapButton, loadRoadmap);
 });
 
+elements.kisSmokeTestForm?.addEventListener('submit', async (event) => {
+  event.preventDefault();
+  await runKisSmokeTest();
+});
+
 elements.watchFilterButtons.forEach((button) => {
   button.addEventListener('click', () => {
     state.watchFilter = button.dataset.watchFilter || 'all';
@@ -453,6 +466,30 @@ async function loadBackups() {
     handleAdminAuthFailure(error);
     showMessage(error.message, true);
   }
+}
+
+async function runKisSmokeTest() {
+  await withBusy(elements.kisSmokeRunButton, async () => {
+    const result = await api('/api/kis/quote-smoke-test', {
+      method: 'POST',
+      body: JSON.stringify({
+        symbol: elements.kisSmokeSymbolInput?.value || '',
+        market: elements.kisSmokeMarketSelect?.value || 'J',
+        forceToken: Boolean(elements.kisSmokeForceTokenInput?.checked)
+      })
+    });
+
+    state.kisQuoteSmokeTest = result.kisQuoteSmokeTest || null;
+    state.quoteProviderStats = result.quoteProviderStats || state.quoteProviderStats;
+    renderKisSmokeTestResult(state.kisQuoteSmokeTest);
+    renderQuoteDiagnostics(state.quoteProviderStats);
+    showMessage(
+      state.kisQuoteSmokeTest?.ok
+        ? 'KIS 현재가 점검이 성공했습니다.'
+        : 'KIS 현재가 점검에서 실패 항목이 있습니다.',
+      !state.kisQuoteSmokeTest?.ok
+    );
+  });
 }
 
 async function api(path, options = {}) {
@@ -1471,6 +1508,140 @@ function renderServerStatusError(error) {
   `;
 }
 
+function renderKisSmokeTestResult(result) {
+  if (!elements.kisSmokeTestResult) {
+    return;
+  }
+
+  if (!result) {
+    elements.kisSmokeTestResult.innerHTML = `
+      <div class="kis-smoke-empty">
+        KIS 앱 키와 시크릿을 .env에 넣은 뒤 점검을 실행하면 토큰 상태와 시장별 현재가 결과가 표시됩니다.
+      </div>
+    `;
+    return;
+  }
+
+  const statusClass = result.ok ? 'ok' : 'error';
+  const statusLabel = result.ok ? '성공' : '실패';
+  const summary = result.summary || {};
+  const rows = Array.isArray(result.results) ? result.results : [];
+
+  elements.kisSmokeTestResult.innerHTML = `
+    <div class="kis-smoke-summary ${statusClass}">
+      <div>
+        <div class="kis-smoke-heading">
+          <strong>${escapeHtml(result.symbol || '-')}</strong>
+          <span class="status-badge ${statusClass}">${escapeHtml(statusLabel)}</span>
+        </div>
+        <div class="kis-smoke-meta">
+          <span>KIS 입력 ${escapeHtml(result.inputSymbol || '-')}</span>
+          <span>시장 ${escapeHtml(formatKisSmokeMarketList(result.markets))}</span>
+          <span>생성 ${escapeHtml(formatDate(result.generatedAt))}</span>
+        </div>
+      </div>
+      <div class="kis-smoke-counts">
+        <span>전체 ${escapeHtml(summary.total || 0)}</span>
+        <span>성공 ${escapeHtml(summary.success || 0)}</span>
+        <span>실패 ${escapeHtml(summary.failed || 0)}</span>
+      </div>
+    </div>
+    <div class="kis-smoke-token">
+      <span class="server-metric-label">토큰</span>
+      <span>${escapeHtml(formatKisSmokeTokenDetail(result.token))}</span>
+    </div>
+    ${
+      result.message
+        ? `<div class="kis-smoke-message ${statusClass}">${escapeHtml(result.message)}</div>`
+        : ''
+    }
+    ${
+      rows.length
+        ? `<div class="kis-smoke-market-list">${rows.map(renderKisSmokeMarketResult).join('')}</div>`
+        : ''
+    }
+  `;
+}
+
+function renderKisSmokeMarketResult(item) {
+  const statusClass = item.ok ? 'ok' : 'error';
+  const quote = item.quote || {};
+  const attempts = Array.isArray(item.attempts) ? item.attempts : [];
+  const marketLabel = [item.market, item.marketLabel].filter(Boolean).join(' / ') || '-';
+  const quoteTitle = quote.name || quote.symbol || '-';
+  const quoteMeta = item.ok
+    ? [
+        formatMoney(quote.price, quote.currency),
+        quote.exchange || quote.providerLabel || getProviderLabel(quote.provider),
+        quote.regularMarketTime ? formatDate(quote.regularMarketTime) : ''
+      ].filter(Boolean)
+    : [item.error || '현재가 조회 실패'];
+
+  return `
+    <div class="dividend-diagnostic-row ${statusClass}">
+      <div class="dividend-diagnostic-main">
+        <span class="dividend-diagnostic-stock">${escapeHtml(marketLabel)}</span>
+        <span class="status-badge ${statusClass}">${escapeHtml(item.ok ? '성공' : '실패')}</span>
+      </div>
+      <div class="dividend-diagnostic-meta">
+        <span>${escapeHtml(quoteTitle)}</span>
+        ${quoteMeta.map((part) => `<span>${escapeHtml(part)}</span>`).join('')}
+      </div>
+      ${item.error ? `<div class="dividend-diagnostic-error">${escapeHtml(item.error)}</div>` : ''}
+      ${
+        attempts.length
+          ? `<div class="dividend-attempt-list">${attempts.map(renderKisSmokeAttempt).join('')}</div>`
+          : ''
+      }
+    </div>
+  `;
+}
+
+function renderKisSmokeAttempt(attempt) {
+  const status = attempt.status === 'success' ? 'success' : attempt.status === 'skipped' ? 'muted' : 'error';
+  const detail =
+    attempt.status === 'success'
+      ? `성공 ${formatDurationMs(attempt.durationMs)}`
+      : attempt.error || getQuoteProviderReasonLabel(attempt.reason) || getQuoteProviderStatusLabel(attempt.status);
+
+  return `
+    <span class="dividend-attempt ${status}">
+      <strong>${escapeHtml(getProviderLabel(attempt.provider))}</strong>
+      <span>${escapeHtml(detail)}</span>
+    </span>
+  `;
+}
+
+function formatKisSmokeMarketList(markets = []) {
+  if (!Array.isArray(markets) || !markets.length) {
+    return '-';
+  }
+
+  return markets.map((market) => `${market.code || '-'} ${market.label || ''}`.trim()).join(', ');
+}
+
+function formatKisSmokeTokenDetail(token = {}) {
+  if (!token.available) {
+    return token.cachePath
+      ? `사용 불가 · 캐시 ${shortenPath(token.cachePath)}`
+      : '사용 불가';
+  }
+
+  const sourceLabels = {
+    env: '환경변수',
+    cache: '캐시',
+    issued: '신규 발급'
+  };
+  const parts = [
+    sourceLabels[token.source] || token.source || '확인됨',
+    token.cached ? '캐시 사용' : '',
+    token.expiresAt ? `만료 ${formatDate(token.expiresAt)}` : '만료 시각 없음',
+    token.cachePath ? `캐시 ${shortenPath(token.cachePath)}` : ''
+  ];
+
+  return parts.filter(Boolean).join(' · ');
+}
+
 function formatDataModelVersion(dataModel) {
   const version = Number(dataModel?.schemaVersion);
 
@@ -1974,6 +2145,8 @@ function getQuoteProviderReasonLabel(reason) {
     korean_symbol_not_supported: '한국 종목 미지원',
     missing_alpha_vantage_key: 'Alpha Vantage 키 없음',
     missing_data_go_kr_service_key: '공공데이터포털 키 없음',
+    missing_nxt_quote_endpoint: 'NXT endpoint 없음',
+    missing_kis_credentials: 'KIS 키 또는 토큰 없음',
     historical_not_supported: '일봉 조회 미지원',
     historical_only_provider: '일봉 전용 provider',
     unsupported_provider: '지원하지 않는 provider'
@@ -3679,6 +3852,8 @@ function getProviderLabel(provider) {
     alphavantage: 'Alpha Vantage',
     publicdata: '공공데이터',
     opendart: 'OpenDART',
+    kis: 'KIS',
+    nxt: 'NXT',
     yahoo: 'Yahoo',
     manual: '수동'
   };

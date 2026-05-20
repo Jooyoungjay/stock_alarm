@@ -589,6 +589,7 @@ http://192.168.0.15:3000
 - 서버 상태 확인
 - 접속 주소와 QR 코드 확인
 - 시세 provider 진단 확인
+- KIS 현재가 점검 실행: 종목코드와 KRX/NXT/통합 시장을 선택해 한국투자증권 Open API 현재가와 토큰 상태 확인
 - 배당 provider 진단 확인
 - 개발 로드맵과 다음 개발 순서 확인
 - 배당 새로고침
@@ -817,6 +818,8 @@ npm run check:kis-quote -- --symbol 336260 --market J
 npm run check:kis-quote -- --symbol 33626L --market all
 npm run check:kis-quote -- --symbol 005930 --market UN --json
 ```
+
+같은 점검은 관리자 화면에서도 실행할 수 있습니다. `/admin`의 `KIS 현재가 점검` 카드에서 종목코드와 시장 구분을 선택하고 `점검 실행`을 누르면 토큰 출처, 만료 시각, 캐시 경로, 시장별 현재가 결과가 표시됩니다. 이 관리자 API는 `ADMIN_TOKEN`을 설정한 경우 관리자 토큰 없이는 호출할 수 없습니다.
 
 `kis` provider는 국내 종목에만 적용됩니다. 키가 없거나 해외 종목이면 스킵하고 다음 provider로 넘어갑니다. 시장 구분은 한국투자증권 샘플 기준으로 `J`는 KRX, `NX`는 NXT, `UN`은 통합입니다.
 
@@ -1429,7 +1432,7 @@ Invoke-RestMethod http://127.0.0.1:3001/api/health
 - 알림/포트폴리오: 이익금 반납률 알림, 최대 수익금/반납 금액, 계좌 총 반납률, 종목별 알림 토글
 - 배당: 배당 API provider 진단, 텔레그램 배당 진단 명령, 국내 종목 매칭 보정, 배당락일/지급일/변경 이력, 배당 성장률, 배당 캘린더 필터/월별 합계, 배당락일/지급일 전후 알림
 - 시세: provider 진단, 시세 출처/데이터 성격 표시, 공공데이터포털 일봉 provider 실험, NXT/공식 API 검토, NXT 계약 API adapter 골격
-- 증권사 API: 한국투자증권/키움 quote-only adapter 점검 CLI, 주문 기능 차단 가드, KIS 현재가 provider, KIS 토큰 자동 발급/캐시, 실계정 현재가 smoke test CLI, 환경변수 문서화
+- 증권사 API: 한국투자증권/키움 quote-only adapter 점검 CLI, 주문 기능 차단 가드, KIS 현재가 provider, KIS 토큰 자동 발급/캐시, 실계정 현재가 smoke test CLI, 관리자 KIS 현재가 점검, 환경변수 문서화
 - 운영/관리: 사용자/관리자 화면 분리, 관리자 보호, 백업/복구/삭제, 백업 스냅샷 계약, 데이터 모델 정리, 저장소 계약, JSON -> DB 이전 설계, WBS 상태 표준화, HTTPS 데모 서버 점검
 - 저장소: PostgresStore JSONB 쿼리 어댑터, DATABASE_URL 마스킹, 계약 테스트, JSON -> Postgres dry-run 마이그레이션 검증, 통합 테스트 데이터셋, 백업 스냅샷 계약 검증, Postgres 연결 리허설 CLI
 - 안정화: 시세/배당 실패 사유 표시와 종목별 재시도 UX
@@ -1437,4 +1440,4 @@ Invoke-RestMethod http://127.0.0.1:3001/api/health
 
 우선순위가 높은 순서:
 
-1. 관리자 KIS 현재가 점검 버튼
+1. 종목별 KIS 시장 구분 설정

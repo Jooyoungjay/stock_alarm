@@ -160,10 +160,23 @@ test('broker API adapter guide documents quote-only checks and trading guard', a
   assert.match(markdown, /QUOTE_PROVIDERS=kis/);
   assert.match(markdown, /npm run kis:token/);
   assert.match(markdown, /npm run check:kis-quote/);
+  assert.match(markdown, /\/api\/kis\/quote-smoke-test/);
   assert.match(markdown, /KIS_MARKET_DIV_CODE/);
   assert.match(markdown, /KIS_TOKEN_AUTO_REFRESH/);
   assert.match(markdown, /KIS_SMOKE_SYMBOL/);
   assert.match(markdown, /한국투자증권/);
   assert.match(markdown, /키움/);
   assert.match(markdown, /주문/);
+});
+
+test('admin page exposes the KIS quote smoke test controls', async () => {
+  const html = await fs.readFile(new URL('../public/index.html', import.meta.url), 'utf8');
+  const script = await fs.readFile(new URL('../public/app.js', import.meta.url), 'utf8');
+
+  assert.match(html, /KIS 현재가 점검/);
+  assert.match(html, /kisSmokeTestForm/);
+  assert.match(html, /kisSmokeMarketSelect/);
+  assert.match(html, /kisSmokeForceTokenInput/);
+  assert.match(script, /\/api\/kis\/quote-smoke-test/);
+  assert.match(script, /renderKisSmokeTestResult/);
 });
