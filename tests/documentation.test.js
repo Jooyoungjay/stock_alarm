@@ -157,6 +157,8 @@ test('broker API adapter guide documents quote-only checks and trading guard', a
   assert.match(markdown, /npm run check:broker-api/);
   assert.match(markdown, /BROKER_QUOTE_PROVIDER/);
   assert.match(markdown, /BROKER_TRADING_ENABLED/);
+  assert.match(markdown, /QUOTE_PROVIDERS=kis/);
+  assert.match(markdown, /KIS_MARKET_DIV_CODE/);
   assert.match(markdown, /한국투자증권/);
   assert.match(markdown, /키움/);
   assert.match(markdown, /주문/);

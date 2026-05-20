@@ -13,6 +13,7 @@ test('parseRoadmapMarkdown extracts roadmap metadata and next task', async () =>
   assert.ok(roadmap.completedScope.some((item) => item.category === '공식 일봉 provider 실험'));
   assert.ok(roadmap.completedScope.some((item) => item.category === 'NXT provider 골격'));
   assert.ok(roadmap.completedScope.some((item) => item.category === '증권사 API adapter 검토'));
+  assert.ok(roadmap.completedScope.some((item) => item.category === 'KIS quote provider'));
   assert.ok(roadmap.completedScope.some((item) => item.category === '데이터 모델 정리'));
   assert.ok(roadmap.completedScope.some((item) => item.category === 'JSON -> DB 이전 설계'));
   assert.ok(roadmap.completedScope.some((item) => item.category === '백업/복구 DB 대응'));
@@ -51,8 +52,8 @@ test('parseRoadmapMarkdown extracts roadmap metadata and next task', async () =>
   assert.ok(roadmap.completedScope.some((item) => item.category === 'Postgres 쿼리 어댑터'));
   assert.ok(roadmap.completedScope.some((item) => item.category === 'Postgres 연결 리허설'));
   assert.ok(roadmap.sections.length >= 9);
-  assert.equal(roadmap.recommendedOrder[0], 'KIS quote provider 구현(실제 키 확보 시)');
-  assert.equal(roadmap.nextTask.title, 'KIS quote provider 구현(실제 키 확보 시)');
+  assert.equal(roadmap.recommendedOrder[0], 'KIS 토큰 자동 발급/갱신');
+  assert.equal(roadmap.nextTask.title, 'KIS 토큰 자동 발급/갱신');
   assert.ok(roadmap.statusLegend.some((item) => item.status === 'pending' && item.label === '예정'));
   assert.ok(roadmap.summary.pending > 0);
   assert.ok(roadmap.summary.total > roadmap.summary.completed);
@@ -71,9 +72,12 @@ test('parseRoadmapMarkdown normalizes explicit WBS task statuses', async () => {
   const completedBrokerAdapterTask = roadmap.sections
     .find((section) => section.id === '6')
     .tasks.find((task) => task.id === '6.7');
-  const pendingKisProviderTask = roadmap.sections
+  const completedKisProviderTask = roadmap.sections
     .find((section) => section.id === '6')
     .tasks.find((task) => task.id === '6.8');
+  const pendingKisTokenTask = roadmap.sections
+    .find((section) => section.id === '6')
+    .tasks.find((task) => task.id === '6.9');
   const completedProviderTask = roadmap.sections
     .find((section) => section.id === '6')
     .tasks.find((task) => task.id === '6.6');
@@ -126,7 +130,8 @@ test('parseRoadmapMarkdown normalizes explicit WBS task statuses', async () => {
   assert.equal(completedMatchingTask.status, 'completed');
   assert.equal(completedNxtTask.status, 'completed');
   assert.equal(completedBrokerAdapterTask.status, 'completed');
-  assert.equal(pendingKisProviderTask.status, 'pending');
+  assert.equal(completedKisProviderTask.status, 'completed');
+  assert.equal(pendingKisTokenTask.status, 'pending');
   assert.equal(completedDividendAlertTask.status, 'completed');
   assert.equal(completedDividendCalendarTask.status, 'completed');
   assert.equal(completedBackupStrategyTask.status, 'completed');

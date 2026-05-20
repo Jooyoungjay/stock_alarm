@@ -6,8 +6,10 @@ const publicDataStockPriceUrl =
 const alphaVantageUrl = 'https://www.alphavantage.co/query';
 
 const defaultProviders = ['naver', 'stooq', 'alphavantage', 'yahoo'];
-const supportedQuoteProviders = [...defaultProviders, 'nxt'];
+const supportedQuoteProviders = [...defaultProviders, 'nxt', 'kis'];
 const koreanStockSymbolPattern = /^(\d{5}[0-9A-Z])(?:\.(KS|KQ))?$/i;
+const kisQuotePath = '/uapi/domestic-stock/v1/quotations/inquire-price';
+const kisQuoteTrId = 'FHKST01010100';
 
 export async function fetchHistoricalHighSince(symbol, startDate, options = {}) {
   const providers = normalizeProviders(options.providers);
@@ -115,6 +117,10 @@ export async function fetchQuote(symbol, options = {}) {
         result = await fetchNxtQuote(symbol, options);
       }
 
+      if (provider === 'kis') {
+        result = await fetchKisQuote(symbol, options);
+      }
+
       if (provider === 'stooq') {
         result = await fetchStooqQuote(symbol, options);
       }
@@ -173,6 +179,16 @@ function getProviderSkipReason(provider, symbol, options, providers) {
 
     if (!options.nxtQuoteEndpointTemplate) {
       return 'missing_nxt_quote_endpoint';
+    }
+  }
+
+  if (provider === 'kis') {
+    if (!isKoreanStockSymbol(symbol)) {
+      return 'not_korean_symbol';
+    }
+
+    if (!hasKisCredentials(options)) {
+      return 'missing_kis_credentials';
     }
   }
 
@@ -244,6 +260,20 @@ export function normalizeProviders(value) {
         return 'nxt';
       }
 
+      if (
+        [
+          'kis',
+          'korea-investment',
+          'koreainvestment',
+          'kis-openapi',
+          'kis-open-api',
+          '한국투자증권',
+          '한투'
+        ].includes(provider)
+      ) {
+        return 'kis';
+      }
+
       return provider;
     })
     .filter(Boolean);
@@ -269,6 +299,13 @@ const quoteSourceDefaults = {
     venue: 'nxt',
     licenseType: 'contract',
     sourceNote: '공식/계약 기반 NXT 시세'
+  },
+  kis: {
+    providerLabel: '한국투자증권 Open API',
+    dataDelay: 'realtime_polling',
+    venue: 'krx',
+    licenseType: 'broker',
+    sourceNote: '증권사 REST 현재가'
   },
   stooq: {
     providerLabel: 'Stooq',
@@ -485,6 +522,47 @@ export function parseNxtQuote(payload, requestedSymbol) {
   });
 }
 
+export function parseKisQuote(payload, requestedSymbol, options = {}) {
+  if (payload?.rt_cd && String(payload.rt_cd) !== '0') {
+    throw new Error(payload.msg1 || payload.msg_cd || 'KIS 현재가 조회 오류');
+  }
+
+  const data = unwrapKisQuotePayload(payload);
+  const price = parseLooseNumber(
+    firstPresentValue(
+      data.stck_prpr,
+      data.currentPrice,
+      data.lastPrice,
+      data.tradePrice,
+      data.regularMarketPrice,
+      data.close
+    )
+  );
+
+  if (!data || !Number.isFinite(price) || price <= 0) {
+    throw new Error(`KIS 가격 정보를 찾을 수 없습니다: ${requestedSymbol}`);
+  }
+
+  const marketDivCode = normalizeKisMarketDivCode(options.kisMarketDivCode);
+
+  return withQuoteSourceMeta(
+    {
+      symbol: data.stck_shrn_iscd || data.shtn_pdno || data.code || requestedSymbol,
+      name: data.hts_kor_isnm || data.prdt_name || data.name || requestedSymbol,
+      price,
+      currency: 'KRW',
+      exchange: toKisExchangeName(marketDivCode),
+      marketState: data.iscd_stat_cls_code || data.marketState || '',
+      provider: 'kis',
+      regularMarketTime: normalizeKisTimestamp(data),
+      venue: toKisVenue(marketDivCode)
+    },
+    {
+      kisMarketDivCode: marketDivCode
+    }
+  );
+}
+
 export function parseNaverDailyChart(content, requestedSymbol) {
   const rows = [];
   const rowPattern =
@@ -658,6 +736,22 @@ async function fetchNxtQuote(symbol, options = {}) {
   });
 
   return parseNxtQuote(payload, symbol);
+}
+
+async function fetchKisQuote(symbol, options = {}) {
+  const marketDivCode = normalizeKisMarketDivCode(options.kisMarketDivCode);
+  const url = buildKisQuoteUrl(options.kisApiBaseUrl, symbol, marketDivCode);
+  const payload = await fetchJson(url, {
+    ...options,
+    headers: {
+      ...options.headers,
+      ...buildKisHeaders(options)
+    }
+  });
+
+  return parseKisQuote(payload, symbol, {
+    kisMarketDivCode: marketDivCode
+  });
 }
 
 async function fetchStooqQuote(symbol, options = {}) {
@@ -942,6 +1036,65 @@ function buildNxtHeaders(options = {}) {
   };
 }
 
+function buildKisQuoteUrl(baseUrl, symbol, marketDivCode) {
+  const endpoint = String(baseUrl || 'https://openapi.koreainvestment.com:9443').trim();
+  const url = new URL(kisQuotePath, endpoint.endsWith('/') ? endpoint : `${endpoint}/`);
+  url.searchParams.set('FID_COND_MRKT_DIV_CODE', normalizeKisMarketDivCode(marketDivCode));
+  url.searchParams.set('FID_INPUT_ISCD', toNaverSymbol(symbol));
+
+  return url;
+}
+
+function buildKisHeaders(options = {}) {
+  const token = String(options.kisAccessToken || '').trim().replace(/^Bearer\s+/i, '');
+
+  return {
+    authorization: `Bearer ${token}`,
+    appkey: options.kisAppKey,
+    appsecret: options.kisAppSecret,
+    tr_id: options.kisTrId || kisQuoteTrId,
+    custtype: options.kisCustType || 'P'
+  };
+}
+
+function hasKisCredentials(options = {}) {
+  return Boolean(options.kisAppKey && options.kisAppSecret && options.kisAccessToken);
+}
+
+function normalizeKisMarketDivCode(value) {
+  const text = String(value || 'J').trim().toUpperCase();
+
+  if (['J', 'NX', 'UN'].includes(text)) {
+    return text;
+  }
+
+  return 'J';
+}
+
+function toKisVenue(marketDivCode) {
+  if (marketDivCode === 'NX') {
+    return 'nxt';
+  }
+
+  if (marketDivCode === 'UN') {
+    return 'integrated';
+  }
+
+  return 'krx';
+}
+
+function toKisExchangeName(marketDivCode) {
+  if (marketDivCode === 'NX') {
+    return 'KIS/NXT';
+  }
+
+  if (marketDivCode === 'UN') {
+    return 'KIS/통합';
+  }
+
+  return 'KIS/KRX';
+}
+
 function normalizeHeaders(headers = {}) {
   return Object.fromEntries(
     Object.entries(headers || {}).filter(([, value]) => value !== undefined && value !== null)
@@ -968,8 +1121,45 @@ function unwrapNxtQuotePayload(payload) {
   return payload.quote || payload.data?.quote || payload.data || payload.result || payload;
 }
 
+function unwrapKisQuotePayload(payload) {
+  if (Array.isArray(payload)) {
+    return payload[0] || {};
+  }
+
+  if (!payload || typeof payload !== 'object') {
+    return {};
+  }
+
+  if (Array.isArray(payload.output)) {
+    return payload.output[0] || {};
+  }
+
+  return payload.output || payload.data?.output || payload.quote || payload.data || payload;
+}
+
 function firstPresentValue(...values) {
   return values.find((value) => value !== undefined && value !== null && value !== '');
+}
+
+function normalizeKisTimestamp(data) {
+  const date = String(
+    firstPresentValue(data.stck_bsop_date, data.bsop_date, data.bas_dt, data.date) || ''
+  ).trim();
+  const time = String(
+    firstPresentValue(data.stck_cntg_hour, data.cntg_hour, data.trade_time, data.time) || ''
+  ).trim();
+  const dateMatch = date.match(/^(\d{4})(\d{2})(\d{2})$/);
+  const timeMatch = time.match(/^(\d{2})(\d{2})(\d{2})$/);
+
+  if (!dateMatch || !timeMatch) {
+    return null;
+  }
+
+  const parsed = new Date(
+    `${dateMatch[1]}-${dateMatch[2]}-${dateMatch[3]}T${timeMatch[1]}:${timeMatch[2]}:${timeMatch[3]}+09:00`
+  );
+
+  return Number.isFinite(parsed.getTime()) ? parsed.toISOString() : null;
 }
 
 function normalizeMarketTimestamp(value) {

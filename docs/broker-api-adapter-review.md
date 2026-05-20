@@ -15,7 +15,7 @@ Stock Alarm은 매도 주문 앱이 아니라 매도 시점 알림 앱입니다.
 
 ## 이번 개발 산출물
 
-이번 단계에서는 실제 증권사 현재가 호출을 구현하지 않고, adapter를 붙이기 전에 필요한 설정과 위험한 설정을 점검하는 CLI를 추가했습니다.
+1차 검토 단계에서는 adapter를 붙이기 전에 필요한 설정과 위험한 설정을 점검하는 CLI를 추가했습니다.
 
 ```powershell
 npm run check:broker-api
@@ -29,6 +29,19 @@ npm run check:broker-api -- --fail-on-warn
 
 `BROKER_TRADING_ENABLED=true`로 설정하면 점검이 실패합니다. 이 프로젝트의 현재 범위는 알림 앱이므로 주문 기능을 실수로 켜지 못하게 막기 위한 가드입니다.
 
+이후 KIS 현재가 provider를 구현했습니다. 실제 키와 접근 토큰을 확보한 경우 아래처럼 시세 체인 앞에 둘 수 있습니다.
+
+```text
+QUOTE_PROVIDERS=kis,naver,stooq,alphavantage,yahoo
+KIS_API_BASE_URL=https://openapi.koreainvestment.com:9443
+KIS_APP_KEY=한국투자증권_앱키
+KIS_APP_SECRET=한국투자증권_앱시크릿
+KIS_ACCESS_TOKEN=한국투자증권_접근토큰
+KIS_MARKET_DIV_CODE=J
+```
+
+키가 없거나 해외 종목이면 `kis` provider는 스킵되고 다음 provider로 넘어갑니다.
+
 ## 환경변수
 
 | 이름 | 기본값 | 설명 |
@@ -40,6 +53,8 @@ npm run check:broker-api -- --fail-on-warn
 | `KIS_APP_SECRET` | 빈 값 | 한국투자증권 앱 시크릿 |
 | `KIS_ACCESS_TOKEN` | 빈 값 | 한국투자증권 접근 토큰 |
 | `KIS_ACCOUNT_NUMBER` | 빈 값 | 선택. 향후 계좌 기반 기능 점검용 |
+| `KIS_MARKET_DIV_CODE` | `J` | 한국투자증권 현재가 시장 구분. `J` KRX, `NX` NXT, `UN` 통합 |
+| `KIS_CUST_TYPE` | `P` | 한국투자증권 고객 구분. 기본값 `P` 개인 |
 | `KIWOOM_API_BASE_URL` | `https://api.kiwoom.com` | 키움 REST API URL |
 | `KIWOOM_APP_KEY` | 빈 값 | 키움 앱 키 |
 | `KIWOOM_SECRET_KEY` | 빈 값 | 키움 시크릿 키 |
@@ -53,6 +68,7 @@ npm run check:broker-api -- --fail-on-warn
 - 공식 포털에서 REST와 WebSocket 방식을 안내합니다.
 - 계좌의 App key, App secret으로 토큰을 발급받아 REST API를 호출하는 구조입니다.
 - 공식 GitHub 샘플 저장소가 있어 adapter 구현 전에 요청/응답 형태를 확인하기 좋습니다.
+- 공식 샘플의 `주식현재가 시세` endpoint는 `/uapi/domestic-stock/v1/quotations/inquire-price`이고, 시장 구분 코드는 `J: KRX`, `NX: NXT`, `UN: 통합`을 사용합니다.
 
 주의할 점:
 
@@ -75,11 +91,13 @@ npm run check:broker-api -- --fail-on-warn
 
 ## 다음 구현 조건
 
-실제 `kis` 또는 `kiwoom` quote provider 구현은 아래 조건이 충족된 뒤 진행합니다.
+다음 단계는 KIS 접근 토큰 자동 발급/갱신입니다. 현재 구현은 사용자가 `KIS_ACCESS_TOKEN`을 `.env`에 넣는 방식을 기준으로 합니다.
 
-- 사용자가 해당 증권사 API 신청을 완료
+실제 운영 전에 확인할 항목:
+
+- 사용자가 한국투자증권 API 신청을 완료
 - 앱 키, 시크릿, 접근 토큰을 `.env`에 준비
-- 현재가 조회 endpoint와 호출 제한을 실제 계정으로 확인
+- 현재가 조회 호출 제한을 실제 계정으로 확인
 - 주문 API를 호출하지 않는다는 제품 범위 유지
 
 ## 참고 링크

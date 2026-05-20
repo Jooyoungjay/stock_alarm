@@ -317,6 +317,12 @@ async function initializePurchaseHigh(stock) {
       nxtApiKey: config.nxtApiKey,
       nxtApiKeyHeader: config.nxtApiKeyHeader,
       nxtApiKeyScheme: config.nxtApiKeyScheme,
+      kisApiBaseUrl: config.kisApiBaseUrl,
+      kisAppKey: config.kisAppKey,
+      kisAppSecret: config.kisAppSecret,
+      kisAccessToken: config.kisAccessToken,
+      kisMarketDivCode: config.kisMarketDivCode,
+      kisCustType: config.kisCustType,
       onProviderAttempt: (attempt) =>
         recordQuoteProviderAttempt({
           ...attempt,
@@ -661,6 +667,12 @@ async function handleApi(request, response, url) {
       nxtApiKey: config.nxtApiKey,
       nxtApiKeyHeader: config.nxtApiKeyHeader,
       nxtApiKeyScheme: config.nxtApiKeyScheme,
+      kisApiBaseUrl: config.kisApiBaseUrl,
+      kisAppKey: config.kisAppKey,
+      kisAppSecret: config.kisAppSecret,
+      kisAccessToken: config.kisAccessToken,
+      kisMarketDivCode: config.kisMarketDivCode,
+      kisCustType: config.kisCustType,
       onProviderAttempt: (attempt) =>
         recordQuoteProviderAttempt({
           ...attempt,

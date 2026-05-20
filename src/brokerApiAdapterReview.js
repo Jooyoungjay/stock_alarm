@@ -5,6 +5,7 @@ const providerLabels = {
   kis: '한국투자증권 Open API',
   kiwoom: '키움 REST API'
 };
+const supportedKisMarketDivCodes = new Set(['J', 'NX', 'UN']);
 
 export function buildBrokerApiAdapterReview(input = {}) {
   const env = input.env || defaultEnv;
@@ -25,6 +26,7 @@ export function buildBrokerApiAdapterReview(input = {}) {
       hasKisAppSecret: Boolean(values.kisAppSecret),
       hasKisAccessToken: Boolean(values.kisAccessToken),
       hasKisAccountNumber: Boolean(values.kisAccountNumber),
+      kisMarketDivCode: values.kisMarketDivCode,
       kiwoomBaseUrl: values.kiwoomBaseUrl,
       hasKiwoomAppKey: Boolean(values.kiwoomAppKey),
       hasKiwoomSecretKey: Boolean(values.kiwoomSecretKey),
@@ -53,6 +55,7 @@ export function formatBrokerApiAdapterReviewReport(result) {
     `- KIS_APP_KEY: ${result.values.hasKisAppKey ? '설정됨' : '미설정'}`,
     `- KIS_APP_SECRET: ${result.values.hasKisAppSecret ? '설정됨' : '미설정'}`,
     `- KIS_ACCESS_TOKEN: ${result.values.hasKisAccessToken ? '설정됨' : '미설정'}`,
+    `- KIS_MARKET_DIV_CODE: ${result.values.kisMarketDivCode}`,
     `- KIWOOM_API_BASE_URL: ${result.values.kiwoomBaseUrl}`,
     `- KIWOOM_APP_KEY: ${result.values.hasKiwoomAppKey ? '설정됨' : '미설정'}`,
     `- KIWOOM_SECRET_KEY: ${result.values.hasKiwoomSecretKey ? '설정됨' : '미설정'}`,
@@ -133,6 +136,7 @@ export function getBrokerApiAdapterReviewHelp() {
     '  KIS_APP_KEY                   한국투자증권 앱 키',
     '  KIS_APP_SECRET                한국투자증권 앱 시크릿',
     '  KIS_ACCESS_TOKEN              한국투자증권 접근 토큰',
+    '  KIS_MARKET_DIV_CODE           J:KRX, NX:NXT, UN:통합. 기본값 J',
     '  KIWOOM_API_BASE_URL           키움 REST API URL',
     '  KIWOOM_APP_KEY                키움 앱 키',
     '  KIWOOM_SECRET_KEY             키움 시크릿 키',
@@ -151,6 +155,7 @@ function normalizeBrokerApiValues(env) {
     kisAppSecret: firstValue(env.KIS_APP_SECRET),
     kisAccessToken: firstValue(env.KIS_ACCESS_TOKEN),
     kisAccountNumber: firstValue(env.KIS_ACCOUNT_NUMBER),
+    kisMarketDivCode: (firstValue(env.KIS_MARKET_DIV_CODE) || 'J').toUpperCase(),
     kiwoomBaseUrl: firstValue(env.KIWOOM_API_BASE_URL) || 'https://api.kiwoom.com',
     kiwoomAppKey: firstValue(env.KIWOOM_APP_KEY),
     kiwoomSecretKey: firstValue(env.KIWOOM_SECRET_KEY),
@@ -221,7 +226,16 @@ function buildChecks(values) {
         name: 'kis_account_number_present',
         label: 'KIS 계좌번호',
         value: values.kisAccountNumber
-      })
+      }),
+      {
+        name: 'kis_market_div_code_supported',
+        label: 'KIS 시장 구분 코드',
+        level: 'error',
+        ok: supportedKisMarketDivCodes.has(values.kisMarketDivCode),
+        message: supportedKisMarketDivCodes.has(values.kisMarketDivCode)
+          ? `KIS_MARKET_DIV_CODE=${values.kisMarketDivCode} 값을 사용할 수 있습니다.`
+          : 'KIS_MARKET_DIV_CODE는 J, NX, UN 중 하나여야 합니다.'
+      }
     );
   }
 

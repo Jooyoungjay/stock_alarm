@@ -8,6 +8,7 @@ import {
   parseAlphaVantageQuote,
   parseNaverDailyChart,
   parseNaverQuote,
+  parseKisQuote,
   parseNxtQuote,
   parsePublicDataStockPriceResponse,
   parseStooqCsv,
@@ -25,6 +26,7 @@ test('provider list is normalized from a comma separated env value', () => {
     'alphavantage'
   ]);
   assert.deepEqual(normalizeProviders('nextrade,nextrade-ats,nxt-ats'), ['nxt', 'nxt', 'nxt']);
+  assert.deepEqual(normalizeProviders('kis,korea-investment,한국투자증권'), ['kis', 'kis', 'kis']);
 });
 
 test('fetchQuote reports when every configured provider is skipped', async () => {
@@ -81,6 +83,24 @@ test('nxt quote provider is skipped until a contract endpoint is configured', as
   assert.deepEqual(
     attempts.map((attempt) => [attempt.provider, attempt.status, attempt.reason]),
     [['nxt', 'skipped', 'missing_nxt_quote_endpoint']]
+  );
+});
+
+test('KIS quote provider is skipped until broker credentials are configured', async () => {
+  const attempts = [];
+
+  await assert.rejects(
+    () =>
+      fetchQuote('005930', {
+        providers: 'kis',
+        onProviderAttempt: (attempt) => attempts.push(attempt)
+      }),
+    /사용할 수 있는 시세 provider가 없습니다/
+  );
+
+  assert.deepEqual(
+    attempts.map((attempt) => [attempt.provider, attempt.status, attempt.reason]),
+    [['kis', 'skipped', 'missing_kis_credentials']]
   );
 });
 
@@ -213,6 +233,77 @@ test('NXT quote response is parsed into a normalized quote', () => {
   assert.equal(quote.venue, 'nxt');
   assert.equal(quote.licenseType, 'contract');
   assert.equal(quote.regularMarketTime, '2026-05-11T05:18:31.775Z');
+});
+
+test('KIS quote response is parsed into a normalized quote', () => {
+  const quote = parseKisQuote(
+    {
+      rt_cd: '0',
+      output: {
+        stck_shrn_iscd: '005930',
+        hts_kor_isnm: '삼성전자',
+        stck_prpr: '68,500',
+        stck_bsop_date: '20260520',
+        stck_cntg_hour: '134501'
+      }
+    },
+    '005930.KS',
+    {
+      kisMarketDivCode: 'UN'
+    }
+  );
+
+  assert.equal(quote.symbol, '005930');
+  assert.equal(quote.name, '삼성전자');
+  assert.equal(quote.price, 68500);
+  assert.equal(quote.currency, 'KRW');
+  assert.equal(quote.exchange, 'KIS/통합');
+  assert.equal(quote.provider, 'kis');
+  assert.equal(quote.providerLabel, '한국투자증권 Open API');
+  assert.equal(quote.dataDelay, 'realtime_polling');
+  assert.equal(quote.venue, 'integrated');
+  assert.equal(quote.licenseType, 'broker');
+  assert.equal(quote.regularMarketTime, '2026-05-20T04:45:01.000Z');
+});
+
+test('fetchQuote calls KIS endpoint with broker headers', async () => {
+  const attempts = [];
+  const quote = await fetchQuote('005930.KS', {
+    providers: 'kis',
+    kisApiBaseUrl: 'https://openapi.koreainvestment.com:9443',
+    kisAppKey: 'app-key',
+    kisAppSecret: 'app-secret',
+    kisAccessToken: 'Bearer access-token',
+    kisMarketDivCode: 'NX',
+    timeoutMs: 1000,
+    onProviderAttempt: (attempt) => attempts.push(attempt),
+    fetch: async (url, request) => {
+      assert.equal(String(url.origin), 'https://openapi.koreainvestment.com:9443');
+      assert.equal(url.pathname, '/uapi/domestic-stock/v1/quotations/inquire-price');
+      assert.equal(url.searchParams.get('FID_COND_MRKT_DIV_CODE'), 'NX');
+      assert.equal(url.searchParams.get('FID_INPUT_ISCD'), '005930');
+      assert.equal(request.headers.authorization, 'Bearer access-token');
+      assert.equal(request.headers.appkey, 'app-key');
+      assert.equal(request.headers.appsecret, 'app-secret');
+      assert.equal(request.headers.tr_id, 'FHKST01010100');
+      assert.equal(request.headers.custtype, 'P');
+
+      return jsonResponse({
+        rt_cd: '0',
+        output: {
+          stck_shrn_iscd: '005930',
+          hts_kor_isnm: '삼성전자',
+          stck_prpr: '68500'
+        }
+      });
+    }
+  });
+
+  assert.equal(quote.price, 68500);
+  assert.equal(quote.provider, 'kis');
+  assert.equal(quote.venue, 'nxt');
+  assert.equal(attempts[0].provider, 'kis');
+  assert.equal(attempts[0].status, 'success');
 });
 
 test('fetchQuote calls configured NXT endpoint with API key headers', async () => {

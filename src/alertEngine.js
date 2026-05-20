@@ -891,6 +891,12 @@ export async function runAlertCheck(store, config, options = {}) {
         nxtApiKey: config.nxtApiKey,
         nxtApiKeyHeader: config.nxtApiKeyHeader,
         nxtApiKeyScheme: config.nxtApiKeyScheme,
+        kisApiBaseUrl: config.kisApiBaseUrl,
+        kisAppKey: config.kisAppKey,
+        kisAppSecret: config.kisAppSecret,
+        kisAccessToken: config.kisAccessToken,
+        kisMarketDivCode: config.kisMarketDivCode,
+        kisCustType: config.kisCustType,
         onProviderAttempt: (attempt) =>
           recordQuoteProviderAttempt(store, {
             ...attempt,
@@ -952,6 +958,12 @@ export async function runStockQuoteRetry(store, config, stockId, options = {}) {
       nxtApiKey: config.nxtApiKey,
       nxtApiKeyHeader: config.nxtApiKeyHeader,
       nxtApiKeyScheme: config.nxtApiKeyScheme,
+      kisApiBaseUrl: config.kisApiBaseUrl,
+      kisAppKey: config.kisAppKey,
+      kisAppSecret: config.kisAppSecret,
+      kisAccessToken: config.kisAccessToken,
+      kisMarketDivCode: config.kisMarketDivCode,
+      kisCustType: config.kisCustType,
       onProviderAttempt: (attempt) =>
         recordQuoteProviderAttempt(store, {
           ...attempt,

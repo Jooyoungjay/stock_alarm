@@ -36,14 +36,17 @@ test('KIS provider is ready when quote-only credentials are present', () => {
       KIS_APP_KEY: 'app-key',
       KIS_APP_SECRET: 'app-secret',
       KIS_ACCESS_TOKEN: 'access-token',
-      KIS_ACCOUNT_NUMBER: '12345678-01'
+      KIS_ACCOUNT_NUMBER: '12345678-01',
+      KIS_MARKET_DIV_CODE: 'UN'
     }
   });
 
   assert.equal(result.ready, true);
   assert.equal(result.values.provider, 'kis');
+  assert.equal(result.values.kisMarketDivCode, 'UN');
   assert.equal(result.summary.error, 0);
   assert.ok(result.checks.some((check) => check.name === 'kis_access_token_present' && check.ok));
+  assert.ok(result.checks.some((check) => check.name === 'kis_market_div_code_supported' && check.ok));
 });
 
 test('KIS provider fails when credentials are missing or trading is enabled', () => {

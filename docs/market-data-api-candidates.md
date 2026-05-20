@@ -19,11 +19,12 @@ Stock Alarm은 현재 로컬 웹앱 MVP 단계이며, 무료/공개 provider 체
 3. 공식 일봉 provider 실험: 완료
 4. NXT 계약 API adapter 골격: 완료
 5. 증권사 API adapter 검토: 완료
+6. KIS quote provider 구현: 완료
 
 남은 추천 순서:
 
-6. KIS quote provider 구현(실제 키 확보 시)
-7. NXT 실계약 endpoint 확보 시 운영 검증
+7. KIS 토큰 자동 발급/갱신
+8. NXT 실계약 endpoint 확보 시 운영 검증
 
 ## 후보 비교
 
@@ -174,24 +175,32 @@ BROKER_QUOTE_PROVIDER=none
 BROKER_TRADING_ENABLED=false
 ```
 
-`BROKER_QUOTE_PROVIDER=none`이면 현재 무료 provider 체인을 그대로 사용합니다. 실제 증권사 시세 호출은 한국투자증권 또는 키움 API 키, 시크릿, 접근 토큰을 확보한 뒤 별도 provider 구현으로 진행합니다.
+`BROKER_QUOTE_PROVIDER=none`이면 점검 CLI에서는 현재 무료 provider 체인을 그대로 사용하는 상태로 봅니다. 실제 시세 체인에서 한국투자증권을 쓰려면 `QUOTE_PROVIDERS`에 `kis`를 추가합니다. 키움 provider는 아직 구현 전입니다.
+
+한국투자증권 현재가 provider는 구현했습니다. 실제 키가 준비되면 아래처럼 사용합니다.
+
+```text
+QUOTE_PROVIDERS=kis,naver,stooq,alphavantage,yahoo
+KIS_APP_KEY=...
+KIS_APP_SECRET=...
+KIS_ACCESS_TOKEN=...
+KIS_MARKET_DIV_CODE=J
+```
+
+공식 샘플의 시장 구분 코드 기준으로 `J`는 KRX, `NX`는 NXT, `UN`은 통합입니다.
 
 상세 내용은 [증권사 API adapter 검토](broker-api-adapter-review.md)에 정리했습니다.
 
 ## 다음 개발로 넘길 항목
 
-현재 provider 실패율 기록, 시세 출처 표시, 공식 일봉 provider 실험, NXT 계약 API adapter 골격, 증권사 API adapter 검토는 완료했습니다. 다음 구현 후보는 `KIS quote provider 구현(실제 키 확보 시)`입니다.
+현재 provider 실패율 기록, 시세 출처 표시, 공식 일봉 provider 실험, NXT 계약 API adapter 골격, 증권사 API adapter 검토, KIS quote provider 구현은 완료했습니다. 다음 구현 후보는 `KIS 토큰 자동 발급/갱신`입니다.
 
-KIS quote provider를 진행할 때 먼저 저장할 값:
+KIS 토큰 자동 발급/갱신을 진행할 때 먼저 저장할 값:
 
-- provider 이름
-- 요청 종목코드
-- 성공/실패 여부
-- 실패 사유
-- 응답 시간
-- 마지막 성공 시각
-- provider별 누적 성공/실패 횟수
 - 접근 토큰 만료/재발급 필요 여부
+- 마지막 토큰 발급 시각
+- 토큰 발급 실패 사유
+- 토큰 원문을 Git이나 로그에 남기지 않는 마스킹 기준
 
 ## 참고 링크
 
