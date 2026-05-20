@@ -887,6 +887,10 @@ export async function runAlertCheck(store, config, options = {}) {
         providers: config.quoteProviders,
         dataGoKrServiceKey: config.dataGoKrServiceKey,
         alphaVantageApiKey: config.alphaVantageApiKey,
+        nxtQuoteEndpointTemplate: config.nxtQuoteEndpointTemplate,
+        nxtApiKey: config.nxtApiKey,
+        nxtApiKeyHeader: config.nxtApiKeyHeader,
+        nxtApiKeyScheme: config.nxtApiKeyScheme,
         onProviderAttempt: (attempt) =>
           recordQuoteProviderAttempt(store, {
             ...attempt,
@@ -944,6 +948,10 @@ export async function runStockQuoteRetry(store, config, stockId, options = {}) {
       providers: config.quoteProviders,
       dataGoKrServiceKey: config.dataGoKrServiceKey,
       alphaVantageApiKey: config.alphaVantageApiKey,
+      nxtQuoteEndpointTemplate: config.nxtQuoteEndpointTemplate,
+      nxtApiKey: config.nxtApiKey,
+      nxtApiKeyHeader: config.nxtApiKeyHeader,
+      nxtApiKeyScheme: config.nxtApiKeyScheme,
       onProviderAttempt: (attempt) =>
         recordQuoteProviderAttempt(store, {
           ...attempt,

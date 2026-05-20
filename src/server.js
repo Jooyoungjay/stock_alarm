@@ -313,6 +313,10 @@ async function initializePurchaseHigh(stock) {
       providers: config.quoteProviders,
       dataGoKrServiceKey: config.dataGoKrServiceKey,
       alphaVantageApiKey: config.alphaVantageApiKey,
+      nxtQuoteEndpointTemplate: config.nxtQuoteEndpointTemplate,
+      nxtApiKey: config.nxtApiKey,
+      nxtApiKeyHeader: config.nxtApiKeyHeader,
+      nxtApiKeyScheme: config.nxtApiKeyScheme,
       onProviderAttempt: (attempt) =>
         recordQuoteProviderAttempt({
           ...attempt,
@@ -653,6 +657,10 @@ async function handleApi(request, response, url) {
       providers: config.quoteProviders,
       dataGoKrServiceKey: config.dataGoKrServiceKey,
       alphaVantageApiKey: config.alphaVantageApiKey,
+      nxtQuoteEndpointTemplate: config.nxtQuoteEndpointTemplate,
+      nxtApiKey: config.nxtApiKey,
+      nxtApiKeyHeader: config.nxtApiKeyHeader,
+      nxtApiKeyScheme: config.nxtApiKeyScheme,
       onProviderAttempt: (attempt) =>
         recordQuoteProviderAttempt({
           ...attempt,

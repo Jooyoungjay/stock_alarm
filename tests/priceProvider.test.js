@@ -8,6 +8,7 @@ import {
   parseAlphaVantageQuote,
   parseNaverDailyChart,
   parseNaverQuote,
+  parseNxtQuote,
   parsePublicDataStockPriceResponse,
   parseStooqCsv,
   parseStooqHistoricalCsv,
@@ -23,6 +24,7 @@ test('provider list is normalized from a comma separated env value', () => {
     'publicdata',
     'alphavantage'
   ]);
+  assert.deepEqual(normalizeProviders('nextrade,nextrade-ats,nxt-ats'), ['nxt', 'nxt', 'nxt']);
 });
 
 test('fetchQuote reports when every configured provider is skipped', async () => {
@@ -61,6 +63,24 @@ test('publicdata is skipped for quotes because it is historical only', async () 
   assert.deepEqual(
     attempts.map((attempt) => [attempt.provider, attempt.status, attempt.reason]),
     [['publicdata', 'skipped', 'historical_only_provider']]
+  );
+});
+
+test('nxt quote provider is skipped until a contract endpoint is configured', async () => {
+  const attempts = [];
+
+  await assert.rejects(
+    () =>
+      fetchQuote('336260', {
+        providers: 'nxt',
+        onProviderAttempt: (attempt) => attempts.push(attempt)
+      }),
+    /사용할 수 있는 시세 provider가 없습니다/
+  );
+
+  assert.deepEqual(
+    attempts.map((attempt) => [attempt.provider, attempt.status, attempt.reason]),
+    [['nxt', 'skipped', 'missing_nxt_quote_endpoint']]
   );
 });
 
@@ -167,6 +187,60 @@ test('Naver quote response is parsed into a normalized quote', () => {
   assert.equal(quote.providerLabel, 'Naver Finance');
   assert.equal(quote.dataDelay, 'realtime_estimated');
   assert.equal(quote.venue, 'krx_estimated');
+});
+
+test('NXT quote response is parsed into a normalized quote', () => {
+  const quote = parseNxtQuote(
+    {
+      data: {
+        code: '336260',
+        name: '두산퓨얼셀',
+        tradePrice: '96,700',
+        currency: 'KRW',
+        marketState: 'OPEN',
+        timestamp: 1778476711775
+      }
+    },
+    '336260'
+  );
+
+  assert.equal(quote.symbol, '336260');
+  assert.equal(quote.name, '두산퓨얼셀');
+  assert.equal(quote.price, 96700);
+  assert.equal(quote.provider, 'nxt');
+  assert.equal(quote.providerLabel, 'NexTrade ATS');
+  assert.equal(quote.dataDelay, 'realtime_contract');
+  assert.equal(quote.venue, 'nxt');
+  assert.equal(quote.licenseType, 'contract');
+  assert.equal(quote.regularMarketTime, '2026-05-11T05:18:31.775Z');
+});
+
+test('fetchQuote calls configured NXT endpoint with API key headers', async () => {
+  const attempts = [];
+  const quote = await fetchQuote('336260.KS', {
+    providers: 'nxt',
+    nxtQuoteEndpointTemplate: 'https://market.example.com/nxt/quotes/{symbol}',
+    nxtApiKey: 'secret-key',
+    timeoutMs: 1000,
+    onProviderAttempt: (attempt) => attempts.push(attempt),
+    fetch: async (url, request) => {
+      assert.equal(String(url), 'https://market.example.com/nxt/quotes/336260');
+      assert.equal(request.headers.Authorization, 'Bearer secret-key');
+
+      return jsonResponse({
+        quote: {
+          symbol: '336260',
+          name: '두산퓨얼셀',
+          price: 96700
+        }
+      });
+    }
+  });
+
+  assert.equal(quote.price, 96700);
+  assert.equal(quote.provider, 'nxt');
+  assert.equal(attempts[0].provider, 'nxt');
+  assert.equal(attempts[0].status, 'success');
 });
 
 test('Naver daily chart is parsed into a highest daily price', () => {
@@ -288,3 +362,13 @@ test('Alpha Vantage global quote is parsed into a normalized quote', () => {
   assert.equal(quote.dataDelay, 'delayed');
   assert.equal(quote.licenseType, 'keyed');
 });
+
+function jsonResponse(payload) {
+  return {
+    ok: true,
+    status: 200,
+    async arrayBuffer() {
+      return new TextEncoder().encode(JSON.stringify(payload)).buffer;
+    }
+  };
+}

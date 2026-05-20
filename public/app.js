@@ -3633,6 +3633,7 @@ function formatQuoteSourceDetail(source) {
 function getQuoteDataDelayLabel(value) {
   const labels = {
     realtime_estimated: '실시간 추정',
+    realtime_contract: '계약 실시간',
     delayed: '지연',
     delayed_or_close: '지연/종가',
     eod: '일봉',
@@ -3646,6 +3647,7 @@ function getQuoteDataDelayLabel(value) {
 function getQuoteVenueLabel(value) {
   const labels = {
     krx_estimated: 'KRX 추정',
+    nxt: 'NXT',
     nxt_estimated: 'NXT 추정',
     integrated: '통합',
     us: '미국',

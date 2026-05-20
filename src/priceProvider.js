@@ -6,6 +6,7 @@ const publicDataStockPriceUrl =
 const alphaVantageUrl = 'https://www.alphavantage.co/query';
 
 const defaultProviders = ['naver', 'stooq', 'alphavantage', 'yahoo'];
+const supportedQuoteProviders = [...defaultProviders, 'nxt'];
 const koreanStockSymbolPattern = /^(\d{5}[0-9A-Z])(?:\.(KS|KQ))?$/i;
 
 export async function fetchHistoricalHighSince(symbol, startDate, options = {}) {
@@ -110,6 +111,10 @@ export async function fetchQuote(symbol, options = {}) {
         result = await fetchNaverQuote(symbol, options);
       }
 
+      if (provider === 'nxt') {
+        result = await fetchNxtQuote(symbol, options);
+      }
+
       if (provider === 'stooq') {
         result = await fetchStooqQuote(symbol, options);
       }
@@ -157,8 +162,18 @@ function getProviderSkipReason(provider, symbol, options, providers) {
     return 'historical_only_provider';
   }
 
-  if (!defaultProviders.includes(provider)) {
+  if (!supportedQuoteProviders.includes(provider)) {
     return 'unsupported_provider';
+  }
+
+  if (provider === 'nxt') {
+    if (!isKoreanStockSymbol(symbol)) {
+      return 'not_korean_symbol';
+    }
+
+    if (!options.nxtQuoteEndpointTemplate) {
+      return 'missing_nxt_quote_endpoint';
+    }
   }
 
   if (providers.length <= 1) {
@@ -225,6 +240,10 @@ export function normalizeProviders(value) {
         return 'alphavantage';
       }
 
+      if (['nextrade', 'nextrade-ats', 'nxt-ats'].includes(provider)) {
+        return 'nxt';
+      }
+
       return provider;
     })
     .filter(Boolean);
@@ -243,6 +262,13 @@ const quoteSourceDefaults = {
     venue: 'krx_estimated',
     licenseType: 'unofficial',
     sourceNote: '무료/비공식 시세'
+  },
+  nxt: {
+    providerLabel: 'NexTrade ATS',
+    dataDelay: 'realtime_contract',
+    venue: 'nxt',
+    licenseType: 'contract',
+    sourceNote: '공식/계약 기반 NXT 시세'
   },
   stooq: {
     providerLabel: 'Stooq',
@@ -425,6 +451,40 @@ export function parseNaverQuote(payload, requestedSymbol) {
   });
 }
 
+export function parseNxtQuote(payload, requestedSymbol) {
+  const data = unwrapNxtQuotePayload(payload);
+  const price = parseLooseNumber(
+    firstPresentValue(
+      data.price,
+      data.currentPrice,
+      data.lastPrice,
+      data.tradePrice,
+      data.regularMarketPrice,
+      data.close
+    )
+  );
+
+  if (!data || !Number.isFinite(price) || price <= 0) {
+    throw new Error(`NXT 가격 정보를 찾을 수 없습니다: ${requestedSymbol}`);
+  }
+
+  return withQuoteSourceMeta({
+    symbol: data.symbol || data.code || data.stockCode || requestedSymbol,
+    name: data.name || data.stockName || data.itmsNm || requestedSymbol,
+    price,
+    currency: data.currency || 'KRW',
+    exchange: data.exchange || 'NexTrade ATS',
+    marketState: data.marketState || data.session || '',
+    provider: 'nxt',
+    regularMarketTime: normalizeMarketTimestamp(
+      firstPresentValue(data.regularMarketTime, data.tradeTime, data.timestamp, data.time)
+    ),
+    dataDelay: data.dataDelay || undefined,
+    venue: data.venue || 'nxt',
+    sourceNote: data.sourceNote || undefined
+  });
+}
+
 export function parseNaverDailyChart(content, requestedSymbol) {
   const rows = [];
   const rowPattern =
@@ -585,6 +645,19 @@ async function fetchNaverQuote(symbol, options = {}) {
   const payload = await fetchJson(url, options, 'euc-kr');
 
   return parseNaverQuote(payload, symbol);
+}
+
+async function fetchNxtQuote(symbol, options = {}) {
+  const url = buildNxtQuoteUrl(options.nxtQuoteEndpointTemplate, symbol);
+  const payload = await fetchJson(url, {
+    ...options,
+    headers: {
+      ...options.headers,
+      ...buildNxtHeaders(options)
+    }
+  });
+
+  return parseNxtQuote(payload, symbol);
 }
 
 async function fetchStooqQuote(symbol, options = {}) {
@@ -802,18 +875,117 @@ async function fetchWithTimeout(url, options = {}) {
   const timeoutMs = options.timeoutMs || 10000;
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), timeoutMs);
+  const fetchImpl = options.fetch || fetch;
 
   try {
-    return await fetch(url, {
+    return await fetchImpl(url, {
       signal: controller.signal,
       headers: {
         accept: 'application/json, text/csv, text/plain, */*',
-        'user-agent': 'stock-alarm-mvp/0.1'
+        'user-agent': 'stock-alarm-mvp/0.1',
+        ...normalizeHeaders(options.headers)
       }
     });
   } finally {
     clearTimeout(timeout);
   }
+}
+
+function buildNxtQuoteUrl(template, symbol) {
+  const endpointTemplate = String(template || '').trim();
+
+  if (!endpointTemplate) {
+    throw new Error('NXT_QUOTE_ENDPOINT_TEMPLATE가 설정되지 않았습니다.');
+  }
+
+  const rawSymbol = String(symbol || '').trim().toUpperCase();
+  const code = toNaverSymbol(rawSymbol);
+  const replacements = {
+    '{symbol}': encodeURIComponent(code),
+    '{code}': encodeURIComponent(code),
+    '{nxtSymbol}': encodeURIComponent(code),
+    '{rawSymbol}': encodeURIComponent(rawSymbol)
+  };
+  let rendered = endpointTemplate;
+  let replaced = false;
+
+  for (const [token, value] of Object.entries(replacements)) {
+    if (rendered.includes(token)) {
+      rendered = rendered.replaceAll(token, value);
+      replaced = true;
+    }
+  }
+
+  const url = new URL(rendered);
+
+  if (!replaced) {
+    url.searchParams.set('symbol', code);
+  }
+
+  return url;
+}
+
+function buildNxtHeaders(options = {}) {
+  const apiKey = String(options.nxtApiKey || '').trim();
+
+  if (!apiKey) {
+    return {};
+  }
+
+  const headerName = String(options.nxtApiKeyHeader || 'Authorization').trim() || 'Authorization';
+  const scheme = String(options.nxtApiKeyScheme || 'Bearer').trim();
+  const headerValue =
+    headerName.toLowerCase() === 'authorization' && scheme ? `${scheme} ${apiKey}` : apiKey;
+
+  return {
+    [headerName]: headerValue
+  };
+}
+
+function normalizeHeaders(headers = {}) {
+  return Object.fromEntries(
+    Object.entries(headers || {}).filter(([, value]) => value !== undefined && value !== null)
+  );
+}
+
+function unwrapNxtQuotePayload(payload) {
+  if (Array.isArray(payload)) {
+    return payload[0] || {};
+  }
+
+  if (!payload || typeof payload !== 'object') {
+    return {};
+  }
+
+  if (Array.isArray(payload.data)) {
+    return payload.data[0] || {};
+  }
+
+  if (Array.isArray(payload.result)) {
+    return payload.result[0] || {};
+  }
+
+  return payload.quote || payload.data?.quote || payload.data || payload.result || payload;
+}
+
+function firstPresentValue(...values) {
+  return values.find((value) => value !== undefined && value !== null && value !== '');
+}
+
+function normalizeMarketTimestamp(value) {
+  if (value === undefined || value === null || value === '') {
+    return null;
+  }
+
+  if (typeof value === 'number' || /^\d+$/.test(String(value))) {
+    const number = Number(value);
+    const timestamp = number > 9999999999 ? number : number * 1000;
+    const date = new Date(timestamp);
+    return Number.isFinite(date.getTime()) ? date.toISOString() : null;
+  }
+
+  const date = new Date(String(value));
+  return Number.isFinite(date.getTime()) ? date.toISOString() : null;
 }
 
 async function recordProviderAttempt(options, input) {

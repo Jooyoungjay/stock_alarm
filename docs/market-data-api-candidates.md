@@ -17,11 +17,12 @@ Stock Alarm은 현재 로컬 웹앱 MVP 단계이며, 무료/공개 provider 체
 1. 현재 provider 실패율 기록: 완료
 2. 시세 출처와 지연 여부 표시: 완료
 3. 공식 일봉 provider 실험: 완료
+4. NXT 계약 API adapter 골격: 완료
 
 남은 추천 순서:
 
-4. 증권사 API adapter 검토
-5. NXT 분리 시세는 계약형 API 확인 뒤 진행
+5. 증권사 API adapter 검토
+6. NXT 실계약 endpoint 확보 시 운영 검증
 
 ## 후보 비교
 
@@ -34,6 +35,7 @@ Stock Alarm은 현재 로컬 웹앱 MVP 단계이며, 무료/공개 provider 체
 | 키움 REST API | 증권사 API | 시세 정보와 WebSocket 실시간 조회 가이드 제공 | 차트 정보 제공 | 문서 확인 필요 | 계좌와 신청 필요 | 개인 로컬 실시간 후보 |
 | 코스콤 오픈API플랫폼 | 계약형 시세 API | 주식실시간/실시간종가 서비스 제공 | 라이선스별 서비스 | 계약 범위에 따라 가능 | 낮음 | 운영 서비스 후보. 비용/계약 필요 |
 | ICE NexTrade ATS | NXT 관련 데이터 상품 | NexTrade ATS native data feed와 실시간 market data 상품 제공 | 히스토리 상품 별도 | 가능성이 가장 높음 | 낮음 | NXT 분리 시세는 계약 확인 후 진행 |
+| NXT 계약 API adapter | 앱 내부 연결 골격 | 계약 endpoint 템플릿 설정 시 호출 가능 | 미지원 | endpoint가 NXT 데이터를 주면 가능 | 계약 필요 | `nxt` provider 추가 완료, 기본값에서는 스킵 |
 
 ## 세부 판단
 
@@ -135,6 +137,14 @@ ICE Developer Portal에는 NexTrade ATS native data feed와 ICE Consolidated Fee
 
 다만 현재 앱 단계에서는 비용, 계약, 데이터 재배포 약관을 확인하기 전까지 구현하지 않습니다.
 
+구현 상태:
+
+- `QUOTE_PROVIDERS=nxt,naver,stooq,alphavantage,yahoo`로 provider 순서에 넣을 수 있습니다.
+- `NXT_QUOTE_ENDPOINT_TEMPLATE`이 없으면 `missing_nxt_quote_endpoint`로 스킵합니다.
+- endpoint 템플릿의 `{symbol}`, `{code}`, `{nxtSymbol}`은 한국 종목코드로 치환합니다.
+- API 키가 필요하면 `NXT_API_KEY`, `NXT_API_KEY_HEADER`, `NXT_API_KEY_SCHEME`으로 헤더를 설정합니다.
+- 공식 화면 scraping은 구현하지 않습니다.
+
 ## provider 메타데이터 설계 후보
 
 다음 개발에서 시세 출처 표시를 할 때 아래 값을 price result에 포함하는 방향이 좋습니다.
@@ -154,7 +164,7 @@ ICE Developer Portal에는 NexTrade ATS native data feed와 ICE Consolidated Fee
 
 ## 다음 개발로 넘길 항목
 
-현재 provider 실패율 기록, 시세 출처 표시, 공식 일봉 provider 실험은 완료했습니다. 다음 구현 후보는 `증권사 API adapter 검토` 또는 `개발 WBS/일정의 웹 대시보드 표시`입니다.
+현재 provider 실패율 기록, 시세 출처 표시, 공식 일봉 provider 실험, NXT 계약 API adapter 골격은 완료했습니다. 다음 구현 후보는 `증권사 API adapter 검토`입니다.
 
 증권사 API adapter를 진행할 때 먼저 저장할 값:
 

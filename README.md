@@ -281,6 +281,10 @@ ADMIN_TOKEN=
 DATA_GO_KR_SERVICE_KEY=
 OPENDART_API_KEY=
 ALPHA_VANTAGE_API_KEY=
+NXT_QUOTE_ENDPOINT_TEMPLATE=
+NXT_API_KEY=
+NXT_API_KEY_HEADER=Authorization
+NXT_API_KEY_SCHEME=Bearer
 TELEGRAM_BOT_TOKEN=
 TELEGRAM_CHAT_ID=
 MOBILE_PUSH_ENABLED=true
@@ -323,6 +327,10 @@ EXPO_PUSH_ENDPOINT=https://exp.host/--/api/v2/push/send
 | `DATA_GO_KR_SERVICE_KEY` | 빈 값 | 공공데이터포털 주식시세정보/주식배당정보 API 키 |
 | `OPENDART_API_KEY` | 빈 값 | OpenDART API 키 |
 | `ALPHA_VANTAGE_API_KEY` | 빈 값 | Alpha Vantage API 키 |
+| `NXT_QUOTE_ENDPOINT_TEMPLATE` | 빈 값 | 선택. `QUOTE_PROVIDERS`에 `nxt`를 넣을 때 쓰는 공식/계약 API endpoint 템플릿. 예: `https://example.com/quotes/{symbol}` |
+| `NXT_API_KEY` | 빈 값 | 선택. NXT 계약 API 인증 키 |
+| `NXT_API_KEY_HEADER` | `Authorization` | 선택. NXT API 키를 보낼 헤더 이름 |
+| `NXT_API_KEY_SCHEME` | `Bearer` | 선택. `Authorization` 헤더 사용 시 키 앞에 붙일 scheme |
 | `TELEGRAM_BOT_TOKEN` | 빈 값 | 텔레그램 봇 토큰 |
 | `TELEGRAM_CHAT_ID` | 빈 값 | 알림을 받을 텔레그램 채팅 ID |
 | `MOBILE_PUSH_ENABLED` | `true` | 모바일 Expo Push 전송 여부 |
@@ -649,6 +657,7 @@ naver,stooq,alphavantage,yahoo
 provider 역할:
 
 - `naver`: 한국 6자리 종목코드, 영문 포함 우선주 코드, `.KS`, `.KQ` 조회
+- `nxt`: 공식/계약 API endpoint를 직접 설정했을 때만 사용하는 NXT 시세 adapter
 - `publicdata`: 공공데이터포털 금융위원회 주식시세정보. 현재가는 지원하지 않고 일봉 최고가 계산 실험용
 - `stooq`: 미국 종목 조회
 - `alphavantage`: Alpha Vantage API 키가 있을 때 사용
@@ -659,6 +668,7 @@ provider 역할:
 | provider | 화면 표시 | 데이터 성격 | 시장 구분 | 비고 |
 |---|---|---|---|---|
 | `naver` | Naver Finance | 실시간 추정 | KRX 추정 | 무료/비공식 경로. NXT 분리 가격은 보장하지 않음 |
+| `nxt` | NexTrade ATS | 계약 실시간 | NXT | 공식/계약 API endpoint 필요. 미설정 시 `missing_nxt_quote_endpoint`로 스킵 |
 | `publicdata` | 공공데이터포털 주식시세 | 일봉 | KRX 추정 | 공식 일봉 보강용. 현재가 알림용 아님 |
 | `stooq` | Stooq | 지연 또는 일봉 | 미국 | 무료 공개 데이터 |
 | `alphavantage` | Alpha Vantage | 지연 | 미국 | API 키가 있을 때 사용 |
@@ -711,9 +721,19 @@ npm run check:publicdata-price -- 005930 2026-05-01 2026-05-15
 
 ### NXT 시세 검토 현황
 
-2026-05-13 기준으로 NXT 전용 공개 REST API는 확인하지 못했습니다. 현재 한국 종목 시세는 `naver` provider 기준이며, 화면에는 `KRX 추정`으로 표시합니다. KRX와 NXT 가격을 분리해서 보장하는 공식 provider가 아닙니다.
+2026-05-20 기준으로 NXT 전용 무료 공개 REST API는 확인하지 못했습니다. 현재 한국 종목 시세는 기본적으로 `naver` provider 기준이며, 화면에는 `KRX 추정`으로 표시합니다. KRX와 NXT 가격을 분리해서 보장하는 공식 provider가 아닙니다.
 
-NXT 공식 웹사이트에는 시장 개요와 거래현황 화면이 있지만, 화면 scraping 방식은 안정성과 약관 리스크가 있어 구현하지 않습니다. NXT 분리 시세는 공식 또는 계약 기반 API가 확인된 뒤 provider를 추가하는 방향으로 보류합니다.
+NEXTRADE 데이터 포털과 ICE Developer Portal에는 NXT 실시간/마감 데이터, ICE Consolidated Feed/History 같은 계약형 경로가 있습니다. 화면 scraping 방식은 안정성과 약관 리스크가 있어 구현하지 않습니다.
+
+공식/계약 API endpoint를 확보한 경우에는 아래처럼 연결할 수 있습니다.
+
+```text
+QUOTE_PROVIDERS=nxt,naver,stooq,alphavantage,yahoo
+NXT_QUOTE_ENDPOINT_TEMPLATE=https://계약_API_주소/quotes/{symbol}
+NXT_API_KEY=계약_API_키
+```
+
+`nxt` provider는 `{symbol}`, `{code}`, `{nxtSymbol}` 자리에는 한국 6자리/영문 포함 종목코드를 넣고, `{rawSymbol}` 자리에는 사용자가 입력한 원본 심볼을 넣습니다. endpoint가 없으면 자동 확인 경로에서 호출하지 않고 `missing_nxt_quote_endpoint`로 스킵합니다.
 
 상세 검토 내용은 [NXT 시세 API 검토](docs/nxt-market-data-review.md)에 정리했습니다.
 
@@ -1325,7 +1345,7 @@ Invoke-RestMethod http://127.0.0.1:3001/api/health
 - 등록/사용자 UX: 종목 등록 팝업, 매수일 선택 입력, 알림 기준 추천값, 자동완성 배지, 기준별 예상 결과 비교, 매수 이유/매도 조건 카드, 추가매수 계산기
 - 알림/포트폴리오: 이익금 반납률 알림, 최대 수익금/반납 금액, 계좌 총 반납률, 종목별 알림 토글
 - 배당: 배당 API provider 진단, 텔레그램 배당 진단 명령, 국내 종목 매칭 보정, 배당락일/지급일/변경 이력, 배당 성장률, 배당 캘린더 필터/월별 합계, 배당락일/지급일 전후 알림
-- 시세: provider 진단, 시세 출처/데이터 성격 표시, 공공데이터포털 일봉 provider 실험, NXT/공식 API 검토
+- 시세: provider 진단, 시세 출처/데이터 성격 표시, 공공데이터포털 일봉 provider 실험, NXT/공식 API 검토, NXT 계약 API adapter 골격
 - 운영/관리: 사용자/관리자 화면 분리, 관리자 보호, 백업/복구/삭제, 백업 스냅샷 계약, 데이터 모델 정리, 저장소 계약, JSON -> DB 이전 설계, WBS 상태 표준화, HTTPS 데모 서버 점검
 - 저장소: PostgresStore JSONB 쿼리 어댑터, DATABASE_URL 마스킹, 계약 테스트, JSON -> Postgres dry-run 마이그레이션 검증, 통합 테스트 데이터셋, 백업 스냅샷 계약 검증, Postgres 연결 리허설 CLI
 - 안정화: 시세/배당 실패 사유 표시와 종목별 재시도 UX
@@ -1333,4 +1353,4 @@ Invoke-RestMethod http://127.0.0.1:3001/api/health
 
 우선순위가 높은 순서:
 
-1. NXT provider 추가(API 확인 시)
+1. 증권사 API adapter 검토

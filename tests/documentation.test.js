@@ -132,3 +132,17 @@ test('HTTPS demo server guide documents review readiness checks', async () => {
   assert.match(markdown, /ADMIN_TOKEN/);
   assert.match(markdown, /stock_alarm_store/);
 });
+
+test('NXT market data guide documents contract adapter limits and settings', async () => {
+  const markdown = await fs.readFile(
+    new URL('../docs/nxt-market-data-review.md', import.meta.url),
+    'utf8'
+  );
+
+  assert.match(markdown, /NXT 시세 API 검토/);
+  assert.match(markdown, /NEXTRADE 데이터 포털/);
+  assert.match(markdown, /ICE Consolidated Feed/);
+  assert.match(markdown, /NXT_QUOTE_ENDPOINT_TEMPLATE/);
+  assert.match(markdown, /missing_nxt_quote_endpoint/);
+  assert.match(markdown, /화면 scraping/);
+});
