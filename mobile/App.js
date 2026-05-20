@@ -41,6 +41,7 @@ import {
   ALERT_TYPE_OPTIONS,
   buildStockPayload,
   createEmptyStockForm,
+  KIS_MARKET_OPTIONS,
   stockToForm,
   validateStockForm
 } from './src/stockForm.js';
@@ -648,6 +649,10 @@ function StockFormPanel({ open, editing, form, loading, onOpen, onCancel, onSubm
       onChangeText: (value) => onChange('displayName', value),
       placeholder: '두산퓨얼셀'
     }),
+    e(KisMarketSelector, {
+      value: form.kisMarketDivCode,
+      onChange: (value) => onChange('kisMarketDivCode', value)
+    }),
     e(View, { style: styles.formRow },
       e(FormInput, {
         label: '매수가',
@@ -792,6 +797,29 @@ function AlertTypeSelector({ value, onChange }) {
   );
 }
 
+function KisMarketSelector({ value, onChange }) {
+  const selected = value || '';
+
+  return e(View, { style: styles.formField },
+    e(Text, { style: styles.formLabel }, 'KIS 시장 기준'),
+    e(View, { style: styles.segmentedControl },
+      ...KIS_MARKET_OPTIONS.map((option) => {
+        const active = option.value === selected;
+
+        return e(Pressable, {
+          key: option.value || 'default',
+          onPress: () => onChange(option.value),
+          style: [styles.segmentButton, active ? styles.segmentButtonActive : null]
+        },
+          e(Text, {
+            style: [styles.segmentButtonText, active ? styles.segmentButtonTextActive : null]
+          }, option.label)
+        );
+      })
+    )
+  );
+}
+
 function ToggleRow({ label, value, onChange }) {
   return e(View, { style: styles.toggleRow },
     e(Text, { style: styles.formLabel }, label),
@@ -813,12 +841,13 @@ function StockCard({ stock, loading, onEdit, onDelete, onToggleActive }) {
     : formatPercent(stock.profitRetracementPercent);
   const danger = stock.alertState === 'triggered';
   const active = stock.active !== false;
+  const marketLabel = getKisMarketLabel(stock.kisMarketDivCode);
 
   return e(View, { style: [styles.stockCard, danger ? styles.stockCardDanger : null] },
     e(View, { style: styles.stockTop },
       e(View, { style: styles.stockTitleBlock },
         e(Text, { style: styles.stockName }, stock.displayName || stock.symbol),
-        e(Text, { style: styles.stockSymbol }, stock.symbol)
+        e(Text, { style: styles.stockSymbol }, marketLabel ? `${stock.symbol} · KIS ${marketLabel}` : stock.symbol)
       ),
       e(View, { style: [styles.stockBadge, danger ? styles.stockBadgeDanger : styles.stockBadgeNormal] },
         e(Text, { style: [styles.stockBadgeText, danger ? styles.stockBadgeTextDanger : styles.stockBadgeTextNormal] },
@@ -854,6 +883,10 @@ function StockCard({ stock, loading, onEdit, onDelete, onToggleActive }) {
       })
     )
   );
+}
+
+function getKisMarketLabel(value) {
+  return KIS_MARKET_OPTIONS.find((option) => option.value === value)?.label || '';
 }
 
 function StockMetric({ label, value, danger }) {

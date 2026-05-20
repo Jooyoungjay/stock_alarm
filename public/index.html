@@ -105,6 +105,16 @@
                 <span class="form-label">표시 이름</span>
                 <input class="form-input" name="displayName" placeholder="삼성전자" autocomplete="off" />
               </label>
+
+              <label class="form-group">
+                <span class="form-label">KIS 시장 기준</span>
+                <select class="form-input" name="kisMarketDivCode">
+                  <option value="">서버 기본값</option>
+                  <option value="J">KRX</option>
+                  <option value="NX">NXT</option>
+                  <option value="UN">통합</option>
+                </select>
+              </label>
             </section>
 
             <section class="form-step" data-register-step="2" aria-label="매수 정보">
@@ -539,6 +549,6 @@
       </div>
     </nav>
 
-    <script src="/app.js?v=20260520-kis-smoke" type="module"></script>
+    <script src="/app.js?v=20260520-kis-market" type="module"></script>
   </body>
 </html>

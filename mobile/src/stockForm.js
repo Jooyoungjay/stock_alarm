@@ -5,6 +5,13 @@ export const ALERT_TYPE_OPTIONS = Object.freeze([
   { value: 'target_price', label: '직접가' }
 ]);
 
+export const KIS_MARKET_OPTIONS = Object.freeze([
+  { value: '', label: '기본값' },
+  { value: 'J', label: 'KRX' },
+  { value: 'NX', label: 'NXT' },
+  { value: 'UN', label: '통합' }
+]);
+
 export function createEmptyStockForm() {
   return {
     symbol: '',
@@ -12,6 +19,7 @@ export function createEmptyStockForm() {
     purchasePrice: '',
     quantity: '',
     purchaseDate: '',
+    kisMarketDivCode: '',
     alertType: 'high_drawdown',
     thresholdPercent: '10',
     targetPrice: '',
@@ -33,6 +41,7 @@ export function stockToForm(stock = {}) {
     purchasePrice: formatFormNumber(stock.purchasePrice),
     quantity: formatFormNumber(stock.quantity),
     purchaseDate: stock.purchaseDate || '',
+    kisMarketDivCode: normalizeKisMarketDivCode(stock.kisMarketDivCode),
     alertType: stock.alertType || 'high_drawdown',
     thresholdPercent: formatFormNumber(stock.thresholdPercent || 10),
     targetPrice: formatFormNumber(stock.targetPrice),
@@ -92,6 +101,7 @@ export function buildStockPayload(form, options = {}) {
     purchasePrice: toOptionalNumber(normalized.purchasePrice),
     quantity: toOptionalNumber(normalized.quantity),
     purchaseDate: normalized.purchaseDate,
+    kisMarketDivCode: normalized.kisMarketDivCode,
     alertType: normalized.alertType,
     thresholdPercent: Number(normalized.thresholdPercent || 10),
     targetPrice: normalized.alertType === 'target_price' ? toOptionalNumber(normalized.targetPrice) : null,
@@ -120,6 +130,7 @@ function normalizeForm(form) {
     purchasePrice: String(form.purchasePrice || '').trim(),
     quantity: String(form.quantity || '').trim(),
     purchaseDate: String(form.purchaseDate || '').trim(),
+    kisMarketDivCode: normalizeKisMarketDivCode(form.kisMarketDivCode),
     alertType: normalizeAlertType(form.alertType),
     thresholdPercent: String(form.thresholdPercent || '').trim(),
     targetPrice: String(form.targetPrice || '').trim(),
@@ -141,6 +152,27 @@ function normalizeAlertType(value) {
   }
 
   return 'high_drawdown';
+}
+
+function normalizeKisMarketDivCode(value) {
+  const text = String(value || '').trim().toUpperCase();
+  const aliases = {
+    KRX: 'J',
+    NXT: 'NX',
+    NEXTRADE: 'NX',
+    INTEGRATED: 'UN',
+    TOTAL: 'UN',
+    ALL: 'UN',
+    UNIFIED: 'UN',
+    통합: 'UN',
+    DEFAULT: '',
+    SERVER: '',
+    SERVER_DEFAULT: '',
+    기본값: ''
+  };
+  const normalized = Object.prototype.hasOwnProperty.call(aliases, text) ? aliases[text] : text;
+
+  return KIS_MARKET_OPTIONS.some((option) => option.value === normalized) ? normalized : '';
 }
 
 function formatFormNumber(value) {

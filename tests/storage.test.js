@@ -184,6 +184,26 @@ test('JsonStore stores and updates investment plan fields', async () => {
   );
 });
 
+test('JsonStore stores and updates per-stock KIS market settings', async () => {
+  const store = await createStore();
+  const stock = await store.addStock(stockInput({ kisMarketDivCode: 'NX' }));
+
+  assert.equal(stock.kisMarketDivCode, 'NX');
+  assert.equal((await store.listStocks())[0].kisMarketDivCode, 'NX');
+
+  const updated = await store.updateStock(stock.id, { kisMarketDivCode: 'UN' });
+  assert.equal(updated.kisMarketDivCode, 'UN');
+  assert.equal(updated.alertState, 'clear');
+
+  const cleared = await store.updateStock(stock.id, { kisMarketDivCode: 'default' });
+  assert.equal(cleared.kisMarketDivCode, '');
+
+  await assert.rejects(
+    () => store.updateStock(stock.id, { kisMarketDivCode: 'BAD' }),
+    /KIS 시장 구분/
+  );
+});
+
 test('JsonStore records quote provider success and failure stats', async () => {
   const store = await createStore();
 

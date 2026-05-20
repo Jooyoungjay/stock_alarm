@@ -59,6 +59,8 @@ npm run check:kis-quote -- --symbol 005930 --market UN --json
 
 관리자 화면에서도 같은 점검을 실행할 수 있습니다. `/admin`의 `KIS 현재가 점검` 카드에서 종목코드와 `KRX`, `NXT`, `통합`, `전체` 시장을 선택하면 `POST /api/kis/quote-smoke-test`가 실행되고, 토큰 출처와 시장별 성공/실패가 표시됩니다.
 
+사용자 종목에는 `kisMarketDivCode`를 저장할 수 있습니다. 비어 있으면 `KIS_MARKET_DIV_CODE` 기본값을 사용하고, 값이 있으면 자동 가격 확인과 실패 종목 재시도에서 해당 종목의 KRX/NXT/통합 기준을 우선 적용합니다.
+
 키가 없거나 해외 종목이면 `kis` provider는 스킵되고 다음 provider로 넘어갑니다.
 
 ## 환경변수

@@ -1,5 +1,6 @@
 import { buildAlertRule, initializeHighFromPurchaseDate, runAlertCheck } from './alertEngine.js';
 import { createBackup, deleteBackup, listBackups, restoreBackup } from './backups.js';
+import { formatKisMarketDivCode } from './kisMarket.js';
 import { buildDailyBriefing, formatDailyBriefingMessage } from './portfolioBriefing.js';
 import { ALERT_TYPES } from './storage.js';
 import {
@@ -37,6 +38,7 @@ const helpMessage = [
   '/edit 336260 profit 10',
   '/edit 336260 loss 5',
   '/edit 336260 target 93000',
+  '/edit 336260 kis NX',
   '/edit 336260 cooldown 60',
   '/edit 336260 qty 10',
   '/edit 336260 dividend 1200',
@@ -593,6 +595,7 @@ async function addStockFromCommand(store, config, command, options) {
       : `비율: ${stock.thresholdPercent}%`,
     stock.quantity ? `보유 수량: ${formatNumber(stock.quantity)}` : '',
     stock.annualDividendPerShare ? `주당 연 배당금: ${formatNumber(stock.annualDividendPerShare)}` : '',
+    formatKisMarketLine(stock),
     formatDividendScheduleLine(stock),
     formatHighPriceLine(stock)
   ]
@@ -622,6 +625,7 @@ async function editStockFromCommand(store, config, command, options) {
     stock.purchasePrice ? `매수가: ${formatNumber(stock.purchasePrice)}` : '',
     stock.quantity ? `보유 수량: ${formatNumber(stock.quantity)}` : '',
     stock.annualDividendPerShare ? `주당 연 배당금: ${formatNumber(stock.annualDividendPerShare)}` : '',
+    formatKisMarketLine(stock),
     formatDividendScheduleLine(stock),
     stock.purchaseDate ? `매수일: ${stock.purchaseDate}` : '',
     formatHighPriceLine(stock)
@@ -655,6 +659,7 @@ export function parseAddArgs(args) {
         keyed.dividendCycle,
       dividendMonths: keyed.dividendMonths || keyed.months || keyed.payMonths || keyed.payoutMonths,
       purchaseDate: keyed.date || keyed.purchaseDate,
+      kisMarketDivCode: keyed.kis || keyed.market || keyed.kisMarket || keyed.kisMarketDivCode,
       alertType: keyed.type || keyed.alertType || keyed.basis,
       thresholdPercent: keyed.rate || keyed.threshold || keyed.thresholdPercent,
       targetPrice: keyed.target || keyed.targetPrice,
@@ -693,6 +698,7 @@ export function parseAddArgs(args) {
     displayName,
     purchasePrice,
     purchaseDate: dateIndex === -1 ? '' : rest[dateIndex],
+    kisMarketDivCode: '',
     alertType,
     thresholdPercent: alertType === ALERT_TYPES.TARGET_PRICE ? undefined : valueToken,
     targetPrice: alertType === ALERT_TYPES.TARGET_PRICE ? valueToken : undefined,
@@ -830,6 +836,17 @@ export function parseEditArgs(args) {
           resetHighPrice: true
         }
       };
+    case 'kisMarket':
+      requireValue(value, 'KIS 시장 구분을 J, NX, UN 또는 default로 입력하세요.');
+      return {
+        query,
+        label: 'KIS 시장 기준',
+        reinitializeHigh: true,
+        patch: {
+          kisMarketDivCode: firstValue,
+          resetHighPrice: true
+        }
+      };
     case 'notes':
       return {
         query,
@@ -871,7 +888,7 @@ export function parseEditArgs(args) {
         }
       };
     default:
-      throw new Error('수정 항목은 high, profit, loss, target, cooldown, name, price, qty, dividend, dividendfreq, dividendmonths, date, notes, reason, goal, sell, review 중 하나로 입력하세요.');
+      throw new Error('수정 항목은 high, profit, loss, target, cooldown, name, price, qty, dividend, dividendfreq, dividendmonths, date, kis, notes, reason, goal, sell, review 중 하나로 입력하세요.');
   }
 }
 
@@ -887,6 +904,7 @@ function normalizeAddInput(input) {
     dividendFrequency: input.dividendFrequency,
     dividendMonths: input.dividendMonths,
     purchaseDate: input.purchaseDate,
+    kisMarketDivCode: input.kisMarketDivCode,
     alertType,
     thresholdPercent:
       alertType === ALERT_TYPES.TARGET_PRICE ? input.thresholdPercent || 5 : input.thresholdPercent,
@@ -936,6 +954,14 @@ function formatHighPriceLine(stock) {
   const label = stock.purchaseDate ? '구매일 이후 최고가' : '감시 최고가';
   const currency = stock.currency ? ` ${stock.currency}` : '';
   return `${label}: ${formatNumber(stock.highPrice)}${currency}`;
+}
+
+function formatKisMarketLine(stock) {
+  if (!stock.kisMarketDivCode) {
+    return '';
+  }
+
+  return `KIS 시장 기준: ${formatKisMarketDivCode(stock.kisMarketDivCode)}`;
 }
 
 function isExplicitTypeToken(value) {
@@ -1113,6 +1139,10 @@ function normalizeEditField(value) {
     return 'dividendMonths';
   }
 
+  if (['kis', 'kismarket', 'kis_market', 'kismarketdivcode', 'market', 'venue', '시장'].includes(token)) {
+    return 'kisMarket';
+  }
+
   if (['date', 'purchasedate', 'purchase_date', 'buydate', '매수일', '구매일'].includes(token)) {
     return 'date';
   }
@@ -1223,6 +1253,7 @@ function formatStockLine(stock) {
     stock.purchasePrice ? `매수가: ${formatNumber(stock.purchasePrice)}` : '',
     stock.quantity ? `보유 수량: ${formatNumber(stock.quantity)}` : '',
     stock.annualDividendPerShare ? `주당 연 배당금: ${formatNumber(stock.annualDividendPerShare)}` : '',
+    formatKisMarketLine(stock),
     Number.isFinite(currentPrice) ? `현재가: ${formatNumber(currentPrice)}${stock.currency ? ` ${stock.currency}` : ''}` : '',
     formatDividendScheduleLine(stock),
     formatDividendEventLine(stock),
@@ -1580,7 +1611,8 @@ function getShortUsage(commandName) {
       '/edit 336260 reason 수소 밸류체인 성장',
       '/edit 336260 goal 120000',
       '/edit 336260 sell 분기 적자 확대 시 매도',
-      '/edit 336260 review 2026-08-15'
+      '/edit 336260 review 2026-08-15',
+      '/edit 336260 kis NX'
     ].join('\n');
   }
 

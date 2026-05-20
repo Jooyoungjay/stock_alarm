@@ -179,6 +179,7 @@ test('mobile stock form builds add and edit payloads', () => {
     displayName: '두산퓨얼셀',
     purchasePrice: 80000,
     quantity: 10,
+    kisMarketDivCode: 'NX',
     alertType: 'profit_retracement',
     thresholdPercent: 15,
     alertCooldownMinutes: 30,
@@ -196,6 +197,7 @@ test('mobile stock form builds add and edit payloads', () => {
   assert.equal(addPayload.symbol, '336260');
   assert.equal(addPayload.purchasePrice, 80000);
   assert.equal(addPayload.quantity, 10);
+  assert.equal(addPayload.kisMarketDivCode, 'NX');
   assert.equal(addPayload.alertType, 'profit_retracement');
   assert.equal(addPayload.thresholdPercent, 15);
   assert.equal(addPayload.investmentTargetPrice, 120000);

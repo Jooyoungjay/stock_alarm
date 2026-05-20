@@ -6,6 +6,12 @@ const APP_MODES = Object.freeze({
 });
 
 const ADMIN_TOKEN_STORAGE_KEY = 'stock_alarm_admin_token';
+const KIS_MARKET_DIV_CODE_OPTIONS = Object.freeze([
+  { value: '', label: '서버 기본값' },
+  { value: 'J', label: 'KRX' },
+  { value: 'NX', label: 'NXT' },
+  { value: 'UN', label: '통합' }
+]);
 
 function getAppMode() {
   const pathname = window.location.pathname.replace(/\/+$/, '') || '/';
@@ -215,6 +221,11 @@ elements.form.elements.symbol.addEventListener('input', () => {
 
 elements.form.elements.symbol.addEventListener('focus', () => {
   queueSymbolSearch(elements.form.elements.symbol.value);
+});
+
+elements.form.elements.kisMarketDivCode?.addEventListener('change', () => {
+  renderQuotePreview(null);
+  renderRegistrationSummary();
 });
 
 document.addEventListener('click', (event) => {
@@ -662,10 +673,48 @@ function handleAdminAuthFailure(error) {
   return true;
 }
 
+function normalizeKisMarketDivCode(value) {
+  const text = String(value || '').trim().toUpperCase();
+  const aliases = {
+    KRX: 'J',
+    NXT: 'NX',
+    NEXTRADE: 'NX',
+    INTEGRATED: 'UN',
+    TOTAL: 'UN',
+    ALL: 'UN',
+    UNIFIED: 'UN',
+    통합: 'UN',
+    DEFAULT: '',
+    SERVER: '',
+    SERVER_DEFAULT: '',
+    기본값: ''
+  };
+  const normalized = Object.prototype.hasOwnProperty.call(aliases, text) ? aliases[text] : text;
+
+  return KIS_MARKET_DIV_CODE_OPTIONS.some((option) => option.value === normalized) ? normalized : '';
+}
+
+function formatKisMarketDivCodeLabel(value) {
+  const normalized = normalizeKisMarketDivCode(value);
+  const option = KIS_MARKET_DIV_CODE_OPTIONS.find((item) => item.value === normalized);
+
+  return option?.label || '서버 기본값';
+}
+
+function renderKisMarketDivCodeOptions(selectedValue) {
+  const selected = normalizeKisMarketDivCode(selectedValue);
+
+  return KIS_MARKET_DIV_CODE_OPTIONS.map(
+    (option) =>
+      `<option value="${escapeHtml(option.value)}" ${option.value === selected ? 'selected' : ''}>${escapeHtml(option.label)}</option>`
+  ).join('');
+}
+
 function normalizeStockPayload(payload) {
   const normalized = { ...payload };
 
   normalized.alertType = normalized.alertType || 'high_drawdown';
+  normalized.kisMarketDivCode = normalizeKisMarketDivCode(normalized.kisMarketDivCode);
   normalized.purchasePrice = normalized.purchasePrice ? Number(normalized.purchasePrice) : null;
   normalized.quantity = normalized.quantity ? Number(normalized.quantity) : null;
   normalized.annualDividendPerShare = normalized.annualDividendPerShare
@@ -914,6 +963,7 @@ async function previewQuote(button) {
       dividendFrequency: elements.form.elements.dividendFrequency.value,
       dividendMonths: elements.form.elements.dividendMonths.value,
       purchaseDate: elements.form.elements.purchaseDate.value,
+      kisMarketDivCode: elements.form.elements.kisMarketDivCode.value,
       alertType: elements.form.elements.alertType.value,
       thresholdPercent: elements.form.elements.thresholdPercent.value,
       targetPrice: elements.form.elements.targetPrice.value
@@ -1374,6 +1424,7 @@ function renderRegistrationSummary() {
   const dividendMonths = parseDividendMonths(form.elements.dividendMonths.value);
   const purchaseDate = form.elements.purchaseDate.value;
   const purchaseDateDetail = purchaseDate || '미입력 시 등록 이후 감시 최고가 기준';
+  const kisMarketDivCode = form.elements.kisMarketDivCode.value;
   const alertType = form.elements.alertType.value;
   const thresholdPercent = parseFiniteNumber(form.elements.thresholdPercent.value);
   const targetPrice = parseFiniteNumber(form.elements.targetPrice.value);
@@ -1421,6 +1472,7 @@ function renderRegistrationSummary() {
   elements.registrationSummary.innerHTML = `
     <div class="registration-summary-grid">
       ${renderSummaryItem('종목', displayName ? `${displayName} · ${symbol}` : symbol)}
+      ${renderSummaryItem('시세 기준', formatKisMarketDivCodeLabel(kisMarketDivCode), 'KIS provider 사용 시 적용')}
       ${renderSummaryItem('매수가', formatMoney(purchasePrice), purchaseDateDetail)}
       ${renderSummaryItem('보유 수량', quantity ? formatQuantity(quantity) : '-', purchaseAmount ? `총 ${formatMoney(purchaseAmount)}` : '선택 입력')}
       ${renderSummaryItem('배당', annualDividendPerShare ? `주당 ${formatMoney(annualDividendPerShare)}` : '-', expectedAnnualDividend ? `연 ${formatMoney(expectedAnnualDividend)} · ${formatPercent(dividendYield)}` : '선택 입력')}
@@ -2311,6 +2363,11 @@ function renderStocks() {
       const quoteSourceSummary = formatQuoteSourceSummary(stock);
       const quoteSourceDetail = formatQuoteSourceDetail(stock);
       const highPriceDetail = formatHighPriceDetail(stock);
+      const stockMeta = [
+        stock.symbol,
+        stock.kisMarketDivCode ? `KIS ${formatKisMarketDivCodeLabel(stock.kisMarketDivCode)}` : '',
+        stock.active ? '' : '알림 꺼짐'
+      ].filter(Boolean).join(' · ');
 
       row.innerHTML = `
         <div class="stock-risk-line">
@@ -2320,7 +2377,7 @@ function renderStocks() {
         <div class="stock-top">
           <div class="stock-title stock-info">
             <div class="stock-name">${escapeHtml(stock.displayName || stock.symbol)}</div>
-            <div class="stock-symbol">${escapeHtml(stock.symbol)} ${stock.active ? '' : '알림 꺼짐'}</div>
+            <div class="stock-symbol">${escapeHtml(stockMeta)}</div>
             ${renderPositionSummary(stock)}
           </div>
           <div class="metric price-block">
@@ -3241,6 +3298,12 @@ function editStockForm(stock) {
       <input name="purchaseDate" type="date" max="${getTodayInputValue()}" value="${escapeHtml(stock.purchaseDate || '')}" />
     </label>
     <label>
+      <span>KIS 시장 기준</span>
+      <select name="kisMarketDivCode">
+        ${renderKisMarketDivCodeOptions(stock.kisMarketDivCode)}
+      </select>
+    </label>
+    <label>
       <span>알림 기준</span>
       <select name="alertType">
         <option value="high_drawdown" ${getAlertType(stock) === 'high_drawdown' ? 'selected' : ''}>최고가 대비 하락률</option>
@@ -3807,6 +3870,7 @@ function getQuoteDataDelayLabel(value) {
   const labels = {
     realtime_estimated: '실시간 추정',
     realtime_contract: '계약 실시간',
+    realtime_polling: '실시간 조회',
     delayed: '지연',
     delayed_or_close: '지연/종가',
     eod: '일봉',

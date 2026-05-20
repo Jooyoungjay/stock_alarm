@@ -1,4 +1,5 @@
 import { fetchHistoricalHighSince, fetchQuote, getQuoteSourceMeta } from './priceProvider.js';
+import { resolveKisMarketDivCode } from './kisMarket.js';
 import { sendPushNotificationForStock } from './pushNotifications.js';
 import { ALERT_TYPES, DEFAULT_ALERT_TYPE, normalizeAlertType } from './storage.js';
 import { formatAlertMessage, isTelegramConfigured, sendTelegramMessage } from './telegram.js';
@@ -9,6 +10,10 @@ const alertTypeLabels = {
   [ALERT_TYPES.PURCHASE_LOSS]: '매수가 대비 손절률',
   [ALERT_TYPES.TARGET_PRICE]: '직접 기준가'
 };
+
+function getStockKisMarketDivCode(stock, config = {}) {
+  return resolveKisMarketDivCode(stock?.kisMarketDivCode, config.kisMarketDivCode || 'J');
+}
 
 export function calculateDrawdownPercent(highPrice, currentPrice) {
   const high = Number(highPrice);
@@ -895,7 +900,7 @@ export async function runAlertCheck(store, config, options = {}) {
         kisAppKey: config.kisAppKey,
         kisAppSecret: config.kisAppSecret,
         kisAccessToken: config.kisAccessToken,
-        kisMarketDivCode: config.kisMarketDivCode,
+        kisMarketDivCode: getStockKisMarketDivCode(stock, config),
         kisCustType: config.kisCustType,
         kisTokenAutoRefresh: config.kisTokenAutoRefresh,
         kisTokenCachePath: config.kisTokenCachePath,
@@ -964,7 +969,7 @@ export async function runStockQuoteRetry(store, config, stockId, options = {}) {
       kisAppKey: config.kisAppKey,
       kisAppSecret: config.kisAppSecret,
       kisAccessToken: config.kisAccessToken,
-      kisMarketDivCode: config.kisMarketDivCode,
+      kisMarketDivCode: getStockKisMarketDivCode(stock, config),
       kisCustType: config.kisCustType,
       kisTokenAutoRefresh: config.kisTokenAutoRefresh,
       kisTokenCachePath: config.kisTokenCachePath,

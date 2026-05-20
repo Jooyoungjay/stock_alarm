@@ -92,6 +92,7 @@
 | `purchase_price` | numeric null |
 | `quantity` | numeric null |
 | `purchase_date` | date null |
+| `kis_market_div_code` | text null | KIS 현재가 provider 사용 시 J, NX, UN 중 종목별 시장 기준 |
 | `alert_type` | text not null |
 | `threshold_percent` | numeric not null |
 | `target_price` | numeric null |

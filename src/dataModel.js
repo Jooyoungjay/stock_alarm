@@ -43,6 +43,7 @@ const entities = [
       { name: 'purchasePrice', type: 'number | null', required: false },
       { name: 'quantity', type: 'number | null', required: false },
       { name: 'purchaseDate', type: 'date | empty', required: false },
+      { name: 'kisMarketDivCode', type: 'J | NX | UN | empty', required: false },
       { name: 'alertType', type: 'high_drawdown | profit_retracement | purchase_loss | target_price', required: true },
       { name: 'thresholdPercent', type: 'number', required: true },
       { name: 'targetPrice', type: 'number | null', required: false },

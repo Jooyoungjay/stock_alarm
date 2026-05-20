@@ -7,6 +7,7 @@ import { config } from './config.js';
 import { buildDividendCalendar } from './dividendCalendar.js';
 import { lastDividendEventAlertMetaKey, runDividendEventAlertCheck } from './dividendEventAlerts.js';
 import { runDividendRefresh, runSingleDividendRefresh } from './dividendRefresh.js';
+import { normalizeKisMarketDivCode, resolveKisMarketDivCode } from './kisMarket.js';
 import { buildKisQuoteSmokeTest } from './kisQuoteSmokeTest.js';
 import {
   buildDailyBriefing,
@@ -302,6 +303,17 @@ function recordQuoteProviderAttempt(attempt) {
   return store.recordQuoteProviderAttempt(attempt);
 }
 
+function getStockKisMarketDivCode(stock) {
+  return resolveKisMarketDivCode(stock?.kisMarketDivCode, config.kisMarketDivCode || 'J');
+}
+
+function getRequestKisMarketDivCode(value) {
+  const fallback = resolveKisMarketDivCode('', config.kisMarketDivCode || 'J');
+  const text = String(value || '').trim();
+
+  return text ? normalizeKisMarketDivCode(text) : fallback;
+}
+
 async function runKisQuoteSmokeTest(body = {}) {
   const forceToken = Boolean(body.forceToken);
 
@@ -346,7 +358,7 @@ async function initializePurchaseHigh(stock) {
       kisAppKey: config.kisAppKey,
       kisAppSecret: config.kisAppSecret,
       kisAccessToken: config.kisAccessToken,
-      kisMarketDivCode: config.kisMarketDivCode,
+      kisMarketDivCode: getStockKisMarketDivCode(stock),
       kisCustType: config.kisCustType,
       kisTokenAutoRefresh: config.kisTokenAutoRefresh,
       kisTokenCachePath: config.kisTokenCachePath,
@@ -661,7 +673,7 @@ async function handleApi(request, response, url) {
         const body = await readJsonBody(request);
         let stock = await store.updateStock(id, body, { deviceId: device.id });
 
-        if (body.resetHighPrice || body.purchaseDate !== undefined) {
+        if (body.resetHighPrice || body.purchaseDate !== undefined || body.kisMarketDivCode !== undefined) {
           stock = await initializePurchaseHigh(stock);
         }
 
@@ -698,7 +710,7 @@ async function handleApi(request, response, url) {
       kisAppKey: config.kisAppKey,
       kisAppSecret: config.kisAppSecret,
       kisAccessToken: config.kisAccessToken,
-      kisMarketDivCode: config.kisMarketDivCode,
+      kisMarketDivCode: getRequestKisMarketDivCode(url.searchParams.get('kisMarketDivCode')),
       kisCustType: config.kisCustType,
       kisTokenAutoRefresh: config.kisTokenAutoRefresh,
       kisTokenCachePath: config.kisTokenCachePath,
@@ -779,7 +791,7 @@ async function handleApi(request, response, url) {
       const body = await readJsonBody(request);
       let stock = await store.updateStock(id, body);
 
-      if (body.resetHighPrice || body.purchaseDate !== undefined) {
+      if (body.resetHighPrice || body.purchaseDate !== undefined || body.kisMarketDivCode !== undefined) {
         stock = await initializePurchaseHigh(stock);
       }
 

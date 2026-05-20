@@ -746,6 +746,42 @@ test('runAlertCheck records quote provider attempts when the fetcher reports the
   assert.equal(attempts[0].source, 'alert_check');
 });
 
+test('runAlertCheck passes the stock KIS market setting to the quote fetcher', async () => {
+  const store = createMemoryStore({
+    ...baseStock,
+    highPrice: 100,
+    highPriceAt: '2026-05-11T00:01:00.000Z',
+    kisMarketDivCode: 'NX'
+  });
+  const seen = [];
+
+  await runAlertCheck(
+    store,
+    {
+      telegramBotToken: 'token',
+      telegramChatId: 'chat',
+      quoteTimeoutMs: 10000,
+      quoteProviders: 'kis',
+      kisMarketDivCode: 'J'
+    },
+    {
+      now: date('2026-05-11T00:47:30Z'),
+      fetchQuote: async (_symbol, options) => {
+        seen.push(options.kisMarketDivCode);
+
+        return {
+          symbol: 'AAPL',
+          price: 99,
+          currency: 'USD',
+          provider: 'kis'
+        };
+      }
+    }
+  );
+
+  assert.deepEqual(seen, ['NX']);
+});
+
 test('runStockQuoteRetry checks one failed stock and clears the quote error', async () => {
   const store = createMemoryStore({
     ...baseStock,
@@ -753,7 +789,8 @@ test('runStockQuoteRetry checks one failed stock and clears the quote error', as
     highPriceAt: '2026-05-11T00:01:00.000Z',
     lastCheckStatus: 'error',
     lastError: '이전 조회 실패',
-    lastErrorAt: '2026-05-11T00:40:00.000Z'
+    lastErrorAt: '2026-05-11T00:40:00.000Z',
+    kisMarketDivCode: 'UN'
   });
   const attempts = [];
   store.recordQuoteProviderAttempt = async (attempt) => {
@@ -773,6 +810,7 @@ test('runStockQuoteRetry checks one failed stock and clears the quote error', as
       now: date('2026-05-11T00:48:00Z'),
       fetchQuote: async (symbol, options) => {
         assert.equal(symbol, 'AAPL');
+        assert.equal(options.kisMarketDivCode, 'UN');
         await options.onProviderAttempt({
           type: 'quote',
           provider: 'stooq',

@@ -44,6 +44,7 @@ test('buildPostgresMigrationDryRun flattens JSON store data into Postgres table 
 
   assert.equal(result.tables.stocks.sampleRows[0].symbol, '336260');
   assert.equal(result.tables.stocks.sampleRows[0].purchase_price, 88779);
+  assert.equal(result.tables.stocks.sampleRows[0].kis_market_div_code, 'NX');
   assert.equal(result.tables.stocks.sampleRows[0].dividend_snapshot.annualDividendPerShare, 1200);
   assert.equal(result.tables.dividend_events.sampleRows[0].stock_id, 'stock-1');
   assert.equal(result.tables.alerts.sampleRows[0].maximum_profit_amount, 10000);
@@ -149,6 +150,7 @@ function createSnapshot() {
         purchasePrice: 88779,
         quantity: 10,
         purchaseDate: '',
+        kisMarketDivCode: 'NX',
         alertType: 'profit_retracement',
         thresholdPercent: 10,
         active: true,

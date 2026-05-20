@@ -263,6 +263,7 @@ function mapStockRow(stock, index) {
     purchase_price: nullableNumber(stock.purchasePrice),
     quantity: nullableNumber(stock.quantity),
     purchase_date: nullableString(stock.purchaseDate),
+    kis_market_div_code: nullableString(stock.kisMarketDivCode),
     alert_type: stringify(stock.alertType),
     threshold_percent: nullableNumber(stock.thresholdPercent),
     target_price: nullableNumber(stock.targetPrice),

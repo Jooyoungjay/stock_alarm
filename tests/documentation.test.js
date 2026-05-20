@@ -180,3 +180,13 @@ test('admin page exposes the KIS quote smoke test controls', async () => {
   assert.match(script, /\/api\/kis\/quote-smoke-test/);
   assert.match(script, /renderKisSmokeTestResult/);
 });
+
+test('user stock forms expose per-stock KIS market settings', async () => {
+  const html = await fs.readFile(new URL('../public/index.html', import.meta.url), 'utf8');
+  const script = await fs.readFile(new URL('../public/app.js', import.meta.url), 'utf8');
+
+  assert.match(html, /name="kisMarketDivCode"/);
+  assert.match(html, /KIS 시장 기준/);
+  assert.match(script, /renderKisMarketDivCodeOptions/);
+  assert.match(script, /kisMarketDivCode: elements\.form\.elements\.kisMarketDivCode\.value/);
+});

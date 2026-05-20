@@ -8,6 +8,7 @@ import {
   restoreBackup as restoreFileBackup
 } from './backups.js';
 import { buildDataModelInfo, normalizeStoreEnvelope, touchStoreEnvelope } from './dataModel.js';
+import { normalizeKisMarketDivCode } from './kisMarket.js';
 import { STORAGE_ENGINES } from './storageContract.js';
 import { normalizeSymbolInput } from './symbols.js';
 
@@ -105,6 +106,7 @@ export function normalizeStock(input, defaults) {
     dividendLastDiagnostic: null,
     dividendHistory: [],
     purchaseDate: normalizeOptionalDate(input.purchaseDate),
+    kisMarketDivCode: normalizeKisMarketDivCode(input.kisMarketDivCode),
     alertType,
     thresholdPercent,
     targetPrice,
@@ -208,6 +210,11 @@ export function applyStockPatch(stock, patch) {
 
   if (patch.reviewDate !== undefined) {
     next.reviewDate = normalizeOptionalReviewDate(patch.reviewDate);
+  }
+
+  if (patch.kisMarketDivCode !== undefined) {
+    next.kisMarketDivCode = normalizeKisMarketDivCode(patch.kisMarketDivCode);
+    alertConditionChanged = true;
   }
 
   if (patch.purchasePrice !== undefined) {
@@ -382,6 +389,7 @@ export function normalizeStoredStock(stock) {
     dividendLastDiagnostic: normalizeDividendDiagnostic(stock.dividendLastDiagnostic),
     dividendHistory: normalizeDividendHistory(stock.dividendHistory),
     purchaseDate: stock.purchaseDate || '',
+    kisMarketDivCode: normalizeKisMarketDivCode(stock.kisMarketDivCode, { fallback: '' }),
     alertType:
       alertType === ALERT_TYPES.TARGET_PRICE && normalizedTargetPrice === null
         ? DEFAULT_ALERT_TYPE
