@@ -53,6 +53,32 @@ test('JsonStore stores sanitized push tokens for devices', async () => {
   assert.equal(tokens[0].deviceId, created.device.id);
 });
 
+test('JsonStore serializes concurrent writes without leaving temp files', async () => {
+  const store = await createStore();
+  await fs.writeFile(path.join(store.dataDir, 'store.json.tmp'), '{}\n', 'utf8');
+
+  await Promise.all(
+    Array.from({ length: 12 }, (_, index) =>
+      store.write({
+        devices: [],
+        stocks: [],
+        alerts: [],
+        meta: { concurrentWriteIndex: index }
+      })
+    )
+  );
+
+  const data = await store.read();
+  assert.equal(typeof data.meta.concurrentWriteIndex, 'number');
+
+  const files = await fs.readdir(store.dataDir);
+  assert.deepEqual(
+    files.filter((file) => file.startsWith('store.json.') && file.endsWith('.tmp')),
+    []
+  );
+  assert.equal(files.includes('store.json.tmp'), false);
+});
+
 test('JsonStore scopes stocks and alerts by anonymous device', async () => {
   const store = await createStore();
   const first = await store.createDevice({ label: 'first' });

@@ -201,6 +201,21 @@ test('full regression scenario guide documents end-to-end test coverage', async 
   assert.match(markdown, /최종 합격 기준/);
 });
 
+test('full regression execution report records results and fixed defects', async () => {
+  const markdown = await fs.readFile(
+    new URL('../docs/full-regression-test-report-2026-05-21.md', import.meta.url),
+    'utf8'
+  );
+
+  assert.match(markdown, /전수 테스트 실행 기록/);
+  assert.match(markdown, /238개 통과/);
+  assert.match(markdown, /JsonStore/);
+  assert.match(markdown, /store\.json\.tmp/);
+  assert.match(markdown, /HTTP 403 Forbidden/);
+  assert.match(markdown, /KIS_APP_KEY/);
+  assert.match(markdown, /모바일 실기기/);
+});
+
 test('admin page exposes the KIS quote smoke test controls', async () => {
   const html = await fs.readFile(new URL('../public/index.html', import.meta.url), 'utf8');
   const script = await fs.readFile(new URL('../public/app.js', import.meta.url), 'utf8');

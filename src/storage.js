@@ -49,10 +49,48 @@ function stripBom(value) {
   return String(value || '').replace(/^\uFEFF/, '');
 }
 
+const writeJsonRetryableRenameErrorCodes = new Set(['EACCES', 'EBUSY', 'EPERM']);
+
+function buildJsonTempPath(filePath) {
+  return `${filePath}.${process.pid}.${Date.now()}.${randomUUID()}.tmp`;
+}
+
+function delay(milliseconds) {
+  return new Promise((resolve) => setTimeout(resolve, milliseconds));
+}
+
+async function renameJsonWithRetry(tempPath, filePath) {
+  const maxAttempts = 5;
+
+  for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
+    try {
+      await fs.rename(tempPath, filePath);
+      return;
+    } catch (error) {
+      const canRetry =
+        writeJsonRetryableRenameErrorCodes.has(error.code) &&
+        attempt < maxAttempts;
+
+      if (!canRetry) {
+        throw error;
+      }
+
+      await delay(attempt * 25);
+    }
+  }
+}
+
 async function writeJson(filePath, data) {
-  const tempPath = `${filePath}.tmp`;
-  await fs.writeFile(tempPath, `${JSON.stringify(data, null, 2)}\n`, 'utf8');
-  await fs.rename(tempPath, filePath);
+  const tempPath = buildJsonTempPath(filePath);
+
+  try {
+    await fs.writeFile(tempPath, `${JSON.stringify(data, null, 2)}\n`, 'utf8');
+    await renameJsonWithRetry(tempPath, filePath);
+    await fs.unlink(`${filePath}.tmp`).catch(() => {});
+  } catch (error) {
+    await fs.unlink(tempPath).catch(() => {});
+    throw error;
+  }
 }
 
 export function normalizeStock(input, defaults) {
@@ -1477,6 +1515,7 @@ export class JsonStore {
       maxBackups: defaults.backups?.maxBackups
     };
     this.ready = ensureDataDir(dataDir);
+    this.writeQueue = Promise.resolve();
   }
 
   async read() {
@@ -1493,7 +1532,10 @@ export class JsonStore {
 
   async write(data) {
     await this.ready;
-    await writeJson(this.filePath, touchStoreEnvelope(data));
+    const payload = touchStoreEnvelope(data);
+    const writeTask = this.writeQueue.then(() => writeJson(this.filePath, payload));
+    this.writeQueue = writeTask.catch(() => {});
+    await writeTask;
   }
 
   async getDataModelInfo() {
