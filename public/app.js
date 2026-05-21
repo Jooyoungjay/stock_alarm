@@ -2899,6 +2899,10 @@ function formatKisNaverAutoCompareAlertStatus(alert = {}) {
   };
 
   if (alert.deliveryStatus === 'skipped') {
+    if (alert.reason === 'all_issues_handled') {
+      return '처리 상태로 생략';
+    }
+
     if (alert.reason === 'duplicate_issue') {
       return '중복 생략';
     }

@@ -6,6 +6,7 @@ import {
   buildKisNaverCompareIssueStateSummary,
   kisNaverCompareIssueStatesMetaKey,
   normalizeKisNaverCompareIssueStates,
+  reopenResolvedKisNaverCompareIssues,
   updateKisNaverCompareIssueState
 } from '../src/kisNaverCompareIssues.js';
 
@@ -88,6 +89,25 @@ test('normalizeKisNaverCompareIssueStates drops invalid entries', () => {
       }
     }
   );
+});
+
+test('reopenResolvedKisNaverCompareIssues only reopens resolved issues', async () => {
+  const store = createMemoryStore({
+    [kisNaverCompareIssueStatesMetaKey]: {
+      'issue-1': { issueKey: 'issue-1', status: 'resolved' },
+      'issue-2': { issueKey: 'issue-2', status: 'on_hold' }
+    }
+  });
+  const result = await reopenResolvedKisNaverCompareIssues(
+    store,
+    ['issue-1', 'issue-2'],
+    { now: new Date('2026-05-21T02:00:00.000Z') }
+  );
+
+  assert.deepEqual(result.reopenedIssueKeys, ['issue-1']);
+  assert.equal(result.issueStates['issue-1'].status, 'open');
+  assert.equal(result.issueStates['issue-1'].updatedAt, '2026-05-21T02:00:00.000Z');
+  assert.equal(result.issueStates['issue-2'].status, 'on_hold');
 });
 
 test('buildKisNaverCompareIssueStateSummary counts issue resolutions', () => {

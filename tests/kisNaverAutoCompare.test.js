@@ -8,6 +8,7 @@ import {
   normalizeKisNaverAutoCompareSymbol,
   runKisNaverAutoCompare
 } from '../src/kisNaverAutoCompare.js';
+import { kisNaverCompareIssueStatesMetaKey } from '../src/kisNaverCompareIssues.js';
 
 test('buildKisNaverAutoCompareCandidates keeps active unique Korean stocks only', () => {
   const candidates = buildKisNaverAutoCompareCandidates(
@@ -188,6 +189,102 @@ test('runKisNaverAutoCompare skips duplicate alert fingerprints', async () => {
   assert.equal(result.alert.deliveryStatus, 'skipped');
   assert.equal(result.alert.reason, 'duplicate_issue');
   assert.equal(result.alert.sentAt, '2026-05-20T03:00:00.000Z');
+});
+
+test('runKisNaverAutoCompare suppresses alert issues marked acknowledged or on hold', async () => {
+  const issueKey = 'comparison_failed:336260:error:KIS timeout';
+  const store = createMemoryStore(
+    [{ id: 'stock-1', symbol: '336260', displayName: '두산퓨얼셀', active: true }],
+    {
+      [kisNaverCompareIssueStatesMetaKey]: {
+        [issueKey]: {
+          issueKey,
+          status: 'on_hold',
+          updatedAt: '2026-05-20T03:30:00.000Z'
+        }
+      }
+    }
+  );
+  const messages = [];
+  const result = await runKisNaverAutoCompare(
+    store,
+    {
+      kisNaverAutoCompareEnabled: true,
+      kisNaverAutoCompareLimit: 1,
+      telegramBotToken: 'token',
+      telegramChatId: '5863355323'
+    },
+    {
+      now: new Date('2026-05-20T04:00:00.000Z'),
+      compare: async () => {
+        throw new Error('KIS timeout');
+      },
+      sendTelegramMessage: async (_config, text) => {
+        messages.push(text);
+        return { ok: true };
+      }
+    }
+  );
+
+  assert.equal(messages.length, 0);
+  assert.equal(result.alert.deliveryStatus, 'skipped');
+  assert.equal(result.alert.reason, 'all_issues_handled');
+  assert.equal(result.alert.issueCount, 1);
+  assert.equal(result.alert.alertableIssueCount, 0);
+  assert.equal(result.alert.suppressedIssueCount, 1);
+  assert.equal(result.alert.issues[0].resolution.status, 'on_hold');
+});
+
+test('runKisNaverAutoCompare resends and reopens resolved issues when they reappear', async () => {
+  const issueKey = 'comparison_failed:336260:error:KIS timeout';
+  const store = createMemoryStore(
+    [{ id: 'stock-1', symbol: '336260', displayName: '두산퓨얼셀', active: true }],
+    {
+      [lastKisNaverAutoCompareAlertMetaKey]: {
+        deliveryStatus: 'sent',
+        fingerprint: issueKey,
+        notificationFingerprint: issueKey,
+        attemptedAt: '2026-05-20T03:00:00.000Z',
+        sentAt: '2026-05-20T03:00:00.000Z'
+      },
+      [kisNaverCompareIssueStatesMetaKey]: {
+        [issueKey]: {
+          issueKey,
+          status: 'resolved',
+          updatedAt: '2026-05-20T03:30:00.000Z'
+        }
+      }
+    }
+  );
+  const messages = [];
+  const result = await runKisNaverAutoCompare(
+    store,
+    {
+      kisNaverAutoCompareEnabled: true,
+      kisNaverAutoCompareLimit: 1,
+      kisNaverAutoCompareAlertCooldownMinutes: 360,
+      telegramBotToken: 'token',
+      telegramChatId: '5863355323'
+    },
+    {
+      now: new Date('2026-05-20T04:00:00.000Z'),
+      compare: async () => {
+        throw new Error('KIS timeout');
+      },
+      sendTelegramMessage: async (_config, text) => {
+        messages.push(text);
+        return { ok: true };
+      }
+    }
+  );
+
+  assert.equal(messages.length, 1);
+  assert.equal(result.alert.deliveryStatus, 'sent');
+  assert.equal(result.alert.reason, 'resolved_issue_reopened');
+  assert.equal(result.alert.reopenedIssueCount, 1);
+  assert.equal(result.alert.issues[0].resolution.status, 'open');
+  assert.equal(store.meta[kisNaverCompareIssueStatesMetaKey][issueKey].status, 'open');
+  assert.equal(store.meta[lastKisNaverAutoCompareAlertMetaKey].notificationFingerprint, issueKey);
 });
 
 test('buildKisNaverAutoCompareAlertIssues detects repeated drift and recommendation changes', () => {

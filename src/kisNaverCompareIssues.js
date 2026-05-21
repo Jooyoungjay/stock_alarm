@@ -101,12 +101,66 @@ export async function updateKisNaverCompareIssueState(store, input = {}, options
   };
 }
 
+export async function reopenResolvedKisNaverCompareIssues(store, issueKeys = [], options = {}) {
+  if (typeof store?.setMetaValue !== 'function') {
+    return {
+      issueStates: {},
+      reopenedIssueKeys: []
+    };
+  }
+
+  const normalizedKeys = [
+    ...new Set(
+      (Array.isArray(issueKeys) ? issueKeys : [])
+        .map(normalizeKisNaverCompareIssueKey)
+        .filter(Boolean)
+    )
+  ];
+
+  if (!normalizedKeys.length) {
+    return {
+      issueStates: await readKisNaverCompareIssueStates(store),
+      reopenedIssueKeys: []
+    };
+  }
+
+  const issueStates = await readKisNaverCompareIssueStates(store);
+  const updatedAt = toIsoDateTime(options.now || new Date());
+  const note = normalizeNote(options.note || '해결 처리된 이슈가 다시 감지되어 열림으로 전환');
+  const nextIssueStates = { ...issueStates };
+  const reopenedIssueKeys = [];
+
+  for (const issueKey of normalizedKeys) {
+    const current = issueStates[issueKey];
+
+    if (current?.status !== KIS_NAVER_COMPARE_ISSUE_STATUSES.RESOLVED) {
+      continue;
+    }
+
+    nextIssueStates[issueKey] = {
+      issueKey,
+      status: KIS_NAVER_COMPARE_ISSUE_STATUSES.OPEN,
+      updatedAt,
+      note
+    };
+    reopenedIssueKeys.push(issueKey);
+  }
+
+  if (reopenedIssueKeys.length) {
+    await store.setMetaValue(kisNaverCompareIssueStatesMetaKey, nextIssueStates);
+  }
+
+  return {
+    issueStates: nextIssueStates,
+    reopenedIssueKeys
+  };
+}
+
 export function applyKisNaverCompareIssueStates(snapshot, issueStates = {}) {
   if (!snapshot || typeof snapshot !== 'object' || Array.isArray(snapshot)) {
     return snapshot || null;
   }
 
-  const normalizedStates = normalizeKisNaverCompareIssueStates(issueStates);
   const alert = snapshot.alert && typeof snapshot.alert === 'object' && !Array.isArray(snapshot.alert)
     ? snapshot.alert
     : null;
@@ -116,15 +170,7 @@ export function applyKisNaverCompareIssueStates(snapshot, issueStates = {}) {
     return snapshot;
   }
 
-  const decoratedIssues = issues.map((issue) => {
-    const key = normalizeKisNaverCompareIssueKey(issue?.key);
-    const resolution = normalizedStates[key] || buildOpenIssueState(key);
-
-    return {
-      ...issue,
-      resolution
-    };
-  });
+  const decoratedIssues = decorateKisNaverCompareIssues(issues, issueStates);
   const issueStateSummary = buildKisNaverCompareIssueStateSummary(decoratedIssues);
 
   return {
@@ -138,6 +184,20 @@ export function applyKisNaverCompareIssueStates(snapshot, issueStates = {}) {
         issueStateSummary.acknowledged + issueStateSummary.on_hold + issueStateSummary.resolved
     }
   };
+}
+
+export function decorateKisNaverCompareIssues(issues = [], issueStates = {}) {
+  const normalizedStates = normalizeKisNaverCompareIssueStates(issueStates);
+
+  return (Array.isArray(issues) ? issues : []).map((issue) => {
+    const key = normalizeKisNaverCompareIssueKey(issue?.key);
+    const resolution = normalizedStates[key] || buildOpenIssueState(key);
+
+    return {
+      ...issue,
+      resolution
+    };
+  });
 }
 
 export function buildKisNaverCompareIssueStateSummary(issues = []) {

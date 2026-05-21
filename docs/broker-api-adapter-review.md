@@ -61,7 +61,7 @@ npm run check:kis-quote -- --symbol 005930 --market UN --json
 
 `/admin`의 `KIS/Naver 가격 비교` 카드에서는 `POST /api/kis/naver-compare`로 같은 종목의 Naver 기준가와 KIS KRX/NXT/통합 가격을 나란히 조회합니다. 결과에는 시장별 가격 차이, 차이율, 추천 시장, 가격 차이 이상치 주의/경고, 실패 사유, provider 진단 시도가 표시되며 관리자 API 보호 대상입니다. 비교 결과와 이상치 판정은 최근 이력으로 저장되고, 저장된 이력은 시장별 평균/최대/최근 괴리율과 반복 이상치 추세로 관리자 화면에서 확인할 수 있습니다. 저장된 추세 기반 추천은 현재 1회 비교 추천과 비교해 적용 가능, 추가 확인, 관찰 필요로 판단합니다. 등록된 같은 종목이 있으면 `POST /api/kis/naver-compare/apply`로 해당 시장을 종목의 KIS 기준에 바로 적용할 수 있습니다.
 
-자동 점검은 `KIS_NAVER_AUTO_COMPARE_ENABLED=true`일 때 등록된 활성 국내 종목을 대상으로 KIS/Naver 비교를 주기 실행합니다. 기본값은 실제 API 호출 반복을 막기 위해 꺼짐이며, 관리자 화면의 `자동 점검 실행` 버튼 또는 `POST /api/kis/naver-compare/auto-run`으로 강제 1회 실행할 수 있습니다. 자동 비교에서 실패, 반복 괴리, 추천 시장 변경, 추가 확인 판단이 나오면 `KIS_NAVER_AUTO_COMPARE_ALERT_ENABLED=true` 기준으로 텔레그램 요약 알림을 보냅니다. 같은 이슈는 중복 전송하지 않고, 전송 실패나 Telegram 미설정 상태는 `KIS_NAVER_AUTO_COMPARE_ALERT_COOLDOWN_MINUTES` 간격으로 재시도합니다. 자동 비교 알림 이슈는 관리자 화면에서 열림, 확인, 보류, 해결 상태로 처리할 수 있고 `PATCH /api/kis/naver-compare/issues`로 저장됩니다.
+자동 점검은 `KIS_NAVER_AUTO_COMPARE_ENABLED=true`일 때 등록된 활성 국내 종목을 대상으로 KIS/Naver 비교를 주기 실행합니다. 기본값은 실제 API 호출 반복을 막기 위해 꺼짐이며, 관리자 화면의 `자동 점검 실행` 버튼 또는 `POST /api/kis/naver-compare/auto-run`으로 강제 1회 실행할 수 있습니다. 자동 비교에서 실패, 반복 괴리, 추천 시장 변경, 추가 확인 판단이 나오면 `KIS_NAVER_AUTO_COMPARE_ALERT_ENABLED=true` 기준으로 텔레그램 요약 알림을 보냅니다. 같은 이슈는 중복 전송하지 않고, 전송 실패나 Telegram 미설정 상태는 `KIS_NAVER_AUTO_COMPARE_ALERT_COOLDOWN_MINUTES` 간격으로 재시도합니다. 자동 비교 알림 이슈는 관리자 화면에서 열림, 확인, 보류, 해결 상태로 처리할 수 있고 `PATCH /api/kis/naver-compare/issues`로 저장됩니다. 확인/보류 상태의 이슈는 자동 알림 대상에서 제외하고, 해결 처리한 이슈가 다시 감지되면 열림으로 되돌린 뒤 재알림합니다.
 
 사용자 종목에는 `kisMarketDivCode`를 저장할 수 있습니다. 비어 있으면 `KIS_MARKET_DIV_CODE` 기본값을 사용하고, 값이 있으면 자동 가격 확인과 실패 종목 재시도에서 해당 종목의 KRX/NXT/통합 기준을 우선 적용합니다.
 
@@ -126,7 +126,7 @@ npm run check:kis-quote -- --symbol 005930 --market UN --json
 
 ## 다음 구현 조건
 
-KIS 접근 토큰 자동 발급/갱신, 현재가 smoke test CLI, 관리자 화면 점검 버튼, 종목별 KIS 시장 설정, KIS/Naver 가격 비교 진단, 비교 결과 기반 시장 적용, 가격 차이 이상치 모니터링, 가격 비교 이력 저장, 가격 비교 추세 시각화, 추세 기반 시장 추천, 자동 점검, 자동 점검 결과 알림, 가격 비교 이슈 처리 UX는 구현했습니다. 다음 단계는 처리 상태와 새 이슈 발생 여부를 반영한 자동 비교 알림 재전송 정책입니다.
+KIS 접근 토큰 자동 발급/갱신, 현재가 smoke test CLI, 관리자 화면 점검 버튼, 종목별 KIS 시장 설정, KIS/Naver 가격 비교 진단, 비교 결과 기반 시장 적용, 가격 차이 이상치 모니터링, 가격 비교 이력 저장, 가격 비교 추세 시각화, 추세 기반 시장 추천, 자동 점검, 자동 점검 결과 알림, 가격 비교 이슈 처리 UX, 처리 상태 기반 알림 재전송 정책은 구현했습니다. 다음 단계는 전수 테스트 시나리오를 실제 로컬 환경에서 실행하고 발견 결함을 정리하는 것입니다.
 
 실제 운영 전에 확인할 항목:
 

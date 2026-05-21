@@ -164,6 +164,7 @@ test('broker API adapter guide documents quote-only checks and trading guard', a
   assert.match(markdown, /\/api\/kis\/quote-smoke-test/);
   assert.match(markdown, /\/api\/kis\/naver-compare/);
   assert.match(markdown, /\/api\/kis\/naver-compare\/auto-run/);
+  assert.match(markdown, /\/api\/kis\/naver-compare\/issues/);
   assert.match(markdown, /\/api\/kis\/naver-compare\/apply/);
   assert.match(markdown, /가격 차이 이상치/);
   assert.match(markdown, /가격 비교 이력/);
@@ -175,9 +176,29 @@ test('broker API adapter guide documents quote-only checks and trading guard', a
   assert.match(markdown, /KIS_NAVER_AUTO_COMPARE_ENABLED/);
   assert.match(markdown, /KIS_NAVER_AUTO_COMPARE_ALERT_ENABLED/);
   assert.match(markdown, /KIS_NAVER_AUTO_COMPARE_ALERT_COOLDOWN_MINUTES/);
+  assert.match(markdown, /확인\/보류/);
+  assert.match(markdown, /재알림/);
   assert.match(markdown, /한국투자증권/);
   assert.match(markdown, /키움/);
   assert.match(markdown, /주문/);
+});
+
+test('full regression scenario guide documents end-to-end test coverage', async () => {
+  const markdown = await fs.readFile(
+    new URL('../docs/full-regression-test-scenarios.md', import.meta.url),
+    'utf8'
+  );
+
+  assert.match(markdown, /Stock Alarm 전수 테스트 시나리오/);
+  assert.match(markdown, /npm test/);
+  assert.match(markdown, /서버 실행\/종료 테스트/);
+  assert.match(markdown, /사용자 웹앱 테스트/);
+  assert.match(markdown, /텔레그램 테스트/);
+  assert.match(markdown, /배당 기능 테스트/);
+  assert.match(markdown, /KIS\/Naver 가격 비교 테스트/);
+  assert.match(markdown, /해결 후 재발/);
+  assert.match(markdown, /모바일 앱\/API 테스트/);
+  assert.match(markdown, /최종 합격 기준/);
 });
 
 test('admin page exposes the KIS quote smoke test controls', async () => {

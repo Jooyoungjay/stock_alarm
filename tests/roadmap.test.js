@@ -27,6 +27,8 @@ test('parseRoadmapMarkdown extracts roadmap metadata and next task', async () =>
   assert.ok(roadmap.completedScope.some((item) => item.category === '가격 비교 자동 점검'));
   assert.ok(roadmap.completedScope.some((item) => item.category === '자동 점검 결과 알림'));
   assert.ok(roadmap.completedScope.some((item) => item.category === '가격 비교 이슈 처리 UX'));
+  assert.ok(roadmap.completedScope.some((item) => item.category === '가격 비교 이슈 알림 재전송 정책'));
+  assert.ok(roadmap.completedScope.some((item) => item.category === '전수 테스트 시나리오'));
   assert.ok(roadmap.completedScope.some((item) => item.category === '데이터 모델 정리'));
   assert.ok(roadmap.completedScope.some((item) => item.category === 'JSON -> DB 이전 설계'));
   assert.ok(roadmap.completedScope.some((item) => item.category === '백업/복구 DB 대응'));
@@ -65,8 +67,8 @@ test('parseRoadmapMarkdown extracts roadmap metadata and next task', async () =>
   assert.ok(roadmap.completedScope.some((item) => item.category === 'Postgres 쿼리 어댑터'));
   assert.ok(roadmap.completedScope.some((item) => item.category === 'Postgres 연결 리허설'));
   assert.ok(roadmap.sections.length >= 9);
-  assert.equal(roadmap.recommendedOrder[0], '가격 비교 이슈 알림 재전송 정책');
-  assert.equal(roadmap.nextTask.title, '가격 비교 이슈 알림 재전송 정책');
+  assert.equal(roadmap.recommendedOrder[0], '전수 테스트 실행 및 결함 정리');
+  assert.equal(roadmap.nextTask.title, '전수 테스트 실행 및 결함 정리');
   assert.ok(roadmap.statusLegend.some((item) => item.status === 'pending' && item.label === '예정'));
   assert.ok(roadmap.summary.pending > 0);
   assert.ok(roadmap.summary.total > roadmap.summary.completed);
@@ -127,9 +129,15 @@ test('parseRoadmapMarkdown normalizes explicit WBS task statuses', async () => {
   const completedKisCompareIssueUxTask = roadmap.sections
     .find((section) => section.id === '6')
     .tasks.find((task) => task.id === '6.21');
-  const pendingKisCompareIssueResendTask = roadmap.sections
+  const completedKisCompareIssueResendTask = roadmap.sections
     .find((section) => section.id === '6')
     .tasks.find((task) => task.id === '6.22');
+  const completedRegressionScenarioTask = roadmap.sections
+    .find((section) => section.id === '10')
+    .tasks.find((task) => task.id === '10.1');
+  const pendingRegressionExecutionTask = roadmap.sections
+    .find((section) => section.id === '10')
+    .tasks.find((task) => task.id === '10.2');
   const completedProviderTask = roadmap.sections
     .find((section) => section.id === '6')
     .tasks.find((task) => task.id === '6.6');
@@ -196,7 +204,9 @@ test('parseRoadmapMarkdown normalizes explicit WBS task statuses', async () => {
   assert.equal(completedKisCompareAutomationTask.status, 'completed');
   assert.equal(completedKisAutoCompareAlertTask.status, 'completed');
   assert.equal(completedKisCompareIssueUxTask.status, 'completed');
-  assert.equal(pendingKisCompareIssueResendTask.status, 'pending');
+  assert.equal(completedKisCompareIssueResendTask.status, 'completed');
+  assert.equal(completedRegressionScenarioTask.status, 'completed');
+  assert.equal(pendingRegressionExecutionTask.status, 'pending');
   assert.equal(completedDividendAlertTask.status, 'completed');
   assert.equal(completedDividendCalendarTask.status, 'completed');
   assert.equal(completedBackupStrategyTask.status, 'completed');

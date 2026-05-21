@@ -1,4 +1,10 @@
 import { buildKisNaverQuoteComparison } from './kisNaverCompare.js';
+import {
+  KIS_NAVER_COMPARE_ISSUE_STATUSES,
+  decorateKisNaverCompareIssues,
+  readKisNaverCompareIssueStates,
+  reopenResolvedKisNaverCompareIssues
+} from './kisNaverCompareIssues.js';
 import { isKoreanStockSymbol } from './priceProvider.js';
 import {
   buildKisNaverCompareTrendSnapshot,
@@ -310,13 +316,35 @@ export async function maybeSendKisNaverAutoCompareAlert(
 ) {
   const now = toDate(options.now);
   const checkedAt = result.checkedAt || now.toISOString();
-  const issues = buildKisNaverAutoCompareAlertIssues(result, options.previousSnapshot || {});
+  const rawIssues = buildKisNaverAutoCompareAlertIssues(result, options.previousSnapshot || {});
+  let issueStates = await readKisNaverCompareIssueStates(store);
+  const resolvedIssueKeys = getIssueKeysByState(rawIssues, issueStates, KIS_NAVER_COMPARE_ISSUE_STATUSES.RESOLVED);
+  const reopened = await reopenResolvedKisNaverCompareIssues(store, resolvedIssueKeys, {
+    now,
+    note: '자동 비교에서 해결 처리된 이슈가 다시 감지되어 열림으로 전환'
+  });
+
+  if (reopened.reopenedIssueKeys.length) {
+    issueStates = reopened.issueStates;
+  }
+
+  const issuePolicy = buildKisNaverAutoCompareIssueAlertPolicy(
+    decorateKisNaverCompareIssues(rawIssues, issueStates),
+    reopened.reopenedIssueKeys
+  );
+  const issues = issuePolicy.issues;
+  const alertableIssues = issuePolicy.alertableIssues;
   const fingerprint = buildKisNaverAutoCompareAlertFingerprint(issues);
+  const notificationFingerprint = buildKisNaverAutoCompareAlertFingerprint(alertableIssues);
   const previousAlert = await readLastKisNaverAutoCompareAlert(store);
   const baseAlert = {
     checkedAt,
     fingerprint,
+    notificationFingerprint,
     issueCount: issues.length,
+    alertableIssueCount: alertableIssues.length,
+    suppressedIssueCount: issuePolicy.suppressedIssues.length,
+    reopenedIssueCount: issuePolicy.reopenedIssueKeys.length,
     issues
   };
 
@@ -328,6 +356,20 @@ export async function maybeSendKisNaverAutoCompareAlert(
     });
   }
 
+  if (!alertableIssues.length) {
+    const sameFingerprint = previousAlert?.fingerprint === fingerprint;
+
+    return persistKisNaverAutoCompareAlert(store, {
+      ...baseAlert,
+      deliveryStatus: 'skipped',
+      reason: 'all_issues_handled',
+      sentAt: sameFingerprint ? previousAlert.sentAt || null : null,
+      attemptedAt: sameFingerprint
+        ? previousAlert.attemptedAt || previousAlert.sentAt || null
+        : null
+    });
+  }
+
   if (config.kisNaverAutoCompareAlertEnabled === false) {
     return persistKisNaverAutoCompareAlert(store, {
       ...baseAlert,
@@ -336,9 +378,11 @@ export async function maybeSendKisNaverAutoCompareAlert(
     });
   }
 
-  const sameFingerprint = previousAlert?.fingerprint === fingerprint;
+  const previousNotificationFingerprint = getPreviousNotificationFingerprint(previousAlert);
+  const sameNotificationFingerprint = previousNotificationFingerprint === notificationFingerprint;
+  const forceResolvedIssueResend = issuePolicy.reopenedIssueKeys.length > 0;
 
-  if (sameFingerprint && previousAlert?.sentAt) {
+  if (sameNotificationFingerprint && previousAlert?.sentAt && !forceResolvedIssueResend) {
     return persistKisNaverAutoCompareAlert(store, {
       ...baseAlert,
       deliveryStatus: 'skipped',
@@ -356,9 +400,10 @@ export async function maybeSendKisNaverAutoCompareAlert(
   const previousAttemptAt = previousAlert?.attemptedAt || previousAlert?.checkedAt || '';
 
   if (
-    sameFingerprint &&
+    sameNotificationFingerprint &&
     previousAttemptAt &&
-    isWithinCooldown(previousAttemptAt, now, cooldownMinutes)
+    isWithinCooldown(previousAttemptAt, now, cooldownMinutes) &&
+    !forceResolvedIssueResend
   ) {
     return persistKisNaverAutoCompareAlert(store, {
       ...baseAlert,
@@ -370,7 +415,7 @@ export async function maybeSendKisNaverAutoCompareAlert(
   }
 
   const attemptedAt = now.toISOString();
-  const message = formatKisNaverAutoCompareAlertMessage(result, issues);
+  const message = formatKisNaverAutoCompareAlertMessage(result, alertableIssues);
 
   if (!isTelegramConfigured(config)) {
     return persistKisNaverAutoCompareAlert(store, {
@@ -391,6 +436,7 @@ export async function maybeSendKisNaverAutoCompareAlert(
     return persistKisNaverAutoCompareAlert(store, {
       ...baseAlert,
       deliveryStatus: 'sent',
+      reason: forceResolvedIssueResend ? 'resolved_issue_reopened' : '',
       attemptedAt,
       sentAt: attemptedAt,
       cooldownMinutes,
@@ -406,6 +452,67 @@ export async function maybeSendKisNaverAutoCompareAlert(
       messagePreview: message
     });
   }
+}
+
+function buildKisNaverAutoCompareIssueAlertPolicy(issues = [], reopenedIssueKeys = []) {
+  const reopenedSet = new Set(
+    (Array.isArray(reopenedIssueKeys) ? reopenedIssueKeys : [])
+      .map((key) => String(key || '').trim())
+      .filter(Boolean)
+  );
+  const normalizedIssues = (Array.isArray(issues) ? issues : []).map((issue) => ({
+    ...issue,
+    alertPolicy: {
+      reopened: reopenedSet.has(String(issue?.key || '').trim())
+    }
+  }));
+  const alertableIssues = [];
+  const suppressedIssues = [];
+
+  for (const issue of normalizedIssues) {
+    const status = getIssueResolutionStatus(issue);
+
+    if (
+      status === KIS_NAVER_COMPARE_ISSUE_STATUSES.ACKNOWLEDGED ||
+      status === KIS_NAVER_COMPARE_ISSUE_STATUSES.ON_HOLD
+    ) {
+      suppressedIssues.push(issue);
+      continue;
+    }
+
+    alertableIssues.push(issue);
+  }
+
+  return {
+    issues: normalizedIssues,
+    alertableIssues,
+    suppressedIssues,
+    reopenedIssueKeys: [...reopenedSet]
+  };
+}
+
+function getIssueKeysByState(issues = [], issueStates = {}, status) {
+  return (Array.isArray(issues) ? issues : [])
+    .map((issue) => String(issue?.key || '').trim())
+    .filter((key) => key && issueStates[key]?.status === status);
+}
+
+function getIssueResolutionStatus(issue = {}) {
+  const status = String(issue?.resolution?.status || '').trim();
+
+  if (
+    status === KIS_NAVER_COMPARE_ISSUE_STATUSES.ACKNOWLEDGED ||
+    status === KIS_NAVER_COMPARE_ISSUE_STATUSES.ON_HOLD ||
+    status === KIS_NAVER_COMPARE_ISSUE_STATUSES.RESOLVED
+  ) {
+    return status;
+  }
+
+  return KIS_NAVER_COMPARE_ISSUE_STATUSES.OPEN;
+}
+
+function getPreviousNotificationFingerprint(alert = {}) {
+  return String(alert?.notificationFingerprint || alert?.fingerprint || '').trim();
 }
 
 async function compareCandidate(store, compare, candidate, context) {
@@ -547,7 +654,11 @@ function toKisNaverAutoCompareAlertSnapshot(alert = {}) {
     sentAt: alert.sentAt || null,
     cooldownMinutes: alert.cooldownMinutes || null,
     fingerprint: String(alert.fingerprint || '').trim(),
+    notificationFingerprint: String(alert.notificationFingerprint || '').trim(),
     issueCount: Number(alert.issueCount || 0),
+    alertableIssueCount: Number(alert.alertableIssueCount || 0),
+    suppressedIssueCount: Number(alert.suppressedIssueCount || 0),
+    reopenedIssueCount: Number(alert.reopenedIssueCount || 0),
     issues: Array.isArray(alert.issues) ? alert.issues.slice(0, 20) : [],
     messagePreview: String(alert.messagePreview || '').slice(0, 2000)
   };
