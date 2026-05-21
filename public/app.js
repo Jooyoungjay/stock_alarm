@@ -1920,6 +1920,7 @@ function renderKisNaverAutoCompareSummary(autoCompare = null) {
   }
 
   const summary = autoCompare.summary || {};
+  const alert = autoCompare.alert || null;
   const failed = Number(summary.failed || 0) + Number(summary.error || 0);
   const statusClass = autoCompare.skipped ? 'muted' : failed ? 'alert' : 'ok';
   const statusLabel = autoCompare.skipped ? '건너뜀' : failed ? '확인 필요' : '자동 점검 완료';
@@ -1943,6 +1944,7 @@ function renderKisNaverAutoCompareSummary(autoCompare = null) {
       <div class="dividend-diagnostic-meta">
         <span>마지막 실행 ${escapeHtml(formatDate(autoCompare.checkedAt))}</span>
         <span>${autoCompare.forced ? '관리자 수동 실행' : '스케줄 실행'}</span>
+        ${alert ? `<span>알림 ${escapeHtml(formatKisNaverAutoCompareAlertStatus(alert))}</span>` : ''}
       </div>
     </section>
   `;
@@ -2686,7 +2688,9 @@ function formatKisNaverAutoCompareSetting(data) {
     return '꺼짐';
   }
 
-  return `${formatInterval(data.kisNaverAutoCompareIntervalSeconds || 21600)} 주기`;
+  const alertLabel = data.kisNaverAutoCompareAlertEnabled === false ? '알림 OFF' : '알림 ON';
+
+  return `${formatInterval(data.kisNaverAutoCompareIntervalSeconds || 21600)} 주기 · ${alertLabel}`;
 }
 
 function getLastKisNaverAutoCompareDetail(lastCompare) {
@@ -2703,12 +2707,22 @@ function getLastKisNaverAutoCompareDetail(lastCompare) {
   }
 
   const summary = lastCompare.summary || {};
-  return `확인 ${summary.checked || 0}개 · 성공 ${summary.success || 0}개 · 실패 ${summary.failed || 0}개`;
+  const failed = Number(summary.failed || 0) + Number(summary.error || 0);
+  const alertText = lastCompare.alert
+    ? ` · 알림 ${formatKisNaverAutoCompareAlertStatus(lastCompare.alert)}`
+    : '';
+
+  return `확인 ${summary.checked || 0}개 · 성공 ${summary.success || 0}개 · 실패 ${failed}개${alertText}`;
 }
 
 function hasKisNaverAutoCompareFailures(lastCompare) {
   const summary = lastCompare?.summary || {};
-  return Boolean(lastCompare?.error || Number(summary.failed || 0) + Number(summary.error || 0) > 0);
+  return Boolean(
+    lastCompare?.error ||
+      Number(summary.failed || 0) + Number(summary.error || 0) > 0 ||
+      lastCompare?.alert?.deliveryStatus === 'failed' ||
+      Number(lastCompare?.alert?.issueCount || 0) > 0
+  );
 }
 
 function formatKisNaverAutoCompareMessage(lastCompare) {
@@ -2722,9 +2736,35 @@ function formatKisNaverAutoCompareMessage(lastCompare) {
 
   const summary = lastCompare.summary || {};
   const failed = Number(summary.failed || 0) + Number(summary.error || 0);
+  const alertText = lastCompare.alert
+    ? ` · 알림 ${formatKisNaverAutoCompareAlertStatus(lastCompare.alert)}`
+    : '';
+
   return failed
-    ? `자동 가격 비교 완료: 성공 ${summary.success || 0}개, 실패 ${failed}개`
-    : `자동 가격 비교 완료: ${summary.success || 0}개 종목 점검`;
+    ? `자동 가격 비교 완료: 성공 ${summary.success || 0}개, 실패 ${failed}개${alertText}`
+    : `자동 가격 비교 완료: ${summary.success || 0}개 종목 점검${alertText}`;
+}
+
+function formatKisNaverAutoCompareAlertStatus(alert = {}) {
+  const labels = {
+    sent: '전송됨',
+    failed: '실패',
+    not_configured: 'Telegram 미설정',
+    disabled: '꺼짐',
+    no_issue: '특이사항 없음'
+  };
+
+  if (alert.deliveryStatus === 'skipped') {
+    if (alert.reason === 'duplicate_issue') {
+      return '중복 생략';
+    }
+
+    if (alert.reason === 'cooldown') {
+      return '쿨다운 생략';
+    }
+  }
+
+  return labels[alert.deliveryStatus] || alert.deliveryStatus || '기록 없음';
 }
 
 function getLastDividendEventAlertDetail(lastAlert) {

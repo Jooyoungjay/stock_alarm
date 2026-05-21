@@ -5,12 +5,18 @@ import {
   buildKisNaverTrendRecommendation
 } from './storage.js';
 import { normalizeSymbolInput } from './symbols.js';
+import {
+  isTelegramConfigured,
+  sendTelegramMessage as sendDefaultTelegramMessage
+} from './telegram.js';
 
 export const lastKisNaverAutoCompareMetaKey = 'lastKisNaverAutoCompare';
+export const lastKisNaverAutoCompareAlertMetaKey = 'lastKisNaverAutoCompareAlert';
 
 const defaultCandidateLimit = 5;
 const defaultMarkets = 'all';
 const defaultDriftThresholdPercent = 1;
+const defaultAlertCooldownMinutes = 360;
 
 export function normalizeKisNaverAutoCompareSymbol(value) {
   const normalized = normalizeSymbolInput(value) || String(value || '').trim().toUpperCase();
@@ -50,6 +56,7 @@ export async function runKisNaverAutoCompare(store, config = {}, options = {}) {
   const checkedAt = now.toISOString();
   const forced = Boolean(options.force);
   const enabled = Boolean(config.kisNaverAutoCompareEnabled);
+  const previousSnapshot = await readLastKisNaverAutoCompareSnapshot(store);
 
   if (!enabled && !forced) {
     return persistLastKisNaverAutoCompare(store, {
@@ -118,9 +125,287 @@ export async function runKisNaverAutoCompare(store, config = {}, options = {}) {
     kisNaverCompareTrend,
     kisNaverTrendRecommendation
   };
+  result.alert = await maybeSendKisNaverAutoCompareAlert(store, config, result, {
+    previousSnapshot,
+    now,
+    sendTelegramMessage: options.sendTelegramMessage
+  });
 
   await persistLastKisNaverAutoCompare(store, result);
   return result;
+}
+
+export function buildKisNaverAutoCompareAlertIssues(result = {}, previousSnapshot = {}) {
+  const issues = [];
+  const seen = new Set();
+
+  const addIssue = (issue) => {
+    if (!issue?.key || seen.has(issue.key)) {
+      return;
+    }
+
+    seen.add(issue.key);
+    issues.push(issue);
+  };
+
+  for (const item of Array.isArray(result.results) ? result.results : []) {
+    const status = String(item.status || '').trim();
+    const symbol = String(item.symbol || '').trim().toUpperCase();
+    const name = item.displayName || symbol || '종목';
+
+    if (status === 'failed' || status === 'error' || item.ok === false) {
+      const reason = normalizeIssueText(item.error || item.message || '가격 비교 실패');
+
+      addIssue({
+        type: 'comparison_failed',
+        key: `comparison_failed:${symbol || name}:${status}:${reason}`,
+        severity: 'error',
+        title: `${name} 비교 실패`,
+        detail: reason,
+        symbol,
+        status
+      });
+    }
+
+    const drift = item.drift || {};
+    const driftStatus = String(drift.status || '').trim();
+
+    if (
+      drift.abnormal ||
+      Number(drift.abnormal || 0) > 0 ||
+      driftStatus === 'warning' ||
+      driftStatus === 'critical'
+    ) {
+      const market = String(drift.worstMarket || '').trim().toUpperCase();
+      const marketLabel = drift.worstMarketLabel || market || '시장';
+      const difference = formatPercentValue(drift.maxAbsoluteDifferencePercent);
+      const threshold = formatPercentValue(drift.thresholdPercent);
+
+      addIssue({
+        type: 'current_drift',
+        key: `current_drift:${symbol || name}:${market}:${driftStatus || 'abnormal'}`,
+        severity: driftStatus === 'critical' ? 'critical' : 'warning',
+        title: `${name} 가격 괴리 ${getDriftStatusLabel(driftStatus)}`,
+        detail: `${marketLabel} 최대 괴리율 ${difference}, 기준 ${threshold}`,
+        symbol,
+        market,
+        marketLabel
+      });
+    }
+  }
+
+  const trend = result.kisNaverCompareTrend || {};
+
+  for (const market of Array.isArray(trend.markets) ? trend.markets : []) {
+    const status = String(market.status || '').trim();
+    const marketCode = String(market.market || '').trim().toUpperCase();
+    const marketLabel = market.marketLabel || marketCode || '시장';
+
+    if (market.repeatedAbnormal) {
+      addIssue({
+        type: 'trend_repeated_abnormal',
+        key: `trend_repeated_abnormal:${marketCode}`,
+        severity: 'critical',
+        title: `${marketLabel} 반복 이상치`,
+        detail: `이상치 ${market.abnormalCount || 0}회 · 최근 괴리율 ${formatPercentValue(market.latestAbsoluteDifferencePercent)}`,
+        market: marketCode,
+        marketLabel
+      });
+    } else if (status === 'critical') {
+      addIssue({
+        type: 'trend_critical',
+        key: `trend_critical:${marketCode}`,
+        severity: 'critical',
+        title: `${marketLabel} 추세 경고`,
+        detail: `최근 상태 ${getDriftStatusLabel(market.latestStatus)} · 최대 괴리율 ${formatPercentValue(market.maxAbsoluteDifferencePercent)}`,
+        market: marketCode,
+        marketLabel
+      });
+    }
+  }
+
+  const currentRecommendation = getSnapshotRecommendation(result);
+  const previousRecommendation = getSnapshotRecommendation(previousSnapshot);
+
+  if (
+    currentRecommendation?.market &&
+    previousRecommendation?.market &&
+    currentRecommendation.market !== previousRecommendation.market
+  ) {
+    addIssue({
+      type: 'recommendation_changed',
+      key: `recommendation_changed:${previousRecommendation.market}->${currentRecommendation.market}`,
+      severity: 'warning',
+      title: '추세 추천 시장 변경',
+      detail: `${previousRecommendation.marketLabel || previousRecommendation.market} -> ${currentRecommendation.marketLabel || currentRecommendation.market}`,
+      market: currentRecommendation.market,
+      marketLabel: currentRecommendation.marketLabel || currentRecommendation.market
+    });
+  }
+
+  if (
+    currentRecommendation?.decision === 'review' ||
+    currentRecommendation?.conflictsWithCurrent
+  ) {
+    addIssue({
+      type: 'recommendation_review',
+      key: `recommendation_review:${currentRecommendation.market || ''}:${currentRecommendation.currentMarket || ''}`,
+      severity: 'warning',
+      title: '추세 추천 추가 확인 필요',
+      detail:
+        currentRecommendation.reason ||
+        `${currentRecommendation.marketLabel || currentRecommendation.market} 추세 추천을 바로 적용하기 전 추가 비교가 필요합니다.`,
+      market: currentRecommendation.market || '',
+      marketLabel: currentRecommendation.marketLabel || currentRecommendation.market || ''
+    });
+  }
+
+  return issues;
+}
+
+export function buildKisNaverAutoCompareAlertFingerprint(issues = []) {
+  const keys = (Array.isArray(issues) ? issues : [])
+    .map((issue) => String(issue?.key || '').trim())
+    .filter(Boolean)
+    .sort();
+
+  return keys.join('|');
+}
+
+export function formatKisNaverAutoCompareAlertMessage(result = {}, issues = []) {
+  const summary = result.summary || {};
+  const trendRecommendation = getSnapshotRecommendation(result);
+  const lines = [
+    '[Stock Alarm] KIS/Naver 자동 점검 알림',
+    `기준 시각: ${formatDateTime(result.checkedAt)}`,
+    `대상 ${summary.checked || 0}개 · 성공 ${summary.success || 0}개 · 실패 ${Number(summary.failed || 0) + Number(summary.error || 0)}개`,
+    '',
+    '이슈',
+    ...(issues.length
+      ? issues.slice(0, 8).map((issue) => `- ${issue.title}: ${issue.detail || '-'}`)
+      : ['- 특이사항 없음'])
+  ];
+
+  if (issues.length > 8) {
+    lines.push(`- 그 외 ${issues.length - 8}건`);
+  }
+
+  if (trendRecommendation?.market) {
+    lines.push(
+      '',
+      `추세 추천: ${trendRecommendation.marketLabel || trendRecommendation.market} · 표본 ${trendRecommendation.sampleCount || trendRecommendation.comparableCount || 0}개 · 신뢰 ${trendRecommendation.confidence || '-'}`
+    );
+  }
+
+  lines.push('', '관리자 화면에서 KIS/Naver 가격 비교를 확인하세요.');
+
+  return lines.join('\n');
+}
+
+export async function maybeSendKisNaverAutoCompareAlert(
+  store,
+  config = {},
+  result = {},
+  options = {}
+) {
+  const now = toDate(options.now);
+  const checkedAt = result.checkedAt || now.toISOString();
+  const issues = buildKisNaverAutoCompareAlertIssues(result, options.previousSnapshot || {});
+  const fingerprint = buildKisNaverAutoCompareAlertFingerprint(issues);
+  const previousAlert = await readLastKisNaverAutoCompareAlert(store);
+  const baseAlert = {
+    checkedAt,
+    fingerprint,
+    issueCount: issues.length,
+    issues
+  };
+
+  if (!issues.length) {
+    return persistKisNaverAutoCompareAlert(store, {
+      ...baseAlert,
+      deliveryStatus: 'no_issue',
+      reason: 'no_alert_issue'
+    });
+  }
+
+  if (config.kisNaverAutoCompareAlertEnabled === false) {
+    return persistKisNaverAutoCompareAlert(store, {
+      ...baseAlert,
+      deliveryStatus: 'disabled',
+      reason: 'kis_naver_auto_compare_alert_disabled'
+    });
+  }
+
+  const sameFingerprint = previousAlert?.fingerprint === fingerprint;
+
+  if (sameFingerprint && previousAlert?.sentAt) {
+    return persistKisNaverAutoCompareAlert(store, {
+      ...baseAlert,
+      deliveryStatus: 'skipped',
+      reason: 'duplicate_issue',
+      sentAt: previousAlert.sentAt,
+      attemptedAt: previousAlert.attemptedAt || previousAlert.sentAt
+    });
+  }
+
+  const cooldownMinutes = normalizePositiveInteger(
+    config.kisNaverAutoCompareAlertCooldownMinutes,
+    defaultAlertCooldownMinutes,
+    { min: 1 }
+  );
+  const previousAttemptAt = previousAlert?.attemptedAt || previousAlert?.checkedAt || '';
+
+  if (
+    sameFingerprint &&
+    previousAttemptAt &&
+    isWithinCooldown(previousAttemptAt, now, cooldownMinutes)
+  ) {
+    return persistKisNaverAutoCompareAlert(store, {
+      ...baseAlert,
+      deliveryStatus: 'skipped',
+      reason: 'cooldown',
+      attemptedAt: previousAttemptAt,
+      cooldownMinutes
+    });
+  }
+
+  const attemptedAt = now.toISOString();
+  const message = formatKisNaverAutoCompareAlertMessage(result, issues);
+
+  if (!isTelegramConfigured(config)) {
+    return persistKisNaverAutoCompareAlert(store, {
+      ...baseAlert,
+      deliveryStatus: 'not_configured',
+      reason: 'telegram_not_configured',
+      attemptedAt,
+      cooldownMinutes,
+      messagePreview: message
+    });
+  }
+
+  try {
+    const sender = options.sendTelegramMessage || sendDefaultTelegramMessage;
+
+    await sender(config, message);
+
+    return persistKisNaverAutoCompareAlert(store, {
+      ...baseAlert,
+      deliveryStatus: 'sent',
+      attemptedAt,
+      sentAt: attemptedAt,
+      cooldownMinutes,
+      messagePreview: message
+    });
+  } catch (error) {
+    return persistKisNaverAutoCompareAlert(store, {
+      ...baseAlert,
+      deliveryStatus: 'failed',
+      attemptedAt,
+      cooldownMinutes,
+      deliveryError: error.message || '텔레그램 알림 전송 실패',
+      messagePreview: message
+    });
+  }
 }
 
 async function compareCandidate(store, compare, candidate, context) {
@@ -209,6 +494,32 @@ async function persistLastKisNaverAutoCompare(store, result) {
   };
 }
 
+async function readLastKisNaverAutoCompareSnapshot(store) {
+  if (typeof store.getMetaValue !== 'function') {
+    return null;
+  }
+
+  return store.getMetaValue(lastKisNaverAutoCompareMetaKey, null);
+}
+
+async function readLastKisNaverAutoCompareAlert(store) {
+  if (typeof store.getMetaValue !== 'function') {
+    return null;
+  }
+
+  return store.getMetaValue(lastKisNaverAutoCompareAlertMetaKey, null);
+}
+
+async function persistKisNaverAutoCompareAlert(store, alert) {
+  const snapshot = toKisNaverAutoCompareAlertSnapshot(alert);
+
+  if (typeof store.setMetaValue === 'function') {
+    await store.setMetaValue(lastKisNaverAutoCompareAlertMetaKey, snapshot);
+  }
+
+  return snapshot;
+}
+
 function toLastAutoCompareSnapshot(result) {
   return {
     checkedAt: result.checkedAt,
@@ -218,8 +529,103 @@ function toLastAutoCompareSnapshot(result) {
     reason: String(result.reason || ''),
     summary: result.summary || createAutoCompareSummary([]),
     candidates: Array.isArray(result.candidates) ? result.candidates : [],
-    results: Array.isArray(result.results) ? result.results : []
+    results: Array.isArray(result.results) ? result.results : [],
+    kisNaverCompareTrend: result.kisNaverCompareTrend || null,
+    kisNaverTrendRecommendation: result.kisNaverTrendRecommendation || null,
+    trendRecommendation: result.kisNaverTrendRecommendation || null,
+    alert: result.alert || null
   };
+}
+
+function toKisNaverAutoCompareAlertSnapshot(alert = {}) {
+  return {
+    checkedAt: alert.checkedAt || new Date().toISOString(),
+    deliveryStatus: String(alert.deliveryStatus || '').trim(),
+    reason: String(alert.reason || '').trim(),
+    deliveryError: String(alert.deliveryError || '').trim(),
+    attemptedAt: alert.attemptedAt || null,
+    sentAt: alert.sentAt || null,
+    cooldownMinutes: alert.cooldownMinutes || null,
+    fingerprint: String(alert.fingerprint || '').trim(),
+    issueCount: Number(alert.issueCount || 0),
+    issues: Array.isArray(alert.issues) ? alert.issues.slice(0, 20) : [],
+    messagePreview: String(alert.messagePreview || '').slice(0, 2000)
+  };
+}
+
+function getSnapshotRecommendation(snapshot = {}) {
+  const recommendation =
+    snapshot.kisNaverTrendRecommendation ||
+    snapshot.trendRecommendation ||
+    snapshot.kisNaverCompareTrend?.recommendation ||
+    null;
+
+  if (!recommendation?.market) {
+    return null;
+  }
+
+  return {
+    ...recommendation,
+    market: String(recommendation.market || '').trim().toUpperCase(),
+    marketLabel: recommendation.marketLabel || recommendation.market || '',
+    currentMarket: String(recommendation.currentMarket || '').trim().toUpperCase(),
+    currentMarketLabel: recommendation.currentMarketLabel || ''
+  };
+}
+
+function isWithinCooldown(previousAttemptAt, now, cooldownMinutes) {
+  const previousTime = new Date(previousAttemptAt).getTime();
+  const nowTime = now.getTime();
+
+  if (!Number.isFinite(previousTime) || !Number.isFinite(nowTime)) {
+    return false;
+  }
+
+  return nowTime - previousTime < cooldownMinutes * 60 * 1000;
+}
+
+function normalizeIssueText(value) {
+  return String(value || '')
+    .trim()
+    .replace(/\s+/g, ' ')
+    .slice(0, 120);
+}
+
+function getDriftStatusLabel(status) {
+  const labels = {
+    normal: '정상',
+    warning: '주의',
+    critical: '경고',
+    not_comparable: '비교 불가'
+  };
+
+  return labels[status] || '이상치';
+}
+
+function formatPercentValue(value) {
+  const number = Number(value);
+
+  if (!Number.isFinite(number)) {
+    return '-';
+  }
+
+  return `${number.toFixed(2)}%`;
+}
+
+function formatDateTime(value) {
+  if (!value) {
+    return '-';
+  }
+
+  const date = new Date(value);
+
+  if (!Number.isFinite(date.getTime())) {
+    return String(value);
+  }
+
+  return date.toLocaleString('ko-KR', {
+    timeZone: 'Asia/Seoul'
+  });
 }
 
 function normalizePositiveInteger(value, fallback, options = {}) {

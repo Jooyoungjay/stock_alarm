@@ -173,6 +173,8 @@ test('broker API adapter guide documents quote-only checks and trading guard', a
   assert.match(markdown, /KIS_TOKEN_AUTO_REFRESH/);
   assert.match(markdown, /KIS_SMOKE_SYMBOL/);
   assert.match(markdown, /KIS_NAVER_AUTO_COMPARE_ENABLED/);
+  assert.match(markdown, /KIS_NAVER_AUTO_COMPARE_ALERT_ENABLED/);
+  assert.match(markdown, /KIS_NAVER_AUTO_COMPARE_ALERT_COOLDOWN_MINUTES/);
   assert.match(markdown, /한국투자증권/);
   assert.match(markdown, /키움/);
   assert.match(markdown, /주문/);
@@ -209,6 +211,7 @@ test('admin page exposes the KIS and Naver comparison controls', async () => {
   assert.match(script, /kisNaverTrendRecommendation/);
   assert.match(script, /lastKisNaverAutoCompare/);
   assert.match(script, /자동 가격 비교/);
+  assert.match(script, /formatKisNaverAutoCompareAlertStatus/);
   assert.match(script, /renderKisNaverCompareHistory/);
   assert.match(script, /renderKisNaverCompareTrend/);
   assert.match(script, /renderKisNaverTrendRecommendation/);

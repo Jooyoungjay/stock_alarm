@@ -1,7 +1,9 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
+  buildKisNaverAutoCompareAlertIssues,
   buildKisNaverAutoCompareCandidates,
+  lastKisNaverAutoCompareAlertMetaKey,
   lastKisNaverAutoCompareMetaKey,
   normalizeKisNaverAutoCompareSymbol,
   runKisNaverAutoCompare
@@ -113,6 +115,120 @@ test('runKisNaverAutoCompare keeps going when one comparison fails', async () =>
   assert.equal(store.meta.kisNaverCompareHistory.length, 1);
 });
 
+test('runKisNaverAutoCompare sends a Telegram alert for comparison issues', async () => {
+  const store = createMemoryStore([
+    { id: 'stock-1', symbol: '336260', displayName: '두산퓨얼셀', active: true }
+  ]);
+  const messages = [];
+  const result = await runKisNaverAutoCompare(
+    store,
+    {
+      kisNaverAutoCompareEnabled: true,
+      kisNaverAutoCompareLimit: 1,
+      kisNaverAutoCompareAlertEnabled: true,
+      kisNaverAutoCompareAlertCooldownMinutes: 360,
+      telegramBotToken: 'token',
+      telegramChatId: '5863355323'
+    },
+    {
+      now: new Date('2026-05-20T03:00:00.000Z'),
+      compare: async () => {
+        throw new Error('KIS timeout');
+      },
+      sendTelegramMessage: async (_config, text) => {
+        messages.push(text);
+        return { ok: true };
+      }
+    }
+  );
+
+  assert.equal(result.alert.deliveryStatus, 'sent');
+  assert.equal(result.alert.issueCount, 1);
+  assert.match(messages[0], /KIS\/Naver 자동 점검 알림/);
+  assert.match(messages[0], /두산퓨얼셀 비교 실패/);
+  assert.equal(store.meta[lastKisNaverAutoCompareAlertMetaKey].deliveryStatus, 'sent');
+  assert.equal(store.meta[lastKisNaverAutoCompareMetaKey].alert.deliveryStatus, 'sent');
+});
+
+test('runKisNaverAutoCompare skips duplicate alert fingerprints', async () => {
+  const fingerprint = 'comparison_failed:336260:error:KIS timeout';
+  const store = createMemoryStore(
+    [{ id: 'stock-1', symbol: '336260', displayName: '두산퓨얼셀', active: true }],
+    {
+      [lastKisNaverAutoCompareAlertMetaKey]: {
+        deliveryStatus: 'sent',
+        fingerprint,
+        attemptedAt: '2026-05-20T03:00:00.000Z',
+        sentAt: '2026-05-20T03:00:00.000Z'
+      }
+    }
+  );
+  const messages = [];
+  const result = await runKisNaverAutoCompare(
+    store,
+    {
+      kisNaverAutoCompareEnabled: true,
+      kisNaverAutoCompareLimit: 1,
+      telegramBotToken: 'token',
+      telegramChatId: '5863355323'
+    },
+    {
+      now: new Date('2026-05-20T04:00:00.000Z'),
+      compare: async () => {
+        throw new Error('KIS timeout');
+      },
+      sendTelegramMessage: async (_config, text) => {
+        messages.push(text);
+        return { ok: true };
+      }
+    }
+  );
+
+  assert.equal(messages.length, 0);
+  assert.equal(result.alert.deliveryStatus, 'skipped');
+  assert.equal(result.alert.reason, 'duplicate_issue');
+  assert.equal(result.alert.sentAt, '2026-05-20T03:00:00.000Z');
+});
+
+test('buildKisNaverAutoCompareAlertIssues detects repeated drift and recommendation changes', () => {
+  const issues = buildKisNaverAutoCompareAlertIssues(
+    {
+      results: [],
+      kisNaverCompareTrend: {
+        markets: [
+          {
+            market: 'NX',
+            marketLabel: 'NXT',
+            repeatedAbnormal: true,
+            abnormalCount: 2,
+            latestAbsoluteDifferencePercent: 1.8,
+            status: 'critical'
+          }
+        ]
+      },
+      kisNaverTrendRecommendation: {
+        decision: 'review',
+        market: 'NX',
+        marketLabel: 'NXT',
+        currentMarket: 'J',
+        currentMarketLabel: 'KRX',
+        conflictsWithCurrent: true,
+        reason: '현재 1회 비교 추천과 추세 추천이 다릅니다.'
+      }
+    },
+    {
+      kisNaverTrendRecommendation: {
+        market: 'J',
+        marketLabel: 'KRX'
+      }
+    }
+  );
+
+  assert.ok(issues.some((issue) => issue.type === 'trend_repeated_abnormal'));
+  assert.ok(issues.some((issue) => issue.type === 'recommendation_changed'));
+  assert.ok(issues.some((issue) => issue.type === 'recommendation_review'));
+});
+
 function createComparison(symbol, options = {}) {
   return {
     id: `compare-${symbol}-${options.generatedAt || 'now'}`,
@@ -185,10 +301,10 @@ function createComparison(symbol, options = {}) {
   };
 }
 
-function createMemoryStore(stocks) {
+function createMemoryStore(stocks, meta = {}) {
   return {
     stocks,
-    meta: {},
+    meta: { ...meta },
     async listStocks() {
       return this.stocks;
     },

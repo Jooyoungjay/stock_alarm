@@ -646,6 +646,9 @@ async function handleApi(request, response, url) {
       kisNaverAutoCompareMarkets: config.kisNaverAutoCompareMarkets,
       kisNaverAutoCompareDriftThresholdPercent:
         config.kisNaverAutoCompareDriftThresholdPercent,
+      kisNaverAutoCompareAlertEnabled: config.kisNaverAutoCompareAlertEnabled,
+      kisNaverAutoCompareAlertCooldownMinutes:
+        config.kisNaverAutoCompareAlertCooldownMinutes,
       dividendRefreshIntervalSeconds: config.dividendRefreshIntervalSeconds,
       dividendEventAlertEnabled: config.dividendEventAlertEnabled,
       dividendEventAlertCheckIntervalSeconds: config.dividendEventAlertCheckIntervalSeconds,
@@ -729,6 +732,9 @@ async function handleApi(request, response, url) {
       kisNaverAutoCompareMarkets: config.kisNaverAutoCompareMarkets,
       kisNaverAutoCompareDriftThresholdPercent:
         config.kisNaverAutoCompareDriftThresholdPercent,
+      kisNaverAutoCompareAlertEnabled: config.kisNaverAutoCompareAlertEnabled,
+      kisNaverAutoCompareAlertCooldownMinutes:
+        config.kisNaverAutoCompareAlertCooldownMinutes,
       dividendRefreshIntervalSeconds: config.dividendRefreshIntervalSeconds,
       dividendEventAlertEnabled: config.dividendEventAlertEnabled,
       dividendEventAlertCheckIntervalSeconds: config.dividendEventAlertCheckIntervalSeconds,

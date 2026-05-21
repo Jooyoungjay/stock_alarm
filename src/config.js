@@ -208,6 +208,15 @@ export const config = {
     1,
     { min: 0.1, max: 100 }
   ),
+  kisNaverAutoCompareAlertEnabled: toBoolean(
+    process.env.KIS_NAVER_AUTO_COMPARE_ALERT_ENABLED,
+    true
+  ),
+  kisNaverAutoCompareAlertCooldownMinutes: toNumber(
+    process.env.KIS_NAVER_AUTO_COMPARE_ALERT_COOLDOWN_MINUTES,
+    360,
+    { min: 1 }
+  ),
   telegramBotToken: process.env.TELEGRAM_BOT_TOKEN || '',
   telegramChatId: process.env.TELEGRAM_CHAT_ID || '',
   mobilePushEnabled: toBoolean(process.env.MOBILE_PUSH_ENABLED, true),
