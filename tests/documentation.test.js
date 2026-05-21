@@ -216,6 +216,24 @@ test('full regression execution report records results and fixed defects', async
   assert.match(markdown, /모바일 실기기/);
 });
 
+test('external API recheck report documents current real-account blockers', async () => {
+  const markdown = await fs.readFile(
+    new URL('../docs/external-api-recheck-2026-05-21.md', import.meta.url),
+    'utf8'
+  );
+  const readme = await fs.readFile(new URL('../README.md', import.meta.url), 'utf8');
+
+  assert.match(markdown, /외부 API 실계정 재점검 기록/);
+  assert.match(markdown, /npm run check:external-apis/);
+  assert.match(markdown, /--send-telegram/);
+  assert.match(markdown, /KIS_APP_KEY/);
+  assert.match(markdown, /HTTP 403 Forbidden/);
+  assert.match(markdown, /모바일 실기기 E2E 테스트/);
+
+  assert.match(readme, /npm run check:external-apis/);
+  assert.match(readme, /external-api-recheck-2026-05-21\.md/);
+});
+
 test('admin page exposes the KIS quote smoke test controls', async () => {
   const html = await fs.readFile(new URL('../public/index.html', import.meta.url), 'utf8');
   const script = await fs.readFile(new URL('../public/app.js', import.meta.url), 'utf8');

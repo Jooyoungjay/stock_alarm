@@ -105,8 +105,9 @@ export async function fetchTelegramUpdates(config, offset = null, options = {}) 
     params.set('offset', String(offset));
   }
 
+  const fetchImpl = options.fetch || fetch;
   const url = `https://api.telegram.org/bot${config.telegramBotToken}/getUpdates?${params}`;
-  const response = await fetch(url);
+  const response = await fetchImpl(url);
   const payload = await response.json().catch(() => ({}));
 
   if (!response.ok || payload.ok === false) {
@@ -122,8 +123,9 @@ export async function sendTelegramMessage(config, text, options = {}) {
   }
 
   const chatId = options.chatId || config.telegramChatId;
+  const fetchImpl = options.fetch || fetch;
   const url = `https://api.telegram.org/bot${config.telegramBotToken}/sendMessage`;
-  const response = await fetch(url, {
+  const response = await fetchImpl(url, {
     method: 'POST',
     headers: {
       'content-type': 'application/json'

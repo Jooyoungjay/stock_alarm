@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { formatAlertMessage } from '../src/telegram.js';
+import { fetchTelegramUpdates, formatAlertMessage, sendTelegramMessage } from '../src/telegram.js';
 
 test('formatAlertMessage explains profit retracement with maximum profit amount', () => {
   const message = formatAlertMessage(
@@ -31,4 +31,57 @@ test('formatAlertMessage explains profit retracement with maximum profit amount'
   assert.match(message, /최대 수익금: 500 USD/);
   assert.match(message, /현재 수익금: 440 USD/);
   assert.match(message, /반납 금액: 60 USD/);
+});
+
+test('sendTelegramMessage uses injected fetch implementation', async () => {
+  const calls = [];
+  const payload = await sendTelegramMessage(
+    {
+      telegramBotToken: 'test-token',
+      telegramChatId: 'chat-1'
+    },
+    'hello',
+    {
+      fetch: async (url, init) => {
+        calls.push({ url, init });
+
+        return {
+          ok: true,
+          status: 200,
+          json: async () => ({ ok: true, result: { message_id: 1 } })
+        };
+      }
+    }
+  );
+
+  assert.equal(payload.ok, true);
+  assert.equal(calls.length, 1);
+  assert.match(calls[0].url, /bottest-token\/sendMessage$/);
+  assert.equal(JSON.parse(calls[0].init.body).chat_id, 'chat-1');
+});
+
+test('fetchTelegramUpdates uses injected fetch implementation', async () => {
+  const calls = [];
+  const updates = await fetchTelegramUpdates(
+    {
+      telegramBotToken: 'test-token'
+    },
+    123,
+    {
+      timeoutSeconds: 1,
+      fetch: async url => {
+        calls.push(url);
+
+        return {
+          ok: true,
+          status: 200,
+          json: async () => ({ ok: true, result: [{ update_id: 124 }] })
+        };
+      }
+    }
+  );
+
+  assert.deepEqual(updates, [{ update_id: 124 }]);
+  assert.equal(calls.length, 1);
+  assert.match(calls[0], /offset=123/);
 });
