@@ -205,13 +205,17 @@ test('admin page exposes the KIS and Naver comparison controls', async () => {
   assert.match(html, /이상치 기준/);
   assert.match(script, /\/api\/kis\/naver-compare/);
   assert.match(script, /\/api\/kis\/naver-compare\/auto-run/);
+  assert.match(script, /\/api\/kis\/naver-compare\/issues/);
   assert.match(script, /\/api\/kis\/naver-compare\/apply/);
   assert.match(script, /kisNaverCompareHistory/);
   assert.match(script, /kisNaverCompareTrend/);
   assert.match(script, /kisNaverTrendRecommendation/);
   assert.match(script, /lastKisNaverAutoCompare/);
   assert.match(script, /자동 가격 비교/);
+  assert.match(script, /가격 비교 이슈/);
+  assert.match(script, /data-kis-issue-status/);
   assert.match(script, /formatKisNaverAutoCompareAlertStatus/);
+  assert.match(script, /formatKisNaverCompareIssueStatusLabel/);
   assert.match(script, /renderKisNaverCompareHistory/);
   assert.match(script, /renderKisNaverCompareTrend/);
   assert.match(script, /renderKisNaverTrendRecommendation/);

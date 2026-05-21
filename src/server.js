@@ -13,6 +13,11 @@ import {
   lastKisNaverAutoCompareMetaKey,
   runKisNaverAutoCompare
 } from './kisNaverAutoCompare.js';
+import {
+  applyKisNaverCompareIssueStates,
+  readKisNaverCompareIssueStates,
+  updateKisNaverCompareIssueState
+} from './kisNaverCompareIssues.js';
 import { buildKisQuoteSmokeTest } from './kisQuoteSmokeTest.js';
 import {
   buildDailyBriefing,
@@ -330,15 +335,26 @@ async function getLastDailyBriefingSnapshot() {
 }
 
 async function getLastKisNaverAutoCompareSnapshot() {
-  if (lastKisNaverAutoCompare) {
-    return lastKisNaverAutoCompare.lastKisNaverAutoCompare || lastKisNaverAutoCompare;
-  }
+  let snapshot = null;
 
-  if (typeof store.getMetaValue !== 'function') {
+  if (lastKisNaverAutoCompare) {
+    snapshot = lastKisNaverAutoCompare.lastKisNaverAutoCompare || lastKisNaverAutoCompare;
+  } else if (typeof store.getMetaValue === 'function') {
+    snapshot = await store.getMetaValue(lastKisNaverAutoCompareMetaKey, null);
+  } else {
     return null;
   }
 
-  return store.getMetaValue(lastKisNaverAutoCompareMetaKey, null);
+  return enrichKisNaverAutoCompareSnapshot(snapshot);
+}
+
+async function enrichKisNaverAutoCompareSnapshot(snapshot) {
+  if (!snapshot) {
+    return null;
+  }
+
+  const issueStates = await readKisNaverCompareIssueStates(store);
+  return applyKisNaverCompareIssueStates(snapshot, issueStates);
 }
 
 function recordQuoteProviderAttempt(attempt) {
@@ -1078,10 +1094,13 @@ async function handleApi(request, response, url) {
   if (request.method === 'POST' && url.pathname === '/api/kis/naver-compare/auto-run') {
     const result = await runKisNaverAutoCompareOnce({ force: true });
     const quoteProviderStats = await store.getQuoteProviderStats();
+    const lastKisNaverAutoCompareSnapshot = await enrichKisNaverAutoCompareSnapshot(
+      result.lastKisNaverAutoCompare || result
+    );
 
     sendJson(response, 200, {
       kisNaverAutoCompare: result,
-      lastKisNaverAutoCompare: result.lastKisNaverAutoCompare || result,
+      lastKisNaverAutoCompare: lastKisNaverAutoCompareSnapshot,
       kisNaverCompareHistory: result.kisNaverCompareHistory || [],
       kisNaverCompareTrend: result.kisNaverCompareTrend || buildKisNaverCompareTrendSnapshot([]),
       kisNaverTrendRecommendation:
@@ -1089,6 +1108,18 @@ async function handleApi(request, response, url) {
         result.kisNaverCompareTrend?.recommendation ||
         buildKisNaverTrendRecommendation({}),
       quoteProviderStats
+    });
+    return;
+  }
+
+  if (request.method === 'PATCH' && url.pathname === '/api/kis/naver-compare/issues') {
+    const body = await readJsonBody(request);
+    const result = await updateKisNaverCompareIssueState(store, body);
+    const lastKisNaverAutoCompareSnapshot = await getLastKisNaverAutoCompareSnapshot();
+
+    sendJson(response, 200, {
+      ...result,
+      lastKisNaverAutoCompare: lastKisNaverAutoCompareSnapshot
     });
     return;
   }

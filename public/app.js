@@ -400,6 +400,16 @@ elements.kisNaverCompareResult?.addEventListener('click', async (event) => {
   await applyKisMarketFromComparison(button);
 });
 
+elements.kisNaverCompareHistoryPanel?.addEventListener('click', async (event) => {
+  const button = event.target?.closest?.('[data-kis-issue-status]');
+
+  if (!button) {
+    return;
+  }
+
+  await updateKisNaverCompareIssueStatus(button);
+});
+
 elements.watchFilterButtons.forEach((button) => {
   button.addEventListener('click', () => {
     state.watchFilter = button.dataset.watchFilter || 'all';
@@ -642,6 +652,34 @@ async function applyKisMarketFromComparison(button) {
 
     showMessage(`${label} KIS 시장 기준을 ${marketLabel}로 적용했습니다.`);
     await loadData();
+  });
+}
+
+async function updateKisNaverCompareIssueStatus(button) {
+  const issueKey = button.dataset.kisIssueKey || '';
+  const status = button.dataset.kisIssueStatus || '';
+
+  if (!issueKey || !status) {
+    showMessage('처리할 가격 비교 이슈를 찾지 못했습니다.', true);
+    return;
+  }
+
+  await withBusy(button, async () => {
+    const result = await api('/api/kis/naver-compare/issues', {
+      method: 'PATCH',
+      body: JSON.stringify({ issueKey, status })
+    });
+
+    state.lastKisNaverAutoCompare =
+      result.lastKisNaverAutoCompare || state.lastKisNaverAutoCompare;
+    renderKisNaverCompareHistory(
+      state.kisNaverCompareHistory,
+      state.kisNaverCompareTrend,
+      state.lastKisNaverAutoCompare
+    );
+
+    showMessage(`가격 비교 이슈를 ${formatKisNaverCompareIssueStatusLabel(status)} 처리했습니다.`);
+    await loadHealth();
   });
 }
 
@@ -1946,7 +1984,91 @@ function renderKisNaverAutoCompareSummary(autoCompare = null) {
         <span>${autoCompare.forced ? '관리자 수동 실행' : '스케줄 실행'}</span>
         ${alert ? `<span>알림 ${escapeHtml(formatKisNaverAutoCompareAlertStatus(alert))}</span>` : ''}
       </div>
+      ${renderKisNaverAutoCompareIssuePanel(alert)}
     </section>
+  `;
+}
+
+function renderKisNaverAutoCompareIssuePanel(alert = null) {
+  const issues = Array.isArray(alert?.issues) ? alert.issues : [];
+
+  if (!issues.length) {
+    return '';
+  }
+
+  const summary = buildKisNaverCompareIssueSummary(issues, alert.issueStateSummary);
+  const summaryText = [
+    `열림 ${summary.open}`,
+    `확인 ${summary.acknowledged}`,
+    `보류 ${summary.on_hold}`,
+    `해결 ${summary.resolved}`
+  ].join(' · ');
+
+  return `
+    <div class="kis-issue-panel" aria-label="가격 비교 이슈 처리">
+      <div class="kis-issue-head">
+        <div>
+          <strong>가격 비교 이슈</strong>
+          <span>${escapeHtml(summaryText)}</span>
+        </div>
+        <span class="status-badge ${summary.open ? 'alert' : 'ok'}">
+          ${summary.open ? `미처리 ${escapeHtml(summary.open)}개` : '처리 완료'}
+        </span>
+      </div>
+      <div class="kis-issue-list">
+        ${issues.map(renderKisNaverCompareIssueItem).join('')}
+      </div>
+    </div>
+  `;
+}
+
+function renderKisNaverCompareIssueItem(issue = {}) {
+  const resolution = issue.resolution || {};
+  const status = getKisNaverCompareIssueStatus(resolution.status);
+  const key = issue.key || resolution.issueKey || '';
+  const meta = [
+    issue.symbol || '',
+    issue.marketLabel || issue.market || '',
+    resolution.updatedAt ? `처리 ${formatDate(resolution.updatedAt)}` : ''
+  ].filter(Boolean);
+
+  return `
+    <article class="kis-issue-item ${escapeHtml(status)}">
+      <div class="kis-issue-main">
+        <div>
+          <strong class="kis-issue-title">${escapeHtml(issue.title || '가격 비교 이슈')}</strong>
+          <span class="status-badge ${escapeHtml(getKisNaverCompareIssueStatusClass(status))}">
+            ${escapeHtml(formatKisNaverCompareIssueStatusLabel(status))}
+          </span>
+        </div>
+        <p>${escapeHtml(issue.detail || '')}</p>
+        ${meta.length ? `<div class="kis-issue-meta">${meta.map((item) => `<span>${escapeHtml(item)}</span>`).join('')}</div>` : ''}
+      </div>
+      <div class="kis-issue-actions">
+        ${renderKisNaverCompareIssueAction(key, 'acknowledged', '확인', status)}
+        ${renderKisNaverCompareIssueAction(key, 'on_hold', '보류', status)}
+        ${renderKisNaverCompareIssueAction(key, 'resolved', '해결', status)}
+        ${status !== 'open' ? renderKisNaverCompareIssueAction(key, 'open', '다시 열기', status) : ''}
+      </div>
+    </article>
+  `;
+}
+
+function renderKisNaverCompareIssueAction(issueKey, status, label, currentStatus) {
+  if (!issueKey) {
+    return '';
+  }
+
+  return `
+    <button
+      type="button"
+      class="btn btn-ghost btn-sm"
+      data-kis-issue-key="${escapeHtml(issueKey)}"
+      data-kis-issue-status="${escapeHtml(status)}"
+      ${status === currentStatus ? 'disabled' : ''}
+    >
+      ${escapeHtml(label)}
+    </button>
   `;
 }
 
@@ -2708,20 +2830,33 @@ function getLastKisNaverAutoCompareDetail(lastCompare) {
 
   const summary = lastCompare.summary || {};
   const failed = Number(summary.failed || 0) + Number(summary.error || 0);
+  const issueSummary = buildKisNaverCompareIssueSummary(
+    lastCompare.alert?.issues,
+    lastCompare.alert?.issueStateSummary
+  );
   const alertText = lastCompare.alert
     ? ` · 알림 ${formatKisNaverAutoCompareAlertStatus(lastCompare.alert)}`
     : '';
+  const issueText = issueSummary.total
+    ? issueSummary.open
+      ? ` · 미처리 ${issueSummary.open}개`
+      : ' · 이슈 처리 완료'
+    : '';
 
-  return `확인 ${summary.checked || 0}개 · 성공 ${summary.success || 0}개 · 실패 ${failed}개${alertText}`;
+  return `확인 ${summary.checked || 0}개 · 성공 ${summary.success || 0}개 · 실패 ${failed}개${alertText}${issueText}`;
 }
 
 function hasKisNaverAutoCompareFailures(lastCompare) {
   const summary = lastCompare?.summary || {};
+  const issueSummary = buildKisNaverCompareIssueSummary(
+    lastCompare?.alert?.issues,
+    lastCompare?.alert?.issueStateSummary
+  );
   return Boolean(
     lastCompare?.error ||
       Number(summary.failed || 0) + Number(summary.error || 0) > 0 ||
       lastCompare?.alert?.deliveryStatus === 'failed' ||
-      Number(lastCompare?.alert?.issueCount || 0) > 0
+      Number(issueSummary.open || 0) > 0
   );
 }
 
@@ -2736,13 +2871,22 @@ function formatKisNaverAutoCompareMessage(lastCompare) {
 
   const summary = lastCompare.summary || {};
   const failed = Number(summary.failed || 0) + Number(summary.error || 0);
+  const issueSummary = buildKisNaverCompareIssueSummary(
+    lastCompare.alert?.issues,
+    lastCompare.alert?.issueStateSummary
+  );
   const alertText = lastCompare.alert
     ? ` · 알림 ${formatKisNaverAutoCompareAlertStatus(lastCompare.alert)}`
     : '';
+  const issueText = issueSummary.total
+    ? issueSummary.open
+      ? ` · 미처리 이슈 ${issueSummary.open}개`
+      : ' · 이슈 처리 완료'
+    : '';
 
   return failed
-    ? `자동 가격 비교 완료: 성공 ${summary.success || 0}개, 실패 ${failed}개${alertText}`
-    : `자동 가격 비교 완료: ${summary.success || 0}개 종목 점검${alertText}`;
+    ? `자동 가격 비교 완료: 성공 ${summary.success || 0}개, 실패 ${failed}개${alertText}${issueText}`
+    : `자동 가격 비교 완료: ${summary.success || 0}개 종목 점검${alertText}${issueText}`;
 }
 
 function formatKisNaverAutoCompareAlertStatus(alert = {}) {
@@ -2765,6 +2909,69 @@ function formatKisNaverAutoCompareAlertStatus(alert = {}) {
   }
 
   return labels[alert.deliveryStatus] || alert.deliveryStatus || '기록 없음';
+}
+
+function buildKisNaverCompareIssueSummary(issues = [], summary = null) {
+  const fallback = {
+    open: 0,
+    acknowledged: 0,
+    on_hold: 0,
+    resolved: 0,
+    total: 0
+  };
+
+  if (summary && typeof summary === 'object') {
+    return {
+      open: Number(summary.open || 0),
+      acknowledged: Number(summary.acknowledged || 0),
+      on_hold: Number(summary.on_hold || 0),
+      resolved: Number(summary.resolved || 0),
+      total: Number(summary.total || 0)
+    };
+  }
+
+  for (const issue of Array.isArray(issues) ? issues : []) {
+    const status = getKisNaverCompareIssueStatus(issue?.resolution?.status);
+    fallback[status] = Number(fallback[status] || 0) + 1;
+    fallback.total += 1;
+  }
+
+  return fallback;
+}
+
+function getKisNaverCompareIssueStatus(value) {
+  const status = String(value || '').trim().toLowerCase();
+
+  if (['acknowledged', 'on_hold', 'resolved'].includes(status)) {
+    return status;
+  }
+
+  return 'open';
+}
+
+function formatKisNaverCompareIssueStatusLabel(value) {
+  const labels = {
+    open: '열림',
+    acknowledged: '확인',
+    on_hold: '보류',
+    resolved: '해결'
+  };
+
+  return labels[getKisNaverCompareIssueStatus(value)] || '열림';
+}
+
+function getKisNaverCompareIssueStatusClass(value) {
+  const status = getKisNaverCompareIssueStatus(value);
+
+  if (status === 'resolved') {
+    return 'ok';
+  }
+
+  if (status === 'acknowledged' || status === 'on_hold') {
+    return 'alert';
+  }
+
+  return 'error';
 }
 
 function getLastDividendEventAlertDetail(lastAlert) {

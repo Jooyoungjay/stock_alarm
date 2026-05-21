@@ -1477,6 +1477,95 @@ select:focus {
   gap: 10px;
 }
 
+.kis-issue-panel {
+  display: grid;
+  gap: 10px;
+  padding-top: 10px;
+  border-top: 1px solid var(--border-soft);
+}
+
+.kis-issue-head {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 10px;
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.kis-issue-head > div {
+  display: grid;
+  gap: 2px;
+}
+
+.kis-issue-head strong {
+  color: var(--text);
+  font-size: 13px;
+}
+
+.kis-issue-list {
+  display: grid;
+  gap: 8px;
+}
+
+.kis-issue-item {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 10px;
+  align-items: center;
+  padding: 10px;
+  background: var(--surface-2);
+  border: 1px solid var(--border-soft);
+  border-radius: var(--radius-sm);
+}
+
+.kis-issue-item.open {
+  border-color: rgba(224, 92, 92, 0.28);
+}
+
+.kis-issue-main {
+  display: grid;
+  gap: 5px;
+  min-width: 0;
+}
+
+.kis-issue-main > div,
+.kis-issue-meta,
+.kis-issue-actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.kis-issue-title {
+  color: var(--text);
+  font-size: 12px;
+  font-weight: 900;
+}
+
+.kis-issue-main p {
+  margin: 0;
+  color: var(--muted);
+  font-size: 12px;
+  overflow-wrap: anywhere;
+}
+
+.kis-issue-meta {
+  color: var(--dim);
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.kis-issue-actions {
+  justify-content: flex-end;
+}
+
+.kis-issue-actions .btn:disabled {
+  cursor: default;
+  opacity: 0.55;
+}
+
 .kis-compare-trend-grid {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
@@ -3312,6 +3401,16 @@ select:focus {
 
   .kis-trend-recommendation-main {
     display: grid;
+  }
+
+  .kis-issue-head,
+  .kis-issue-item {
+    display: grid;
+    grid-template-columns: 1fr;
+  }
+
+  .kis-issue-actions {
+    justify-content: flex-start;
   }
 
   .kis-compare-trend-grid {
