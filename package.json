@@ -16,6 +16,7 @@
     "check:store-assets": "node scripts/check-store-assets.js",
     "check:broker-api": "node scripts/check-broker-api.js",
     "check:external-apis": "node scripts/check-external-apis.js",
+    "check:mobile-e2e": "node scripts/check-mobile-e2e.js",
     "check:kis-quote": "node scripts/check-kis-quote.js",
     "check:publicdata-price": "node scripts/check-publicdata-price.js",
     "kis:token": "node scripts/kis-token.js",

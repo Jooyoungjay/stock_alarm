@@ -234,6 +234,26 @@ test('external API recheck report documents current real-account blockers', asyn
   assert.match(readme, /external-api-recheck-2026-05-21\.md/);
 });
 
+test('mobile real-device E2E guide documents phone testing readiness checks', async () => {
+  const markdown = await fs.readFile(
+    new URL('../docs/mobile-real-device-e2e.md', import.meta.url),
+    'utf8'
+  );
+  const readme = await fs.readFile(new URL('../README.md', import.meta.url), 'utf8');
+
+  assert.match(markdown, /모바일 실기기 E2E 테스트/);
+  assert.match(markdown, /npm run check:mobile-e2e/);
+  assert.match(markdown, /npm run local:phone/);
+  assert.match(markdown, /\/api\/mobile\/ping/);
+  assert.match(markdown, /Expo Push Token/);
+  assert.match(markdown, /LAN URL/);
+  assert.match(markdown, /Node\.js/);
+  assert.match(markdown, /NOT READY/);
+
+  assert.match(readme, /npm run check:mobile-e2e/);
+  assert.match(readme, /mobile-real-device-e2e\.md/);
+});
+
 test('admin page exposes the KIS quote smoke test controls', async () => {
   const html = await fs.readFile(new URL('../public/index.html', import.meta.url), 'utf8');
   const script = await fs.readFile(new URL('../public/app.js', import.meta.url), 'utf8');

@@ -58,6 +58,7 @@ test('parseRoadmapMarkdown extracts roadmap metadata and next task', async () =>
   assert.ok(roadmap.completedScope.some((item) => item.category === '모바일 배당/알림 기록 화면'));
   assert.ok(roadmap.completedScope.some((item) => item.category === '스토어 제출 자산 최종 점검'));
   assert.ok(roadmap.completedScope.some((item) => item.category === '외부 API 실계정 재점검'));
+  assert.ok(roadmap.completedScope.some((item) => item.category === '모바일 실기기 E2E 준비'));
   assert.ok(roadmap.completedScope.some((item) => item.category === '배당 이벤트 알림'));
   assert.ok(roadmap.completedScope.some((item) => item.category === '배당 성장률'));
   assert.ok(roadmap.completedScope.some((item) => item.category === '배당 캘린더'));
@@ -70,8 +71,8 @@ test('parseRoadmapMarkdown extracts roadmap metadata and next task', async () =>
   assert.ok(roadmap.completedScope.some((item) => item.category === 'Postgres 쿼리 어댑터'));
   assert.ok(roadmap.completedScope.some((item) => item.category === 'Postgres 연결 리허설'));
   assert.ok(roadmap.sections.length >= 10);
-  assert.equal(roadmap.recommendedOrder[0], '모바일 실기기 E2E 테스트');
-  assert.equal(roadmap.nextTask.title, '모바일 실기기 E2E 테스트');
+  assert.equal(roadmap.recommendedOrder[0], '모바일 실기기 E2E 실제 실행');
+  assert.equal(roadmap.nextTask.title, '모바일 실기기 E2E 실제 실행');
   assert.ok(roadmap.statusLegend.some((item) => item.status === 'pending' && item.label === '예정'));
   assert.ok(roadmap.summary.pending > 0);
   assert.ok(roadmap.summary.total > roadmap.summary.completed);
@@ -144,6 +145,9 @@ test('parseRoadmapMarkdown normalizes explicit WBS task statuses', async () => {
   const completedExternalApiRetestTask = roadmap.sections
     .find((section) => section.id === '11')
     .tasks.find((task) => task.id === '11.1');
+  const inProgressMobileE2eTask = roadmap.sections
+    .find((section) => section.id === '11')
+    .tasks.find((task) => task.id === '11.2');
   const completedProviderTask = roadmap.sections
     .find((section) => section.id === '6')
     .tasks.find((task) => task.id === '6.6');
@@ -214,6 +218,7 @@ test('parseRoadmapMarkdown normalizes explicit WBS task statuses', async () => {
   assert.equal(completedRegressionScenarioTask.status, 'completed');
   assert.equal(completedRegressionExecutionTask.status, 'completed');
   assert.equal(completedExternalApiRetestTask.status, 'completed');
+  assert.equal(inProgressMobileE2eTask.status, 'in_progress');
   assert.equal(completedDividendAlertTask.status, 'completed');
   assert.equal(completedDividendCalendarTask.status, 'completed');
   assert.equal(completedBackupStrategyTask.status, 'completed');

@@ -201,6 +201,7 @@ stock_alarm/
 │  ├─ telegram.js           # 텔레그램 API 호출
 │  ├─ telegramCommands.js   # 텔레그램 명령어 처리
 │  ├─ externalApiRecheck.js # KIS/공공데이터/텔레그램 실계정 재점검
+│  ├─ mobileE2eReadiness.js # 모바일 실기기 E2E 준비 점검
 │  ├─ backups.js            # 데이터 백업/복구/삭제
 │  ├─ accessUrls.js         # 로컬/휴대폰 접속 주소 계산
 │  ├─ qrCode.js             # 접속 주소 QR 코드 생성
@@ -213,6 +214,7 @@ stock_alarm/
 │  ├─ check-demo-server.js  # 앱 심사용 HTTPS 데모 서버 준비 점검
 │  ├─ check-publicdata-price.js # 공공데이터포털 일봉 provider 실험
 │  ├─ check-external-apis.js # 외부 API 실계정 재점검 CLI
+│  ├─ check-mobile-e2e.js  # 모바일 실기기 E2E 준비 점검 CLI
 │  ├─ json-to-postgres-dry-run.js # JSON -> Postgres dry-run CLI
 │  ├─ postgres-connection-rehearsal.js # Postgres 연결 리허설 CLI
 │  └─ check-railway-config.js
@@ -227,6 +229,7 @@ stock_alarm/
 │  ├─ https-demo-server.md         # HTTPS 데모 서버 준비와 점검 절차
 │  ├─ store-screenshots.md         # 스토어 스크린샷 화면/문구/대체 텍스트 가이드
 │  ├─ external-api-recheck-2026-05-21.md # 외부 API 실계정 재점검 기록
+│  ├─ mobile-real-device-e2e.md    # 모바일 실기기 E2E 테스트 절차
 │  ├─ store-submission-assets.md   # 스토어 제출 자산 최종 점검
 │  ├─ privacy-policy-ko.md         # 개인정보 처리방침 초안
 │  ├─ full-regression-test-scenarios.md # 전수 테스트 시나리오
@@ -485,6 +488,7 @@ npm run mobile:start
 npm run check:store-assets
 npm run check:broker-api
 npm run check:external-apis
+npm run check:mobile-e2e
 npm run check:kis-quote
 npm run kis:token
 ```
@@ -1250,6 +1254,14 @@ npm run local:phone
 
 앱의 서버 주소 입력칸에는 실행 로그나 `status-local.bat`에 표시된 LAN 주소를 넣습니다.
 
+실기기 테스트 전에 아래 점검을 실행하면 PC 전용 서버로 떠 있는지, LAN 주소가 있는지, 모바일 ping API가 응답하는지, Expo 푸시 설정이 기본 기준을 만족하는지 확인할 수 있습니다.
+
+```powershell
+npm run check:mobile-e2e
+npm run check:mobile-e2e -- --server-url http://192.168.x.x:3001
+npm run check:mobile-e2e -- --json
+```
+
 | 환경 | 서버 주소 예시 |
 |---|---|
 | iOS 시뮬레이터 | `http://127.0.0.1:3001` |
@@ -1274,6 +1286,7 @@ npm run local:phone
 
 앱 심사 준비 문서:
 
+- [모바일 실기기 E2E 테스트](docs/mobile-real-device-e2e.md)
 - [앱 심사 준비 체크리스트](docs/app-store-review-prep.md)
 - [HTTPS 데모 서버 준비](docs/https-demo-server.md)
 - [스토어 스크린샷 제작 가이드](docs/store-screenshots.md)
@@ -1486,11 +1499,11 @@ Invoke-RestMethod http://127.0.0.1:3001/api/health
 - 품질 관리: 전수 테스트 시나리오 문서화, 전수 테스트 실행 기록, JsonStore 쓰기 안정화
 - 저장소: PostgresStore JSONB 쿼리 어댑터, DATABASE_URL 마스킹, 계약 테스트, JSON -> Postgres dry-run 마이그레이션 검증, 통합 테스트 데이터셋, 백업 스냅샷 계약 검증, Postgres 연결 리허설 CLI
 - 안정화: 시세/배당 실패 사유 표시와 종목별 재시도 UX
-- 모바일: Expo SDK 55 초기 앱, 서버 연결, 익명 기기 저장, 모바일 종목 조회/등록/편집/삭제, 배당 캘린더/알림 기록 상세, Expo Push 토큰 등록과 알림 전송, 앱 심사 준비 문서, HTTPS 데모 서버 준비, 스토어 메타데이터 초안, 스토어 스크린샷 화면/문구/대체 텍스트 가이드, 스토어 제출 자산 점검 CLI
+- 모바일: Expo SDK 55 초기 앱, 서버 연결, 익명 기기 저장, 모바일 종목 조회/등록/편집/삭제, 배당 캘린더/알림 기록 상세, Expo Push 토큰 등록과 알림 전송, 실기기 E2E 준비 점검 CLI, 앱 심사 준비 문서, HTTPS 데모 서버 준비, 스토어 메타데이터 초안, 스토어 스크린샷 화면/문구/대체 텍스트 가이드, 스토어 제출 자산 점검 CLI
 - 출시 리허설: KIS/공공데이터/텔레그램 외부 API 통합 재점검 CLI와 실행 기록
 
 우선순위가 높은 순서:
 
-1. 모바일 실기기 E2E 테스트
+1. 모바일 실기기 E2E 실제 실행
 2. 스토어 제출 실물 자산 준비
 3. 실제 KIS 키, 공공데이터 권한, 텔레그램 실전송 재확인
