@@ -117,3 +117,18 @@ npm run mobile:start
 - Expo Push endpoint는 HTTPS입니다.
 
 다음 실제 테스트 전에 Node.js를 `20.19.0` 이상으로 올리고, `npm run stop` 후 `npm run local:phone`으로 서버를 다시 시작해야 합니다.
+
+2026-05-21 추가 실행:
+
+- `npm run local:phone`으로 서버를 휴대폰 접속 모드로 전환했습니다.
+- 같은 Wi-Fi 접속 주소가 `http://172.29.45.46:3001`로 확인됐습니다.
+- `http://172.29.45.46:3001/api/mobile/ping`은 `200 OK`로 응답했습니다.
+- 기본 터미널의 `npm run check:mobile-e2e`는 Node.js `v20.11.0` 때문에 아직 `NOT READY`입니다.
+- Node.js `22.12.0`을 `nvm install`로 설치 시도했으나, 명령은 성공 메시지를 냈지만 `nvm list`에는 반영되지 않았습니다. 현재 nvm root가 `C:\Program Files\nvm`이므로 관리자 권한 문제일 가능성이 있습니다.
+
+남은 조치:
+
+1. 관리자 권한 터미널에서 `nvm install 22.12.0`과 `nvm use 22.12.0`을 다시 실행하거나, Node.js `20.19.0` 이상 LTS를 직접 설치합니다.
+2. 새 터미널에서 `node -v`가 `20.19.0` 이상인지 확인합니다.
+3. `npm run check:mobile-e2e`가 error 0개로 바뀌는지 확인합니다.
+4. 그 다음 `npm run mobile:install`, `npm run mobile:start`를 실행하고 실제 휴대폰에서 QR 코드를 엽니다.
