@@ -59,6 +59,10 @@ export function isAdminApiPath(method, pathname) {
     return true;
   }
 
+  if (pathname === '/api/observation-history/run' && method === 'POST') {
+    return true;
+  }
+
   if (pathname === '/api/quote-provider-stats') {
     return true;
   }

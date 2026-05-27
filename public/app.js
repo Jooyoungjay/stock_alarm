@@ -223,6 +223,7 @@ const state = {
   quoteProviderStats: null,
   observationIssues: null,
   observationHistory: null,
+  observationRun: null,
   kisQuoteSmokeTest: null,
   kisNaverQuoteComparison: null,
   kisNaverCompareHistory: [],
@@ -286,6 +287,7 @@ const elements = {
   observationIssuesSummary: document.querySelector('#observationIssuesSummary'),
   observationHistoryPanel: document.querySelector('#observationHistoryPanel'),
   observationHistorySummary: document.querySelector('#observationHistorySummary'),
+  observationRunResult: document.querySelector('#observationRunResult'),
   summaryText: document.querySelector('#summaryText'),
   telegramStatus: document.querySelector('#telegramStatus'),
   quoteStatus: document.querySelector('#quoteStatus'),
@@ -316,6 +318,7 @@ const elements = {
   refreshRoadmapButton: document.querySelector('#refreshRoadmapButton'),
   refreshObservationIssuesButton: document.querySelector('#refreshObservationIssuesButton'),
   refreshObservationHistoryButton: document.querySelector('#refreshObservationHistoryButton'),
+  runObservationCheckButton: document.querySelector('#runObservationCheckButton'),
   kisSmokeTestForm: document.querySelector('#kisSmokeTestForm'),
   kisSmokeSymbolInput: document.querySelector('#kisSmokeSymbolInput'),
   kisSmokeMarketSelect: document.querySelector('#kisSmokeMarketSelect'),
@@ -651,6 +654,10 @@ elements.refreshObservationHistoryButton?.addEventListener('click', async () => 
   await withBusy(elements.refreshObservationHistoryButton, loadObservationHistory);
 });
 
+elements.runObservationCheckButton?.addEventListener('click', async () => {
+  await withBusy(elements.runObservationCheckButton, runObservationCheckFromAdmin);
+});
+
 elements.kisSmokeTestForm?.addEventListener('submit', async (event) => {
   event.preventDefault();
   await runKisSmokeTest();
@@ -823,6 +830,31 @@ async function loadObservationHistory() {
   } catch (error) {
     handleAdminAuthFailure(error);
     renderObservationHistoryError(error);
+  }
+}
+
+async function runObservationCheckFromAdmin() {
+  renderObservationRunResult({ running: true });
+
+  try {
+    const data = await api('/api/observation-history/run', {
+      method: 'POST',
+      body: JSON.stringify({
+        liveSession: true,
+        reportLimit: 8
+      })
+    });
+    state.observationRun = data.observationResult || null;
+    state.observationHistory = data.observationHistory || state.observationHistory;
+    renderObservationRunResult(state.observationRun);
+    renderObservationHistory(state.observationHistory);
+    showMessage(
+      formatObservationRunMessage(state.observationRun),
+      !state.observationRun?.ready || state.observationRun?.history?.saved === false
+    );
+  } catch (error) {
+    renderObservationRunError(error);
+    throw error;
   }
 }
 
@@ -3929,6 +3961,107 @@ function renderObservationIssuesError(error) {
   elements.observationIssuesPanel.innerHTML = `
     <div class="message show error">${escapeHtml(error.message || '실사용 이슈를 확인하지 못했습니다.')}</div>
   `;
+}
+
+function renderObservationRunResult(result) {
+  if (!elements.observationRunResult) {
+    return;
+  }
+
+  if (!result) {
+    elements.observationRunResult.innerHTML = '';
+    return;
+  }
+
+  if (result.running) {
+    elements.observationRunResult.innerHTML = `
+      <div class="observation-run-card running">
+        <span class="roadmap-status-badge pending">실행 중</span>
+        <div>
+          <strong>로컬 실사용 점검을 실행하고 있습니다.</strong>
+          <span>읽기 중심 점검과 장중 상태 확인 후 결과를 히스토리에 저장합니다.</span>
+        </div>
+      </div>
+    `;
+    return;
+  }
+
+  const failedResults = getObservationResultsByStatus(result, 'failed');
+  const manualResults = getObservationResultsByStatus(result, 'manual');
+  const historySaved = result.history?.saved === true;
+  const issueItems = [...failedResults, ...manualResults].slice(0, 5);
+
+  elements.observationRunResult.innerHTML = `
+    <section class="observation-run-card ${result.ready ? 'ready' : 'not-ready'}" aria-label="방금 실행한 점검 결과">
+      <div class="observation-run-head">
+        <div>
+          <span class="roadmap-eyebrow">방금 실행한 점검</span>
+          <strong>${escapeHtml(result.ready ? 'READY' : 'NOT READY')}</strong>
+          <p>${escapeHtml(formatDate(result.generatedAt))}</p>
+        </div>
+        <span class="roadmap-status-badge ${result.ready ? 'completed' : 'pending'}">
+          ${escapeHtml(historySaved ? '저장됨' : '저장 확인')}
+        </span>
+      </div>
+      <div class="roadmap-stats" aria-label="방금 실행한 점검 요약">
+        ${renderRoadmapStat('실패', result.summary?.failed || 0, '자동 실패', 'failed')}
+        ${renderRoadmapStat('수동', result.summary?.manual || 0, '확인 필요', 'pending')}
+        ${renderRoadmapStat('통과', result.summary?.passed || 0, '자동 통과', 'done')}
+        ${renderRoadmapStat('항목', Array.isArray(result.results) ? result.results.length : 0, '전체 점검', 'active')}
+      </div>
+      ${
+        issueItems.length
+          ? `<div class="observation-run-issues">
+              ${issueItems.map(renderObservationRunIssue).join('')}
+            </div>`
+          : '<div class="roadmap-note">실패 항목 없이 점검이 완료됐습니다.</div>'
+      }
+      <div class="roadmap-note">
+        ${
+          historySaved
+            ? `저장 파일: ${escapeHtml(result.history?.fileName || '-')}`
+            : `히스토리 저장 실패: ${escapeHtml(result.history?.error || '원인을 확인하지 못했습니다.')}`
+        }
+      </div>
+    </section>
+  `;
+}
+
+function renderObservationRunError(error) {
+  if (!elements.observationRunResult) {
+    return;
+  }
+
+  elements.observationRunResult.innerHTML = `
+    <div class="message show error">${escapeHtml(error.message || '점검 실행에 실패했습니다.')}</div>
+  `;
+}
+
+function renderObservationRunIssue(item = {}) {
+  return `
+    <div class="observation-run-issue">
+      <span class="roadmap-status-badge ${item.status === 'failed' ? 'paused' : 'pending'}">
+        ${escapeHtml(getObservationResultStatusLabel(item.status))}
+      </span>
+      <div>
+        <strong>${escapeHtml(item.item || item.id || '-')}</strong>
+        <span>${escapeHtml(item.evidence || '')}</span>
+      </div>
+    </div>
+  `;
+}
+
+function getObservationResultsByStatus(result, status) {
+  return (Array.isArray(result?.results) ? result.results : []).filter((item) => item.status === status);
+}
+
+function formatObservationRunMessage(result) {
+  if (!result) {
+    return '점검을 실행했습니다.';
+  }
+
+  const saved = result.history?.saved === true ? '히스토리에 저장했습니다' : '히스토리 저장을 확인하세요';
+  return `점검 완료: 실패 ${result.summary?.failed || 0}개, 수동 ${result.summary?.manual || 0}개, 통과 ${result.summary?.passed || 0}개. ${saved}.`;
 }
 
 function renderObservationHistory(observationHistory) {

@@ -9,6 +9,7 @@ import {
   getLocalObservationHelp,
   parseLocalObservationArgs,
   readLocalObservationHistoryReport,
+  runAndSaveLocalObservationHistory,
   runLocalObservationCheck
 } from '../src/localObservationCheck.js';
 import { main as runLocalObservationCli } from '../scripts/check-local-observation.js';
@@ -170,6 +171,57 @@ test('runLocalObservationCheck saves history and compares the previous result', 
   assert.equal(report.latest.ready, false);
   assert.equal(report.recent[0].summary.failed, second.summary.failed);
   assert.equal(report.comparison.hasPrevious, false);
+});
+
+test('runAndSaveLocalObservationHistory runs a live check and returns refreshed history', async () => {
+  const rootDir = await createObservationFixture();
+  const historyDir = path.join(rootDir, 'observation-history-admin-run');
+  const result = await runAndSaveLocalObservationHistory({
+    rootDir,
+    baseUrl: 'http://127.0.0.1:3001',
+    adminToken: 'admin-token',
+    now: '2026-05-22T10:00:00.000Z',
+    liveSession: true,
+    historyDir,
+    historyLimit: 5,
+    reportLimit: 3,
+    fetchImpl: createObservationFetch({
+      stocks: [
+        {
+          id: 'stock-1',
+          symbol: '005930',
+          displayName: '삼성전자',
+          active: true,
+          highPrice: 80000,
+          purchasePrice: 70000,
+          lastPrice: 79000,
+          lastCheckedAt: '2026-05-22T09:45:00.000Z',
+          lastCheckStatus: 'checked',
+          dividendLastCheckedAt: '2026-05-22T09:30:00.000Z',
+          dividendLastDiagnostic: {
+            status: 'updated',
+            checkedAt: '2026-05-22T09:30:00.000Z',
+            attempts: [{ provider: 'publicdata', status: 'success' }]
+          }
+        }
+      ],
+      stocksMeta: {
+        stocksMeta: {
+          lastDividendRefresh: {
+            checkedAt: '2026-05-22T09:30:00.000Z',
+            results: [{ status: 'updated' }]
+          }
+        }
+      }
+    })
+  });
+
+  assert.equal(result.observationResult.values.saveHistory, true);
+  assert.equal(result.observationResult.values.liveSession, true);
+  assert.equal(result.observationResult.history.saved, true);
+  assert.equal(result.observationHistory.count, 1);
+  assert.equal(result.observationHistory.latest.fileName, result.observationResult.history.fileName);
+  assert.equal(result.observationHistory.latest.resultCount, result.observationResult.results.length);
 });
 
 test('runLocalObservationCheck fails when the server cannot be reached', async () => {
@@ -389,7 +441,7 @@ function createObservationFetch(options = {}) {
     }
 
     if (method === 'GET' && parsed.pathname === '/admin') {
-      return textResponse('<div id="serverStatusPanel"></div><div id="backupList"></div><div id="observationIssuesPanel"></div><div id="observationHistoryPanel"></div>');
+      return textResponse('<div id="serverStatusPanel"></div><div id="backupList"></div><div id="observationIssuesPanel"></div><button id="runObservationCheckButton"></button><div id="observationHistoryPanel"></div>');
     }
 
     return textResponse('', 404);

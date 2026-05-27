@@ -20,7 +20,7 @@
       href="https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=Noto+Sans+KR:wght@300;400;500;600;700&display=swap"
       rel="stylesheet"
     />
-    <link rel="stylesheet" href="/styles.css?v=20260527-observation-history-labels" />
+    <link rel="stylesheet" href="/styles.css?v=20260527-observation-run" />
   </head>
   <body data-register-modal="closed">
     <header class="app-header">
@@ -614,11 +614,15 @@
               <p id="observationHistorySummary" class="card-subtitle">로컬 점검 기록을 확인하는 중입니다.</p>
             </div>
             <div class="watch-actions">
+              <button id="runObservationCheckButton" type="button" class="btn btn-primary btn-sm">
+                점검 실행/저장
+              </button>
               <button id="refreshObservationHistoryButton" type="button" class="btn btn-outline btn-sm secondary-button">
                 새로고침
               </button>
             </div>
           </div>
+          <div id="observationRunResult" class="observation-run-result" aria-live="polite"></div>
           <div id="observationHistoryPanel" class="observation-history-panel" aria-live="polite"></div>
         </div>
 
@@ -684,6 +688,6 @@
       </div>
     </nav>
 
-    <script src="/app.js?v=20260527-observation-history-labels" type="module"></script>
+    <script src="/app.js?v=20260527-observation-run" type="module"></script>
   </body>
 </html>

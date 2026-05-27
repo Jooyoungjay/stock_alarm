@@ -3042,6 +3042,73 @@ select:focus {
   gap: 14px;
 }
 
+.observation-run-result {
+  display: grid;
+  gap: 10px;
+}
+
+.observation-run-card {
+  display: grid;
+  gap: 12px;
+  padding: 14px;
+  border: 1px solid var(--border-soft);
+  border-radius: var(--radius-sm);
+  background: var(--surface-2);
+}
+
+.observation-run-card.running {
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: center;
+}
+
+.observation-run-card strong,
+.observation-run-card span,
+.observation-run-card p {
+  overflow-wrap: anywhere;
+}
+
+.observation-run-card strong {
+  color: var(--text);
+  font-size: 15px;
+  font-weight: 900;
+}
+
+.observation-run-card span,
+.observation-run-card p {
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.observation-run-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.observation-run-issues {
+  display: grid;
+  gap: 6px;
+}
+
+.observation-run-issue {
+  display: grid;
+  grid-template-columns: 70px minmax(0, 1fr);
+  gap: 10px;
+  align-items: start;
+  padding: 8px 10px;
+  border: 1px solid var(--border-soft);
+  border-radius: var(--radius-sm);
+  background: var(--bg);
+}
+
+.observation-run-issue div {
+  display: grid;
+  gap: 3px;
+  min-width: 0;
+}
+
 .roadmap-hero {
   display: grid;
   grid-template-columns: minmax(0, 1fr) minmax(260px, 0.55fr);
@@ -3848,6 +3915,11 @@ select:focus {
   .observation-checklist-row {
     grid-template-columns: 44px minmax(0, 1fr);
     gap: 6px 10px;
+  }
+
+  .observation-run-card.running,
+  .observation-run-issue {
+    grid-template-columns: 1fr;
   }
 
   .roadmap-task-main {

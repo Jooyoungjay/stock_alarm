@@ -1,7 +1,12 @@
 import http from 'node:http';
 import fs from 'node:fs/promises';
 import path from 'node:path';
-import { getAdminAuthStatus, isAdminApiPath, isAdminRequestAuthorized } from './adminAuth.js';
+import {
+  getAdminAuthStatus,
+  getAdminTokenFromRequest,
+  isAdminApiPath,
+  isAdminRequestAuthorized
+} from './adminAuth.js';
 import { buildAccessUrls } from './accessUrls.js';
 import { config } from './config.js';
 import { buildDividendCalendar } from './dividendCalendar.js';
@@ -51,7 +56,10 @@ import {
 } from './runtimeInfo.js';
 import { readRoadmap } from './roadmap.js';
 import { readObservationIssues } from './observationIssues.js';
-import { readLocalObservationHistoryReport } from './localObservationCheck.js';
+import {
+  readLocalObservationHistoryReport,
+  runAndSaveLocalObservationHistory
+} from './localObservationCheck.js';
 import { isTelegramConfigured, sendTelegramMessage } from './telegram.js';
 import { pollTelegramCommands } from './telegramCommands.js';
 import { normalizeSymbolInput, searchSymbols } from './symbols.js';
@@ -885,6 +893,27 @@ async function handleApi(request, response, url) {
         limit: Number.isFinite(limit) ? limit : 8
       })
     });
+    return;
+  }
+
+  if (request.method === 'POST' && url.pathname === '/api/observation-history/run') {
+    const body = await readJsonBody(request);
+    const accessUrls = buildAccessUrls({ host: config.host, port: activePort });
+    const result = await runAndSaveLocalObservationHistory({
+      rootDir: config.rootDir,
+      dataDir: config.dataDir,
+      baseUrl: accessUrls.local || `http://127.0.0.1:${activePort}`,
+      adminToken: getAdminTokenFromRequest(request) || config.adminToken,
+      timeoutMs: body.timeoutMs,
+      liveSession: body.liveSession !== false,
+      liveMaxAgeMinutes: body.liveMaxAgeMinutes,
+      liveDividendMaxAgeHours: body.liveDividendMaxAgeHours,
+      runStateCheck: Boolean(body.runStateCheck),
+      historyLimit: body.historyLimit,
+      reportLimit: body.reportLimit || 8
+    });
+
+    sendJson(response, 200, result);
     return;
   }
 

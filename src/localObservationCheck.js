@@ -326,6 +326,23 @@ export async function readLocalObservationHistoryReport(input = {}) {
   };
 }
 
+export async function runAndSaveLocalObservationHistory(input = {}) {
+  const result = await runLocalObservationCheck({
+    ...input,
+    saveHistory: true
+  });
+  const history = await readLocalObservationHistoryReport({
+    ...input,
+    historyDir: result.values.historyDir,
+    limit: input.reportLimit || input.limit || 8
+  });
+
+  return {
+    observationResult: result,
+    observationHistory: history
+  };
+}
+
 function checkServerAccess(context) {
   const health = context.health || {};
   const ok = Boolean(['Stock Alarm', 'stock_alarm'].includes(health.appName) && health.port);
@@ -361,7 +378,13 @@ function checkUserHome(context) {
 }
 
 function checkAdminHome(context) {
-  const ok = containsAll(context.adminHtml, ['serverStatusPanel', 'backupList', 'observationIssuesPanel', 'observationHistoryPanel']);
+  const ok = containsAll(context.adminHtml, [
+    'serverStatusPanel',
+    'backupList',
+    'observationIssuesPanel',
+    'observationHistoryPanel',
+    'runObservationCheckButton'
+  ]);
 
   return createResult(
     'admin-home',
@@ -682,7 +705,7 @@ function checkLiveQuoteFreshness(context, values, generatedAt) {
       'live-quote-freshness',
       '장중 시세 최신성',
       '실제 등록 종목의 현재가와 마지막 확인 시각이 장중 기준 안에 있다',
-      'failed',
+      'manual',
       '보유 또는 관심 상태의 알림 대상 종목이 없습니다.',
       '실제 확인할 종목을 1개 이상 등록하고 알림을 켠 뒤 다시 실행합니다.'
     );
@@ -740,6 +763,18 @@ function checkLiveDividendDiagnostics(context, values, generatedAt) {
   const stocks = getObservationStocks(context);
   const now = new Date(generatedAt);
   const maxAgeHours = values.liveDividendMaxAgeHours;
+
+  if (!stocks.length) {
+    return createResult(
+      'live-dividend-diagnostics',
+      '장중 배당 진단',
+      '배당 자동 검증 결과가 최근 기준 안에 있고 실패 종목이 없다',
+      'manual',
+      '등록된 종목이 없어 배당 진단 최신성을 판단하지 않았습니다.',
+      '배당을 확인할 종목을 등록한 뒤 다시 실행합니다.'
+    );
+  }
+
   const lastRefreshAt = context.stocks?.lastDividendRefresh?.checkedAt || '';
   const refreshAgeHours = getAgeHours(lastRefreshAt, now);
   const diagnostics = stocks.filter((stock) => getStockDividendCheckedAt(stock));
