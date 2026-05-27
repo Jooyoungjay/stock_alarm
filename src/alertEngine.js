@@ -1,7 +1,7 @@
 import { fetchHistoricalHighSince, fetchQuote, getQuoteSourceMeta } from './priceProvider.js';
 import { resolveKisMarketDivCode } from './kisMarket.js';
 import { sendPushNotificationForStock } from './pushNotifications.js';
-import { ALERT_TYPES, DEFAULT_ALERT_TYPE, normalizeAlertType } from './storage.js';
+import { ALERT_TYPES, DEFAULT_ALERT_TYPE, POSITION_STATUSES, normalizeAlertType } from './storage.js';
 import { formatAlertMessage, isTelegramConfigured, sendTelegramMessage } from './telegram.js';
 
 const alertTypeLabels = {
@@ -13,6 +13,20 @@ const alertTypeLabels = {
 
 function getStockKisMarketDivCode(stock, config = {}) {
   return resolveKisMarketDivCode(stock?.kisMarketDivCode, config.kisMarketDivCode || 'J');
+}
+
+function isSoldPosition(stock) {
+  return stock?.positionStatus === POSITION_STATUSES.SOLD;
+}
+
+function getAlertSnoozeUntil(stock) {
+  const time = new Date(stock?.alertSnoozedUntil || 0).getTime();
+  return Number.isFinite(time) && time > 0 ? time : 0;
+}
+
+export function isAlertSnoozed(stock, now = new Date()) {
+  const until = getAlertSnoozeUntil(stock);
+  return until > now.getTime();
 }
 
 export function calculateDrawdownPercent(highPrice, currentPrice) {
@@ -536,7 +550,23 @@ export function evaluateStock(stock, quote, now = new Date()) {
   const lastAlertAt = stock.lastAlertAt ? new Date(stock.lastAlertAt).getTime() : 0;
   const cooldownMs = Number(stock.alertCooldownMinutes || 1) * 60 * 1000;
   const cooldownElapsed = !lastAlertAt || now.getTime() - lastAlertAt >= cooldownMs;
-  const alertDue = Boolean(stock.active && isAlertConditionActive && cooldownElapsed);
+  const alertSnoozed = isAlertSnoozed(stock, now);
+  const alertSuppressedReason = isSoldPosition(stock)
+    ? 'sold'
+    : !stock.active
+      ? 'inactive'
+      : alertSnoozed
+        ? 'snoozed'
+        : !cooldownElapsed
+          ? 'cooldown'
+          : '';
+  const alertDue = Boolean(
+    stock.active &&
+      !alertSnoozed &&
+      !isSoldPosition(stock) &&
+      isAlertConditionActive &&
+      cooldownElapsed
+  );
   const previousRepeatCount = normalizeRepeatCount(stock.alertRepeatCount);
   const nextAlertRepeatCount = alertDue
     ? previousAlertState === 'triggered'
@@ -563,6 +593,8 @@ export function evaluateStock(stock, quote, now = new Date()) {
   return {
     nextStock,
     alertDue,
+    alertSnoozed,
+    alertSuppressedReason,
     highUpdated,
     recovered,
     isAlertConditionActive,
@@ -713,6 +745,15 @@ async function processStockQuote(store, config, stock, quote, options = {}) {
   const pushSender = options.sendPushNotification || sendPushNotificationForStock;
   const now = options.now || new Date();
 
+  if (isSoldPosition(stock)) {
+    return {
+      stockId: stock.id,
+      symbol: stock.symbol,
+      status: 'skipped',
+      reason: 'sold'
+    };
+  }
+
   if (!stock.active) {
     return {
       stockId: stock.id,
@@ -851,6 +892,8 @@ async function processStockQuote(store, config, stock, quote, options = {}) {
       alertTypeLabel: evaluation.alertTypeLabel,
       alertState: nextStock.alertState,
       alertRepeatCount: nextStock.alertRepeatCount,
+      alertSnoozed: evaluation.alertSnoozed,
+      alertSuppressedReason: evaluation.alertSuppressedReason,
       recovered: evaluation.recovered,
       drawdownPercent: evaluation.drawdownPercent,
       thresholdPrice: evaluation.thresholdPrice,
@@ -876,6 +919,16 @@ export async function runAlertCheck(store, config, options = {}) {
   const results = [];
 
   for (const stock of stocks) {
+    if (isSoldPosition(stock)) {
+      results.push({
+        stockId: stock.id,
+        symbol: stock.symbol,
+        status: 'skipped',
+        reason: 'sold'
+      });
+      continue;
+    }
+
     if (!stock.active) {
       results.push({
         stockId: stock.id,
@@ -936,6 +989,21 @@ export async function runStockQuoteRetry(store, config, stockId, options = {}) {
 
   if (!stock) {
     throw new Error('종목을 찾을 수 없습니다.');
+  }
+
+  if (isSoldPosition(stock)) {
+    return {
+      checkedAt: now.toISOString(),
+      retry: true,
+      results: [
+        {
+          stockId: stock.id,
+          symbol: stock.symbol,
+          status: 'skipped',
+          reason: 'sold'
+        }
+      ]
+    };
   }
 
   if (!stock.active) {

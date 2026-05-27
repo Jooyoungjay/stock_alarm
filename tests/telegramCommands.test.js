@@ -238,6 +238,72 @@ test('handleTelegramMessage can add, pause, resume, and delete a stock', async (
   assert.equal(sent[0].chatId, config.telegramChatId);
 });
 
+test('handleTelegramMessage can report status, snooze alerts, and change position status', async () => {
+  const store = await createStore();
+  const sent = [];
+  const options = {
+    sendTelegramMessage: async (_config, text) => {
+      sent.push(text);
+    }
+  };
+
+  let stock = await store.addStock({
+    symbol: '336260',
+    displayName: '두산퓨얼셀',
+    purchasePrice: 90000,
+    quantity: 3,
+    alertType: 'profit_retracement',
+    thresholdPercent: 10
+  });
+  stock = await store.replaceStock({
+    ...stock,
+    lastPrice: 95000,
+    highPrice: 100000,
+    highPriceAt: '2026-05-12T00:00:00.000Z',
+    currency: 'KRW'
+  });
+
+  await handleTelegramMessage(store, config, message('/status 336260'), options);
+  assert.match(sent.at(-1), /종목 상태/);
+  assert.match(sent.at(-1), /보유중/);
+  assert.match(sent.at(-1), /알림: 켜짐/);
+
+  await handleTelegramMessage(store, config, message('/snooze 336260 60'), options);
+  let stocks = await store.listStocks();
+  assert.equal(stocks[0].active, true);
+  assert.ok(stocks[0].alertSnoozedUntil);
+  assert.match(sent.at(-1), /일시정지/);
+
+  await handleTelegramMessage(store, config, message('/snooze 336260 clear'), options);
+  stocks = await store.listStocks();
+  assert.equal(stocks[0].alertSnoozedUntil, null);
+  assert.equal(stocks[0].active, true);
+
+  await handleTelegramMessage(store, config, message('/sold 336260'), options);
+  stocks = await store.listStocks();
+  assert.equal(stocks[0].positionStatus, 'sold');
+  assert.equal(stocks[0].active, false);
+  assert.match(stocks[0].soldAt, /^\d{4}-\d{2}-\d{2}$/);
+  assert.match(sent.at(-1), /매도 완료/);
+
+  await handleTelegramMessage(store, config, message('/resume 336260'), options);
+  assert.match(sent.at(-1), /보유 상태로 바꾼 뒤/);
+
+  await handleTelegramMessage(store, config, message('/watch 336260'), options);
+  stocks = await store.listStocks();
+  assert.equal(stocks[0].positionStatus, 'watch');
+  assert.equal(stocks[0].active, false);
+  assert.equal(stocks[0].soldAt, '');
+
+  await handleTelegramMessage(store, config, message('/holding 336260'), options);
+  stocks = await store.listStocks();
+  assert.equal(stocks[0].positionStatus, 'holding');
+  assert.equal(stocks[0].active, true);
+  assert.equal(stocks[0].soldAt, '');
+  assert.match(sent.at(-1), /보유중/);
+  assert.match(sent.at(-1), /알림: 켜짐/);
+});
+
 test('handleTelegramMessage can edit stock alert settings', async () => {
   const store = await createStore();
   const sent = [];

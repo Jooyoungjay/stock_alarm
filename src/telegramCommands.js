@@ -2,7 +2,7 @@ import { buildAlertRule, initializeHighFromPurchaseDate, runAlertCheck } from '.
 import { createBackup, deleteBackup, listBackups, restoreBackup } from './backups.js';
 import { formatKisMarketDivCode } from './kisMarket.js';
 import { buildDailyBriefing, formatDailyBriefingMessage } from './portfolioBriefing.js';
-import { ALERT_TYPES } from './storage.js';
+import { ALERT_TYPES, POSITION_STATUSES } from './storage.js';
 import {
   fetchTelegramUpdates,
   isAuthorizedTelegramChat,
@@ -15,11 +15,16 @@ const updateOffsetKey = 'telegramUpdateOffset';
 const helpMessage = [
   '[Stock Alarm] 명령어',
   '/list - 감시 종목 목록',
+  '/status [종목코드] - 종목 상태 상세',
   '/brief - 위험도 순위와 일일 브리핑',
   '/check - 지금 바로 전체 확인',
   '/dividend-status [종목코드] - 배당 API 진단 상태',
   '/pause <종목코드> - 알림 끄기',
   '/resume <종목코드> - 알림 켜기',
+  '/snooze <종목코드> <분|today|clear> - 알림 일시정지',
+  '/sold <종목코드> - 매도 완료 처리',
+  '/watch <종목코드> - 관심 종목 처리',
+  '/holding <종목코드> - 보유 종목 처리',
   '/edit <종목코드> <항목> <값> - 알림 조건 수정',
   '/delete <종목코드> - 종목 삭제',
   '/backup - 현재 데이터 백업 생성',
@@ -164,8 +169,9 @@ async function executeCommand(store, config, command, options) {
     case 'help':
       return helpMessage;
     case 'list':
-    case 'status':
       return formatStockList(await store.listStocks());
+    case 'status':
+      return formatStockStatusFromCommand(store, command.args[0]);
     case 'brief':
     case 'briefing':
     case 'risk':
@@ -178,6 +184,15 @@ async function executeCommand(store, config, command, options) {
     case 'resume':
     case 'startstock':
       return setStockActive(store, command.args[0], true);
+    case 'snooze':
+      return snoozeStockFromCommand(store, command.args);
+    case 'sold':
+      return setStockPositionStatus(store, command.args[0], POSITION_STATUSES.SOLD);
+    case 'watch':
+      return setStockPositionStatus(store, command.args[0], POSITION_STATUSES.WATCH);
+    case 'holding':
+    case 'hold':
+      return setStockPositionStatus(store, command.args[0], POSITION_STATUSES.HOLDING);
     case 'edit':
       return editStockFromCommand(store, config, command, options);
     case 'delete':
@@ -1176,11 +1191,107 @@ function requireValue(value, message) {
   }
 }
 
+function isSnoozeClearToken(value) {
+  return ['clear', 'off', 'resume', '0', '해제', '끄기해제', '일시정지해제'].includes(
+    String(value || '').trim().toLowerCase()
+  );
+}
+
+function parseSnoozeUntil(value, now = new Date()) {
+  const token = String(value || '').trim().toLowerCase();
+
+  if (!token) {
+    throw new Error('/snooze는 시간 값이 필요합니다. 예: /snooze 336260 60 또는 /snooze 336260 today');
+  }
+
+  if (['today', 'day', '오늘', '오늘하루'].includes(token)) {
+    const until = new Date(now);
+    until.setHours(24, 0, 0, 0);
+    return until;
+  }
+
+  const match = token.match(/^(\d+)(m|분|h|시간)?$/);
+
+  if (!match) {
+    throw new Error('일시정지 시간은 분 숫자, 시간 단위, today, clear 중 하나로 입력하세요. 예: 60, 2h, today, clear');
+  }
+
+  const amount = Number(match[1]);
+  const unit = match[2] || 'm';
+
+  if (!Number.isFinite(amount) || amount < 1) {
+    throw new Error('일시정지 시간은 1분 이상이어야 합니다.');
+  }
+
+  const minutes = unit === 'h' || unit === '시간' ? amount * 60 : amount;
+  const until = new Date(now);
+  until.setMinutes(until.getMinutes() + minutes);
+
+  return until;
+}
+
 async function setStockActive(store, query, active) {
   const stock = await findStock(store, query);
+
+  if (active && stock.positionStatus === POSITION_STATUSES.SOLD) {
+    throw new Error('매도 완료 종목은 /holding <종목코드>로 보유 상태로 바꾼 뒤 알림을 켜세요.');
+  }
+
   const updated = await store.updateStock(stock.id, { active });
 
   return `${updated.displayName || updated.symbol} (${updated.symbol}) 알림을 ${active ? '켰습니다' : '껐습니다'}.`;
+}
+
+async function snoozeStockFromCommand(store, args) {
+  const [query, durationToken] = args;
+  const stock = await findStock(store, query);
+
+  if (stock.positionStatus === POSITION_STATUSES.SOLD) {
+    throw new Error('매도 완료 종목은 알림을 일시정지할 수 없습니다. /holding <종목코드>로 보유 상태로 바꾼 뒤 사용하세요.');
+  }
+
+  if (isSnoozeClearToken(durationToken)) {
+    const updated = await store.updateStock(stock.id, {
+      alertSnoozedUntil: null,
+      active: true
+    });
+
+    return `${updated.displayName || updated.symbol} (${updated.symbol}) 알림 일시정지를 해제하고 알림을 켰습니다.`;
+  }
+
+  const snoozeUntil = parseSnoozeUntil(durationToken);
+  const updated = await store.updateStock(stock.id, {
+    alertSnoozedUntil: snoozeUntil.toISOString(),
+    active: true
+  });
+
+  return `${updated.displayName || updated.symbol} (${updated.symbol}) 알림을 ${formatDate(updated.alertSnoozedUntil)}까지 일시정지했습니다.`;
+}
+
+async function setStockPositionStatus(store, query, positionStatus) {
+  const stock = await findStock(store, query);
+  const patch = { positionStatus };
+
+  if (positionStatus === POSITION_STATUSES.HOLDING) {
+    patch.active = true;
+    patch.alertSnoozedUntil = null;
+  } else if (positionStatus === POSITION_STATUSES.WATCH) {
+    patch.active = false;
+    patch.alertSnoozedUntil = null;
+  }
+
+  const updated = await store.updateStock(stock.id, patch);
+  const actionText = {
+    [POSITION_STATUSES.HOLDING]: '보유중으로 변경하고 알림을 켰습니다.',
+    [POSITION_STATUSES.WATCH]: '관심 종목으로 변경하고 알림을 껐습니다.',
+    [POSITION_STATUSES.SOLD]: '매도 완료로 변경하고 알림 대상에서 제외했습니다.'
+  }[updated.positionStatus];
+
+  return [
+    `${updated.displayName || updated.symbol} (${updated.symbol}) ${actionText}`,
+    formatPositionStatusLine(updated),
+    formatAlertControlLine(updated)
+  ].join('\n');
 }
 
 async function deleteStockFromCommand(store, query) {
@@ -1244,10 +1355,22 @@ function formatStockList(stocks) {
   return stocks.map((stock, index) => `${index + 1}. ${formatStockLine(stock)}`).join('\n\n');
 }
 
+async function formatStockStatusFromCommand(store, query) {
+  if (!query) {
+    return formatStockList(await store.listStocks());
+  }
+
+  const stock = await findStock(store, query);
+
+  return ['종목 상태', formatStockLine(stock)].join('\n');
+}
+
 function formatStockLine(stock) {
   const currentPrice = Number(stock.lastPrice);
   const line = [
-    `${stock.displayName || stock.symbol} (${stock.symbol}) ${stock.active ? '알림 켜짐' : '알림 꺼짐'}`,
+    `${stock.displayName || stock.symbol} (${stock.symbol})`,
+    formatPositionStatusLine(stock),
+    formatAlertControlLine(stock),
     `기준: ${formatAlertType(stock.alertType)}`,
     stock.purchaseDate ? `매수일: ${stock.purchaseDate}` : '',
     stock.purchasePrice ? `매수가: ${formatNumber(stock.purchasePrice)}` : '',
@@ -1265,6 +1388,44 @@ function formatStockLine(stock) {
   ];
 
   return line.filter(Boolean).join('\n');
+}
+
+function formatPositionStatusLine(stock) {
+  return `종목 상태: ${formatPositionStatus(stock.positionStatus)}`;
+}
+
+function formatAlertControlLine(stock) {
+  if (stock.positionStatus === POSITION_STATUSES.SOLD) {
+    return '알림: 매도 완료로 중지';
+  }
+
+  const snoozedUntil = getFutureSnoozeUntil(stock);
+
+  if (snoozedUntil) {
+    return `알림: 일시정지 (${formatDate(snoozedUntil.toISOString())}까지)`;
+  }
+
+  return `알림: ${stock.active ? '켜짐' : '꺼짐'}`;
+}
+
+function formatPositionStatus(value) {
+  const labels = {
+    [POSITION_STATUSES.HOLDING]: '보유중',
+    [POSITION_STATUSES.WATCH]: '관심종목',
+    [POSITION_STATUSES.SOLD]: '매도 완료'
+  };
+
+  return labels[value] || labels[POSITION_STATUSES.HOLDING];
+}
+
+function getFutureSnoozeUntil(stock, now = new Date()) {
+  const time = new Date(stock.alertSnoozedUntil || 0).getTime();
+
+  if (!Number.isFinite(time) || time <= now.getTime()) {
+    return null;
+  }
+
+  return new Date(time);
 }
 
 function formatHoldingLine(stock) {
@@ -1596,6 +1757,28 @@ function getShortUsage(commandName) {
       '/backups',
       '/restore 1',
       '/restore store-20260511-082342-355-server-start-c6b8dcd7.json'
+    ].join('\n');
+  }
+
+  if (commandName === 'snooze') {
+    return [
+      '예시:',
+      '/snooze 336260 60',
+      '/snooze 336260 2h',
+      '/snooze 336260 today',
+      '/snooze 336260 clear'
+    ].join('\n');
+  }
+
+  if (['status', 'pause', 'resume', 'sold', 'watch', 'holding', 'hold'].includes(commandName)) {
+    return [
+      '예시:',
+      '/status 336260',
+      '/pause 336260',
+      '/resume 336260',
+      '/sold 336260',
+      '/watch 336260',
+      '/holding 336260'
     ].join('\n');
   }
 

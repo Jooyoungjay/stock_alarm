@@ -165,6 +165,11 @@ export const config = {
     { min: -30, max: 365 }
   ),
   backupRetention: toNumber(process.env.BACKUP_RETENTION, 30, { min: 1 }),
+  autoBackupEnabled: toBoolean(process.env.AUTO_BACKUP_ENABLED, true),
+  autoBackupIntervalHours: toNumber(process.env.AUTO_BACKUP_INTERVAL_HOURS, 24, { min: 1 }),
+  autoBackupMinIntervalMinutes: toNumber(process.env.AUTO_BACKUP_MIN_INTERVAL_MINUTES, 120, {
+    min: 1
+  }),
   defaultAlertCooldownMinutes: toNumber(process.env.DEFAULT_ALERT_COOLDOWN_MINUTES, 30, {
     min: 1
   }),

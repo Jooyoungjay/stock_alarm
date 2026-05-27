@@ -134,6 +134,44 @@ export async function deleteBackup(dataDir, target) {
   };
 }
 
+export async function previewBackup(dataDir, target) {
+  const backup = await resolveBackup(dataDir, target);
+  const content = stripBom(await fs.readFile(backup.path, 'utf8'));
+  const data = validateStoreContent(content);
+  const stocks = Array.isArray(data.stocks) ? data.stocks : [];
+  const alerts = Array.isArray(data.alerts) ? data.alerts : [];
+  const meta = data.meta && typeof data.meta === 'object' ? data.meta : {};
+
+  return {
+    backup,
+    counts: {
+      stocks: stocks.length,
+      activeStocks: stocks.filter((stock) => stock?.active !== false).length,
+      alerts: alerts.length,
+      devices: Array.isArray(data.devices) ? data.devices.length : 0
+    },
+    meta: {
+      schemaVersion: meta.schemaVersion || null,
+      createdAt: meta.createdAt || null,
+      updatedAt: meta.updatedAt || null
+    },
+    samples: {
+      stocks: stocks.slice(0, 5).map((stock) => ({
+        symbol: stock.symbol || '',
+        displayName: stock.displayName || '',
+        positionStatus: stock.positionStatus || 'holding',
+        active: stock.active !== false
+      })),
+      alerts: alerts.slice(-5).map((alert) => ({
+        symbol: alert.symbol || '',
+        displayName: alert.displayName || '',
+        alertType: alert.alertType || '',
+        createdAt: alert.createdAt || ''
+      }))
+    }
+  };
+}
+
 export async function resolveBackup(dataDir, target) {
   const rawTarget = String(target || '').trim();
 

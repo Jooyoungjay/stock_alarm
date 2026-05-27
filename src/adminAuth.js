@@ -49,7 +49,12 @@ export function isAdminApiPath(method, pathname) {
     return false;
   }
 
-  if (pathname === '/api/health' || pathname === '/api/data-model' || pathname === '/api/roadmap') {
+  if (
+    pathname === '/api/health' ||
+    pathname === '/api/data-model' ||
+    pathname === '/api/roadmap' ||
+    pathname === '/api/observation-issues'
+  ) {
     return true;
   }
 

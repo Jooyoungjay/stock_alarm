@@ -120,6 +120,26 @@ test('store submission assets guide documents final app store readiness checks',
   assert.match(markdown, /실제 PNG\/JPEG/);
 });
 
+test('visual regression guide documents browser capture checks', async () => {
+  const markdown = await fs.readFile(
+    new URL('../docs/visual-regression-check.md', import.meta.url),
+    'utf8'
+  );
+  const readme = await fs.readFile(new URL('../README.md', import.meta.url), 'utf8');
+
+  assert.match(markdown, /브라우저 시각 회귀 점검/);
+  assert.match(markdown, /npm run check:visual/);
+  assert.match(markdown, /Playwright/);
+  assert.match(markdown, /user-desktop/);
+  assert.match(markdown, /admin-mobile/);
+  assert.match(markdown, /data\/visual-regression\/latest/);
+  assert.match(markdown, /ADMIN_TOKEN/);
+
+  assert.match(readme, /check-visual-regression\.js/);
+  assert.match(readme, /visual-regression-check\.md/);
+  assert.match(readme, /VISUAL_REGRESSION_BASE_URL/);
+});
+
 test('HTTPS demo server guide documents review readiness checks', async () => {
   const markdown = await fs.readFile(
     new URL('../docs/https-demo-server.md', import.meta.url),
@@ -198,7 +218,203 @@ test('full regression scenario guide documents end-to-end test coverage', async 
   assert.match(markdown, /KIS\/Naver 가격 비교 테스트/);
   assert.match(markdown, /해결 후 재발/);
   assert.match(markdown, /모바일 앱\/API 테스트/);
+  assert.match(markdown, /서버 연결 실패 배너/);
+  assert.match(markdown, /백업 미리보기/);
+  assert.match(markdown, /시세 품질 표시/);
+  assert.match(markdown, /로컬 웹앱 관찰 리포트/);
+  assert.match(markdown, /check:visual/);
+  assert.match(markdown, /visual-regression-check\.md/);
   assert.match(markdown, /최종 합격 기준/);
+});
+
+test('local webapp stabilization docs cover cache, status, backups, and quote quality', async () => {
+  const readme = await fs.readFile(new URL('../README.md', import.meta.url), 'utf8');
+  const roadmap = await fs.readFile(
+    new URL('../docs/development-roadmap.md', import.meta.url),
+    'utf8'
+  );
+  const uxReview = await fs.readFile(
+    new URL('../docs/local-webapp-ux-review-2026-05-26.md', import.meta.url),
+    'utf8'
+  );
+
+  assert.match(readme, /Failed to fetch/);
+  assert.match(readme, /AUTO_BACKUP_INTERVAL_HOURS/);
+  assert.match(readme, /백업 미리보기/);
+  assert.match(readme, /매도 판단 대시보드/);
+  assert.match(readme, /시세 품질 배지/);
+  assert.match(readme, /1시간 쉬기/);
+  assert.match(readme, /check:visual/);
+  assert.match(readme, /check:observation/);
+  assert.match(readme, /--live-session/);
+  assert.match(readme, /check-local-observation\.js/);
+  assert.match(readme, /local-webapp-observation-2026-05-21\.md/);
+  assert.match(readme, /local-webapp-ux-review-2026-05-26\.md/);
+  assert.match(readme, /observationIssues\.js/);
+  assert.match(readme, /\/api\/observation-issues/);
+  assert.match(readme, /관리자 실사용 이슈 우선순위 표시/);
+  assert.match(readme, /실사용 관찰 체크리스트/);
+  assert.match(readme, /감시 종목 필터와 정렬 선택을 브라우저에 저장/);
+  assert.match(readme, /CSV 양식/);
+  assert.match(readme, /행 검증 후 일괄 가져오기/);
+
+  assert.match(roadmap, /로컬 웹앱 안정화와 사용자 편의성/);
+  assert.match(roadmap, /오프라인\/캐시 상태 UX/);
+  assert.match(roadmap, /보유\/관심\/매도 구분/);
+  assert.match(roadmap, /브라우저 시각 회귀 테스트/);
+  assert.match(roadmap, /실사용 관찰 리포트/);
+  assert.match(roadmap, /실사용 이슈 반영/);
+  assert.match(roadmap, /후속 실사용 이슈 수집/);
+  assert.match(roadmap, /관찰 결과 기반 UX 개선/);
+  assert.match(roadmap, /실사용 체크 실행과 신규 OBS 처리/);
+  assert.match(roadmap, /장중 즉시 확인과 알림 제어 실사용 검증/);
+  assert.match(roadmap, /실사용 관찰 결과 회고와 다음 편의 개선 선정/);
+  assert.match(roadmap, /오늘 확인할 일 카드/);
+  assert.match(roadmap, /종목 목록 저장 필터/);
+  assert.match(roadmap, /CSV 가져오기\/내보내기/);
+  assert.match(roadmap, /알림 기준 설명 고도화/);
+  assert.match(roadmap, /배당 API 자동 검증 대시보드 확장/);
+  assert.match(roadmap, /로컬 장중 실사용 재검증/);
+  assert.match(roadmap, /로컬 점검 결과 저장\/히스토리/);
+  assert.match(roadmap, /텔레그램 편의 명령 확장/);
+
+  assert.match(uxReview, /로컬 웹앱 사용자 편의 개선 회고/);
+  assert.match(uxReview, /오늘 확인할 일 카드/);
+  assert.match(uxReview, /종목 목록 저장 필터/);
+  assert.match(uxReview, /CSV 가져오기\/내보내기/);
+  assert.match(uxReview, /알림 기준 설명 고도화/);
+  assert.match(uxReview, /배당 API 자동 검증 대시보드 확장/);
+  assert.match(uxReview, /로컬 장중 실사용 재검증/);
+  assert.match(uxReview, /로컬 점검 결과 저장\/히스토리/);
+  assert.match(uxReview, /위험 종목/);
+  assert.match(uxReview, /시세 또는 배당 조회 실패/);
+  assert.match(uxReview, /주문, 자동 매매, 매수\/매도 추천 문구는 넣지 않습니다/);
+});
+
+test('user webapp wires the today action panel into the first account area', async () => {
+  const html = await fs.readFile(new URL('../public/index.html', import.meta.url), 'utf8');
+  const script = await fs.readFile(new URL('../public/app.js', import.meta.url), 'utf8');
+  const styles = await fs.readFile(new URL('../public/styles.css', import.meta.url), 'utf8');
+
+  assert.match(html, /todayActionPanel/);
+  assert.match(script, /renderTodayActionPanel/);
+  assert.match(script, /buildTodayActions/);
+  assert.match(script, /알림 기준 도달/);
+  assert.match(script, /배당락일 임박/);
+  assert.match(script, /보유 종목 알림 꺼짐/);
+  assert.match(styles, /today-action-panel/);
+  assert.match(styles, /today-action-item/);
+});
+
+test('user webapp persists watch filters and sort order locally', async () => {
+  const script = await fs.readFile(new URL('../public/app.js', import.meta.url), 'utf8');
+  const html = await fs.readFile(new URL('../public/index.html', import.meta.url), 'utf8');
+
+  assert.match(html, /watchFilterButtons/);
+  assert.match(html, /watchSortSelect/);
+  assert.match(script, /WATCH_VIEW_STORAGE_KEY/);
+  assert.match(script, /loadWatchViewPreference/);
+  assert.match(script, /saveWatchViewPreference/);
+  assert.match(script, /normalizeWatchFilter/);
+  assert.match(script, /normalizeWatchSort/);
+  assert.match(script, /localStorage/);
+});
+
+test('user webapp imports and exports stock CSV files with validation', async () => {
+  const script = await fs.readFile(new URL('../public/app.js', import.meta.url), 'utf8');
+  const html = await fs.readFile(new URL('../public/index.html', import.meta.url), 'utf8');
+  const styles = await fs.readFile(new URL('../public/styles.css', import.meta.url), 'utf8');
+
+  assert.match(html, /downloadCsvTemplateButton/);
+  assert.match(html, /exportCsvButton/);
+  assert.match(html, /importCsvButton/);
+  assert.match(html, /csvImportInput/);
+  assert.match(html, /csvImportResult/);
+  assert.match(script, /CSV_STOCK_FIELDS/);
+  assert.match(script, /parseCsvText/);
+  assert.match(script, /validateCsvStockRows/);
+  assert.match(script, /exportStocksCsv/);
+  assert.match(script, /importStocksCsv/);
+  assert.match(script, /중복 종목/);
+  assert.match(styles, /csv-import-result/);
+});
+
+test('user webapp explains alert rule formulas without investment advice', async () => {
+  const script = await fs.readFile(new URL('../public/app.js', import.meta.url), 'utf8');
+  const html = await fs.readFile(new URL('../public/index.html', import.meta.url), 'utf8');
+  const styles = await fs.readFile(new URL('../public/styles.css', import.meta.url), 'utf8');
+
+  assert.match(html, /data-alert-rule-guide/);
+  assert.match(script, /buildAlertRuleGuides/);
+  assert.match(script, /renderAlertRuleGuideComparison/);
+  assert.match(script, /필요 입력/);
+  assert.match(script, /계산식/);
+  assert.match(script, /예시/);
+  assert.match(script, /투자 권유가 아니라/);
+  assert.match(script, /최고가 대비 하락률/);
+  assert.match(script, /이익금 반납률/);
+  assert.match(script, /매수가 대비 손절률/);
+  assert.match(script, /직접 기준가/);
+  assert.doesNotMatch(script, /빠른 추천값|추천 상황|초보 추천/);
+  assert.match(styles, /alert-rule-guide/);
+});
+
+test('admin page exposes dividend API automatic validation dashboard', async () => {
+  const html = await fs.readFile(new URL('../public/index.html', import.meta.url), 'utf8');
+  const script = await fs.readFile(new URL('../public/app.js', import.meta.url), 'utf8');
+  const styles = await fs.readFile(new URL('../public/styles.css', import.meta.url), 'utf8');
+
+  assert.match(html, /dividendDiagnosticsPanel/);
+  assert.match(script, /buildDividendApiDashboard/);
+  assert.match(script, /renderDividendApiDashboard/);
+  assert.match(script, /dividend-provider-grid/);
+  assert.match(script, /다음 조치/);
+  assert.match(script, /DATA_GO_KR_SERVICE_KEY/);
+  assert.match(script, /OPEN_DART_API_KEY/);
+  assert.match(script, /ALPHA_VANTAGE_API_KEY/);
+  assert.match(styles, /dividend-api-dashboard/);
+  assert.match(styles, /dividend-provider-card/);
+  assert.match(styles, /dividend-next-actions/);
+});
+
+test('local webapp observation report documents daily use checks and issue tracking', async () => {
+  const markdown = await fs.readFile(
+    new URL('../docs/local-webapp-observation-2026-05-21.md', import.meta.url),
+    'utf8'
+  );
+
+  assert.match(markdown, /로컬 웹앱 실사용 관찰 리포트/);
+  assert.match(markdown, /하루 관찰 체크리스트/);
+  assert.match(markdown, /종목 상태/);
+  assert.match(markdown, /백업 미리보기/);
+  assert.match(markdown, /연결 실패 안내/);
+  assert.match(markdown, /초기 짧은 관찰 결과/);
+  assert.match(markdown, /OBS-001/);
+  assert.match(markdown, /OBS-002/);
+  assert.match(markdown, /OBS-003/);
+  assert.match(markdown, /OBS-004/);
+  assert.match(markdown, /OBS-005/);
+  assert.match(markdown, /OBS-006/);
+  assert.match(markdown, /OBS-007/);
+  assert.match(markdown, /OBS-008/);
+  assert.match(markdown, /OBS-009/);
+  assert.match(markdown, /OBS-010/);
+  assert.match(markdown, /check:observation/);
+  assert.match(markdown, /--run-state-check/);
+  assert.match(markdown, /--live-session/);
+  assert.match(markdown, /상태 변경 검증 결과/);
+  assert.match(markdown, /실사용 회고 결과/);
+  assert.match(markdown, /실패 항목 \| 0개/);
+  assert.match(markdown, /연결 실패 메시지/);
+  assert.match(markdown, /우선순위 판정 기준/);
+  assert.match(markdown, /관리자 화면의 `실사용 이슈` 카드/);
+  assert.match(markdown, /오늘 확인할 일 카드/);
+  assert.match(markdown, /종목 목록 저장 필터/);
+  assert.match(markdown, /CSV 가져오기\/내보내기/);
+  assert.match(markdown, /알림 기준 설명 고도화/);
+  assert.match(markdown, /배당 API 자동 검증 대시보드 확장/);
+  assert.match(markdown, /로컬 장중 실사용 재검증/);
+  assert.match(markdown, /로컬 점검 결과 저장\/히스토리/);
 });
 
 test('full regression execution report records results and fixed defects', async () => {
@@ -298,6 +514,20 @@ test('admin page exposes the KIS and Naver comparison controls', async () => {
   assert.match(script, /data-kis-apply-market/);
   assert.match(script, /driftThresholdPercent/);
   assert.match(script, /renderKisNaverCompareResult/);
+});
+
+test('admin page exposes local observation issue controls', async () => {
+  const html = await fs.readFile(new URL('../public/index.html', import.meta.url), 'utf8');
+  const script = await fs.readFile(new URL('../public/app.js', import.meta.url), 'utf8');
+
+  assert.match(html, /실사용 이슈/);
+  assert.match(html, /observationIssuesPanel/);
+  assert.match(html, /refreshObservationIssuesButton/);
+  assert.match(script, /\/api\/observation-issues/);
+  assert.match(script, /renderObservationIssues/);
+  assert.match(script, /renderObservationChecklist/);
+  assert.match(script, /nextChecklistItem/);
+  assert.match(script, /priorityQueue/);
 });
 
 test('user stock forms expose per-stock KIS market settings', async () => {

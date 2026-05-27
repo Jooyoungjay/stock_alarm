@@ -9,7 +9,7 @@ test('parseRoadmapMarkdown extracts roadmap metadata and next task', async () =>
   const roadmap = parseRoadmapMarkdown(markdown);
 
   assert.equal(roadmap.title, '개발 WBS 및 로드맵');
-  assert.equal(roadmap.dateLabel, '2026-05-21');
+  assert.equal(roadmap.dateLabel, '2026-05-26');
   assert.ok(roadmap.completedScope.some((item) => item.category === '공식 일봉 provider 실험'));
   assert.ok(roadmap.completedScope.some((item) => item.category === 'NXT provider 골격'));
   assert.ok(roadmap.completedScope.some((item) => item.category === '증권사 API adapter 검토'));
@@ -59,6 +59,26 @@ test('parseRoadmapMarkdown extracts roadmap metadata and next task', async () =>
   assert.ok(roadmap.completedScope.some((item) => item.category === '스토어 제출 자산 최종 점검'));
   assert.ok(roadmap.completedScope.some((item) => item.category === '외부 API 실계정 재점검'));
   assert.ok(roadmap.completedScope.some((item) => item.category === '모바일 실기기 E2E 준비'));
+  assert.ok(roadmap.completedScope.some((item) => item.category === '로컬 웹앱 연결 안정화'));
+  assert.ok(roadmap.completedScope.some((item) => item.category === '매도 판단 대시보드'));
+  assert.ok(roadmap.completedScope.some((item) => item.category === '보유/관심/매도 상태 분리'));
+  assert.ok(roadmap.completedScope.some((item) => item.category === '자동 백업 편의성'));
+  assert.ok(roadmap.completedScope.some((item) => item.category === '시세 품질 안내'));
+  assert.ok(roadmap.completedScope.some((item) => item.category === '텔레그램 편의 명령'));
+  assert.ok(roadmap.completedScope.some((item) => item.category === '브라우저 시각 회귀 점검'));
+  assert.ok(roadmap.completedScope.some((item) => item.category === '실사용 관찰 리포트'));
+  assert.ok(roadmap.completedScope.some((item) => item.category === '실사용 이슈 반영'));
+  assert.ok(roadmap.completedScope.some((item) => item.category === '후속 실사용 이슈 수집'));
+  assert.ok(roadmap.completedScope.some((item) => item.category === '관찰 결과 기반 UX 개선'));
+  assert.ok(roadmap.completedScope.some((item) => item.category === '실사용 체크 실행과 신규 OBS 처리'));
+  assert.ok(roadmap.completedScope.some((item) => item.category === '장중 즉시 확인과 알림 제어 실사용 검증'));
+  assert.ok(roadmap.completedScope.some((item) => item.category === '실사용 관찰 결과 회고'));
+  assert.ok(roadmap.completedScope.some((item) => item.category === '오늘 확인할 일 카드'));
+  assert.ok(roadmap.completedScope.some((item) => item.category === '종목 목록 저장 필터'));
+  assert.ok(roadmap.completedScope.some((item) => item.category === 'CSV 가져오기/내보내기'));
+  assert.ok(roadmap.completedScope.some((item) => item.category === '알림 기준 설명 고도화'));
+  assert.ok(roadmap.completedScope.some((item) => item.category === '배당 API 자동 검증 대시보드 확장'));
+  assert.ok(roadmap.completedScope.some((item) => item.category === '로컬 장중 실사용 재검증'));
   assert.ok(roadmap.completedScope.some((item) => item.category === '배당 이벤트 알림'));
   assert.ok(roadmap.completedScope.some((item) => item.category === '배당 성장률'));
   assert.ok(roadmap.completedScope.some((item) => item.category === '배당 캘린더'));
@@ -70,9 +90,9 @@ test('parseRoadmapMarkdown extracts roadmap metadata and next task', async () =>
   assert.ok(roadmap.completedScope.some((item) => item.category === '저장소별 백업 스냅샷 검증'));
   assert.ok(roadmap.completedScope.some((item) => item.category === 'Postgres 쿼리 어댑터'));
   assert.ok(roadmap.completedScope.some((item) => item.category === 'Postgres 연결 리허설'));
-  assert.ok(roadmap.sections.length >= 10);
-  assert.equal(roadmap.recommendedOrder[0], '모바일 실기기 E2E 실제 실행');
-  assert.equal(roadmap.nextTask.title, '모바일 실기기 E2E 실제 실행');
+  assert.ok(roadmap.sections.length >= 12);
+  assert.equal(roadmap.recommendedOrder[0], '로컬 점검 결과 저장/히스토리');
+  assert.equal(roadmap.nextTask.title, '로컬 점검 결과 저장/히스토리');
   assert.ok(roadmap.statusLegend.some((item) => item.status === 'pending' && item.label === '예정'));
   assert.ok(roadmap.summary.pending > 0);
   assert.ok(roadmap.summary.total > roadmap.summary.completed);
@@ -145,9 +165,63 @@ test('parseRoadmapMarkdown normalizes explicit WBS task statuses', async () => {
   const completedExternalApiRetestTask = roadmap.sections
     .find((section) => section.id === '11')
     .tasks.find((task) => task.id === '11.1');
-  const inProgressMobileE2eTask = roadmap.sections
+  const pausedMobileE2eTask = roadmap.sections
     .find((section) => section.id === '11')
     .tasks.find((task) => task.id === '11.2');
+  const completedConnectionUxTask = roadmap.sections
+    .find((section) => section.id === '12')
+    .tasks.find((task) => task.id === '12.1');
+  const completedBackupPreviewTask = roadmap.sections
+    .find((section) => section.id === '12')
+    .tasks.find((task) => task.id === '12.6');
+  const completedTelegramConvenienceTask = roadmap.sections
+    .find((section) => section.id === '12')
+    .tasks.find((task) => task.id === '12.8');
+  const completedVisualRegressionTask = roadmap.sections
+    .find((section) => section.id === '12')
+    .tasks.find((task) => task.id === '12.9');
+  const completedObservationTask = roadmap.sections
+    .find((section) => section.id === '12')
+    .tasks.find((task) => task.id === '12.10');
+  const completedObservationIssueTask = roadmap.sections
+    .find((section) => section.id === '12')
+    .tasks.find((task) => task.id === '12.11');
+  const completedFollowUpObservationTask = roadmap.sections
+    .find((section) => section.id === '12')
+    .tasks.find((task) => task.id === '12.12');
+  const completedObservationUxTask = roadmap.sections
+    .find((section) => section.id === '12')
+    .tasks.find((task) => task.id === '12.13');
+  const completedObservationExecutionTask = roadmap.sections
+    .find((section) => section.id === '12')
+    .tasks.find((task) => task.id === '12.14');
+  const completedManualObservationTask = roadmap.sections
+    .find((section) => section.id === '12')
+    .tasks.find((task) => task.id === '12.15');
+  const completedObservationReviewTask = roadmap.sections
+    .find((section) => section.id === '12')
+    .tasks.find((task) => task.id === '12.16');
+  const completedTodayActionCardTask = roadmap.sections
+    .find((section) => section.id === '12')
+    .tasks.find((task) => task.id === '12.17');
+  const completedSavedFilterTask = roadmap.sections
+    .find((section) => section.id === '12')
+    .tasks.find((task) => task.id === '12.18');
+  const completedCsvImportExportTask = roadmap.sections
+    .find((section) => section.id === '12')
+    .tasks.find((task) => task.id === '12.19');
+  const completedAlertGuideTask = roadmap.sections
+    .find((section) => section.id === '12')
+    .tasks.find((task) => task.id === '12.20');
+  const completedDividendApiDashboardTask = roadmap.sections
+    .find((section) => section.id === '12')
+    .tasks.find((task) => task.id === '12.21');
+  const completedLocalLiveValidationTask = roadmap.sections
+    .find((section) => section.id === '12')
+    .tasks.find((task) => task.id === '12.22');
+  const pendingObservationHistoryTask = roadmap.sections
+    .find((section) => section.id === '12')
+    .tasks.find((task) => task.id === '12.23');
   const completedProviderTask = roadmap.sections
     .find((section) => section.id === '6')
     .tasks.find((task) => task.id === '6.6');
@@ -218,7 +292,25 @@ test('parseRoadmapMarkdown normalizes explicit WBS task statuses', async () => {
   assert.equal(completedRegressionScenarioTask.status, 'completed');
   assert.equal(completedRegressionExecutionTask.status, 'completed');
   assert.equal(completedExternalApiRetestTask.status, 'completed');
-  assert.equal(inProgressMobileE2eTask.status, 'in_progress');
+  assert.equal(pausedMobileE2eTask.status, 'paused');
+  assert.equal(completedConnectionUxTask.status, 'completed');
+  assert.equal(completedBackupPreviewTask.status, 'completed');
+  assert.equal(completedTelegramConvenienceTask.status, 'completed');
+  assert.equal(completedVisualRegressionTask.status, 'completed');
+  assert.equal(completedObservationTask.status, 'completed');
+  assert.equal(completedObservationIssueTask.status, 'completed');
+  assert.equal(completedFollowUpObservationTask.status, 'completed');
+  assert.equal(completedObservationUxTask.status, 'completed');
+  assert.equal(completedObservationExecutionTask.status, 'completed');
+  assert.equal(completedManualObservationTask.status, 'completed');
+  assert.equal(completedObservationReviewTask.status, 'completed');
+  assert.equal(completedTodayActionCardTask.status, 'completed');
+  assert.equal(completedSavedFilterTask.status, 'completed');
+  assert.equal(completedCsvImportExportTask.status, 'completed');
+  assert.equal(completedAlertGuideTask.status, 'completed');
+  assert.equal(completedDividendApiDashboardTask.status, 'completed');
+  assert.equal(completedLocalLiveValidationTask.status, 'completed');
+  assert.equal(pendingObservationHistoryTask.status, 'pending');
   assert.equal(completedDividendAlertTask.status, 'completed');
   assert.equal(completedDividendCalendarTask.status, 'completed');
   assert.equal(completedBackupStrategyTask.status, 'completed');

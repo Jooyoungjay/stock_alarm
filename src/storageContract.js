@@ -26,6 +26,7 @@ export const STORE_CONTRACT_METHODS = Object.freeze([
   'appendAlert',
   'createBackup',
   'listBackups',
+  'previewBackup',
   'restoreBackup',
   'deleteBackup',
   'exportBackupSnapshot',

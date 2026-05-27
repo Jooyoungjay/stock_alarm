@@ -38,7 +38,10 @@
 | A-09 | `node --test .\tests\storageContract.test.js` | 전체 통과 | JsonStore/PostgresStore 계약 |
 | A-10 | `node --test .\tests\documentation.test.js` | 전체 통과 | 문서와 화면 노출 계약 |
 | A-11 | `node --test .\tests\roadmap.test.js` | 전체 통과 | WBS 파싱과 다음 작업 |
-| A-12 | `npm test` | 전체 통과 | 최종 자동 회귀 |
+| A-12 | `node --test .\tests\storage.test.js` | 전체 통과 | 보유/관심/매도 상태와 일시정지 저장 |
+| A-13 | `node --test .\tests\backups.test.js` | 전체 통과 | 백업 미리보기/복구/삭제 |
+| A-14 | `node --test .\tests\visualRegressionCheck.test.js` | 전체 통과 | 브라우저 시각 회귀 점검 CLI |
+| A-15 | `npm test` | 전체 통과 | 최종 자동 회귀 |
 
 ## 서버 실행/종료 테스트
 
@@ -63,8 +66,14 @@
 | U-06 | 매수일 미입력 등록 | 매수일을 비워 등록 | 감시 최고가 기준으로 등록되고 오류 없음 |
 | U-07 | 매수일 입력 등록 | 과거 매수일 입력 후 미리 확인 | 구매일 이후 최고가 또는 실패 사유 표시 |
 | U-08 | 알림 토글 | 종목 카드 토글 OFF/ON | OFF 상태는 자동 확인과 알림에서 제외 |
-| U-09 | 편집 | 평단가, 수량, 메모, 매수 이유, 매도 조건 수정 | 저장 후 카드에 반영 |
-| U-10 | 삭제 | 테스트 종목 삭제 | 목록에서 제거되고 새로고침 후에도 유지 |
+| U-09 | 알림 일시정지 | `1시간 쉬기`, `오늘 쉬기`, `해제` 클릭 | 카드 상태와 자동 확인 억제 사유가 일치 |
+| U-10 | 상태 필터 | 보유, 관심, 매도 상태로 편집 후 필터 변경 | 상태별 종목만 표시되고 매도 종목은 알림 제외 |
+| U-11 | 매도 판단 대시보드 | 보유 종목 여러 개 등록 | 기준가 여유와 이익금 반납률 기준 위험 종목 표시 |
+| U-12 | 시세 품질 표시 | 정상/지연/오래된/실패 상태 종목 확인 | 종목 카드에 시세 품질 배지가 표시 |
+| U-13 | 편집 | 평단가, 수량, 메모, 매수 이유, 매도 조건 수정 | 저장 후 카드에 반영 |
+| U-14 | 삭제 | 테스트 종목 삭제 | 목록에서 제거되고 새로고침 후에도 유지 |
+| U-15 | 서버 연결 실패 배너 | 서버를 안전 종료한 뒤 기존 화면 새로고침 | 연결 실패 배너와 다시 시도/캐시 초기화 버튼 표시 |
+| U-16 | CSV 가져오기/내보내기 | CSV 양식 다운로드, 현재 목록 내보내기, 오류 포함 CSV 가져오기, 정상 CSV 가져오기 | 오류 CSV는 등록 전 차단되고 정상 CSV는 중복 없이 일괄 등록 |
 
 ## 가격 알림 규칙 테스트
 
@@ -151,10 +160,13 @@
 | M-04 | 토큰 삭제 | 토큰 삭제 버튼 클릭 | 다시 잠금 상태 |
 | M-05 | 서버 상태 카드 | 새로고침 버튼 클릭 | 실행 주소, QR, provider 설정 표시 |
 | M-06 | 백업 목록 | 백업 생성/새로고침 | 목록과 retention 표시 |
-| M-07 | 백업 복구 | 테스트 백업으로 복구 | 자동 안전 백업 생성 후 데이터 복구 |
-| M-08 | 백업 삭제 | 테스트 백업 삭제 | 파일과 목록에서 제거 |
-| M-09 | WBS 카드 | 개발 로드맵 새로고침 | 다음 작업과 완료/예정 수 표시 |
-| M-10 | 모바일 반응형 | 390px 폭에서 `/admin` 확인 | 카드와 버튼 텍스트가 겹치지 않음 |
+| M-07 | 자동 백업 즉시 실행 | `자동 백업 실행` 클릭 | 자동 백업 결과와 마지막 실행 시각 표시 |
+| M-08 | 백업 미리보기 | 백업 목록의 `미리보기` 클릭 | 종목/알림/기기 개수와 샘플 종목 표시 |
+| M-09 | 백업 복구 | 테스트 백업으로 복구 | 미리보기 확인 후 자동 안전 백업 생성, 데이터 복구 |
+| M-10 | 백업 삭제 | 테스트 백업 삭제 | 파일과 목록에서 제거 |
+| M-11 | 서버 상태 안전장치 | 서버 상태 카드 확인 | 종료 안전장치와 자동 백업 설정 표시 |
+| M-12 | WBS 카드 | 개발 로드맵 새로고침 | 다음 작업과 완료/예정 수 표시 |
+| M-13 | 모바일 반응형 | 390px 폭에서 `/admin` 확인 | 카드와 버튼 텍스트가 겹치지 않음 |
 
 ## 모바일 앱/API 테스트
 
@@ -176,9 +188,11 @@
 |---|---|---|---|
 | R-01 | JsonStore 계약 | `node --test .\tests\storageContract.test.js` | JsonStore 계약 통과 |
 | R-02 | 백업 스냅샷 계약 | `node --test .\tests\backupSnapshotContract.test.js` | export/import round-trip 통과 |
-| R-03 | Postgres dry-run | `npm run migrate:postgres:dry-run` | JSON 원본 변경 없이 테이블 후보 출력 |
-| R-04 | Postgres rehearsal | 테스트 DATABASE_URL로 `npm run migrate:postgres:rehearsal` | 전용 테이블 import/export 건수 일치 |
-| R-05 | DB 연결 미설정 | DATABASE_URL 없이 PostgresStore 테스트 | 명확히 runtime unavailable 표시 |
+| R-03 | 종목 상태 저장 | `node --test .\tests\storage.test.js` | 보유/관심/매도, soldAt, alertSnoozedUntil 보존 |
+| R-04 | 백업 미리보기 | `node --test .\tests\backups.test.js` | 복구 없이 counts/samples 확인 |
+| R-05 | Postgres dry-run | `npm run migrate:postgres:dry-run` | JSON 원본 변경 없이 테이블 후보 출력 |
+| R-06 | Postgres rehearsal | 테스트 DATABASE_URL로 `npm run migrate:postgres:rehearsal` | 전용 테이블 import/export 건수 일치 |
+| R-07 | DB 연결 미설정 | DATABASE_URL 없이 PostgresStore 테스트 | 명확히 runtime unavailable 표시 |
 
 ## 앱 심사/운영 문서 테스트
 
@@ -189,6 +203,8 @@
 | O-03 | 증권사 API 설정 점검 | `npm run check:broker-api` | 주문 차단, quote-only 상태 표시 |
 | O-04 | README 실행 가이드 | 초보자 기준으로 처음부터 실행 | 서버 실행/종료까지 막힘 없음 |
 | O-05 | WBS 문서 | `docs/development-roadmap.md` 확인 | 완료 범위와 다음 작업이 화면과 일치 |
+| O-06 | 로컬 웹앱 관찰 리포트 | `docs/local-webapp-observation-2026-05-21.md` 확인 | 하루 관찰 체크리스트와 이슈 기록 양식이 있음 |
+| O-07 | 브라우저 시각 회귀 점검 | `npm run check:visual -- --base-url http://127.0.0.1:<port>` | 사용자/관리자 데스크톱/모바일 캡처와 핵심 영역 점검 결과 표시 |
 
 ## 브라우저 확인 체크리스트
 
@@ -198,6 +214,8 @@
 | 390x844 | `/app` | 모바일 하단 내비게이션, 등록 팝업, 카드 줄바꿈 |
 | 1440x900 | `/admin` | 서버 상태, provider 진단, KIS/Naver 카드, WBS |
 | 390x844 | `/admin` | 관리자 카드 세로 배치, 버튼 겹침 없음 |
+
+자동 캡처 기준은 [브라우저 시각 회귀 점검](visual-regression-check.md)을 따릅니다.
 
 ## 종료 절차
 
@@ -214,4 +232,5 @@
 - KIS/Naver 가격 비교에서 이슈 처리 상태와 재전송 정책이 의도대로 동작합니다.
 - 배당 API 실패/성공 모두 사용자가 원인을 확인할 수 있습니다.
 - 모바일 API와 푸시 경로가 기존 기능을 깨지 않습니다.
+- 브라우저 시각 회귀 점검에서 빈 화면, 핵심 영역 누락, 심한 가로 넘침이 없습니다.
 - 서버 종료 후 실행 중인 Stock Alarm 서버가 남아 있지 않습니다.

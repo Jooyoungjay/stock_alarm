@@ -17,6 +17,8 @@
     "check:broker-api": "node scripts/check-broker-api.js",
     "check:external-apis": "node scripts/check-external-apis.js",
     "check:mobile-e2e": "node scripts/check-mobile-e2e.js",
+    "check:visual": "node scripts/check-visual-regression.js",
+    "check:observation": "node scripts/check-local-observation.js",
     "check:kis-quote": "node scripts/check-kis-quote.js",
     "check:publicdata-price": "node scripts/check-publicdata-price.js",
     "kis:token": "node scripts/kis-token.js",

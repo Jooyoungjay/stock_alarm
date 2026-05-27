@@ -50,6 +50,7 @@ import {
   writeRuntimeInfo
 } from './runtimeInfo.js';
 import { readRoadmap } from './roadmap.js';
+import { readObservationIssues } from './observationIssues.js';
 import { isTelegramConfigured, sendTelegramMessage } from './telegram.js';
 import { pollTelegramCommands } from './telegramCommands.js';
 import { normalizeSymbolInput, searchSymbols } from './symbols.js';
@@ -66,12 +67,14 @@ let lastDividendEventAlert = null;
 let lastDailyBriefing = null;
 let lastTelegramCommandPoll = null;
 let lastKisNaverAutoCompare = null;
+let lastAutoBackup = null;
 let isChecking = false;
 let isRefreshingDividends = false;
 let isCheckingDividendEvents = false;
 let isSendingDailyBriefing = false;
 let isPollingTelegramCommands = false;
 let isRunningKisNaverAutoCompare = false;
+let isRunningAutoBackup = false;
 let activePort = config.port;
 let server = null;
 const startedAt = new Date().toISOString();
@@ -289,6 +292,70 @@ async function runKisNaverAutoCompareOnce(options = {}) {
   } finally {
     isRunningKisNaverAutoCompare = false;
   }
+}
+
+async function runAutoBackupOnce(options = {}) {
+  const checkedAt = new Date().toISOString();
+
+  if (!config.autoBackupEnabled && !options.force) {
+    lastAutoBackup = {
+      checkedAt,
+      skipped: true,
+      reason: 'disabled'
+    };
+    return lastAutoBackup;
+  }
+
+  if (isRunningAutoBackup) {
+    return {
+      checkedAt,
+      skipped: true,
+      reason: 'auto_backup_already_running'
+    };
+  }
+
+  const previous = await store.getMetaValue('lastAutoBackup', null);
+  const previousTime = new Date(previous?.createdAt || previous?.checkedAt || 0).getTime();
+  const minIntervalMs = Number(config.autoBackupMinIntervalMinutes || 120) * 60 * 1000;
+
+  if (!options.force && Number.isFinite(previousTime) && Date.now() - previousTime < minIntervalMs) {
+    lastAutoBackup = {
+      checkedAt,
+      skipped: true,
+      reason: 'min_interval',
+      previous
+    };
+    return lastAutoBackup;
+  }
+
+  isRunningAutoBackup = true;
+
+  try {
+    const backup = await store.createBackup(options.reason || 'auto-scheduled');
+    lastAutoBackup = {
+      checkedAt,
+      createdAt: backup.createdAt || checkedAt,
+      backup: serializeBackup(backup),
+      skipped: backup.created === false,
+      reason: backup.created === false ? backup.reason : options.reason || 'auto-scheduled'
+    };
+    await store.setMetaValue('lastAutoBackup', lastAutoBackup);
+    return lastAutoBackup;
+  } finally {
+    isRunningAutoBackup = false;
+  }
+}
+
+async function getLastAutoBackupSnapshot() {
+  if (lastAutoBackup) {
+    return lastAutoBackup;
+  }
+
+  if (typeof store.getMetaValue !== 'function') {
+    return null;
+  }
+
+  return store.getMetaValue('lastAutoBackup', null);
 }
 
 async function getLastDividendEventAlertSnapshot() {
@@ -625,6 +692,7 @@ async function handleApi(request, response, url) {
       dividendEventAlertSnapshot,
       dailyBriefingSnapshot,
       kisNaverAutoCompareSnapshot,
+      autoBackupSnapshot,
       quoteProviderStats,
       dataModelInfo
     ] = await Promise.all([
@@ -632,6 +700,7 @@ async function handleApi(request, response, url) {
       getLastDividendEventAlertSnapshot(),
       getLastDailyBriefingSnapshot(),
       getLastKisNaverAutoCompareSnapshot(),
+      getLastAutoBackupSnapshot(),
       store.getQuoteProviderStats(),
       store.getDataModelInfo()
     ]);
@@ -649,6 +718,12 @@ async function handleApi(request, response, url) {
       railwayRuntime: config.isRailwayRuntime,
       startedAt,
       runtimeFile: getRuntimeInfoPath(config.dataDir),
+      runtimeVerified: Boolean(runtimeInfo && runtimeInfo.pid === process.pid),
+      safeStop: {
+        command: 'node scripts\\stop-server.js',
+        policy: 'runtime_file_and_health_match_required',
+        message: 'server.json과 /api/health가 같은 Stock Alarm PID일 때만 종료합니다.'
+      },
       telegramConfigured: isTelegramConfigured(config),
       port: activePort,
       accessUrls: buildAccessUrls({ host: config.host, port: activePort }),
@@ -670,6 +745,9 @@ async function handleApi(request, response, url) {
       dividendEventAlertCheckIntervalSeconds: config.dividendEventAlertCheckIntervalSeconds,
       dividendEventAlertExDateOffsets: config.dividendEventAlertExDateOffsets,
       dividendEventAlertPaymentDateOffsets: config.dividendEventAlertPaymentDateOffsets,
+      autoBackupEnabled: config.autoBackupEnabled,
+      autoBackupIntervalHours: config.autoBackupIntervalHours,
+      autoBackupMinIntervalMinutes: config.autoBackupMinIntervalMinutes,
       dailyBriefingEnabled: config.dailyBriefingEnabled,
       dailyBriefingTime: normalizeBriefingTime(config.dailyBriefingTime),
       dailyBriefingCheckIntervalSeconds: config.dailyBriefingCheckIntervalSeconds,
@@ -680,6 +758,7 @@ async function handleApi(request, response, url) {
       lastKisNaverAutoCompare: kisNaverAutoCompareSnapshot,
       lastDividendRefresh: dividendRefreshSnapshot,
       lastDividendEventAlert: dividendEventAlertSnapshot,
+      lastAutoBackup: autoBackupSnapshot,
       lastDailyBriefing: dailyBriefingSnapshot,
       quoteProviderStats,
       dataSchemaVersion: dataModelInfo.schemaVersion,
@@ -784,6 +863,13 @@ async function handleApi(request, response, url) {
   if (request.method === 'GET' && url.pathname === '/api/roadmap') {
     sendJson(response, 200, {
       roadmap: await readRoadmap(config.rootDir)
+    });
+    return;
+  }
+
+  if (request.method === 'GET' && url.pathname === '/api/observation-issues') {
+    sendJson(response, 200, {
+      observationIssues: await readObservationIssues(config.rootDir)
     });
     return;
   }
@@ -1044,7 +1130,13 @@ async function handleApi(request, response, url) {
 
     sendJson(response, 200, {
       backups: backups.map(serializeBackup),
-      retention: config.backupRetention
+      retention: config.backupRetention,
+      autoBackup: {
+        enabled: config.autoBackupEnabled,
+        intervalHours: config.autoBackupIntervalHours,
+        minIntervalMinutes: config.autoBackupMinIntervalMinutes,
+        last: await getLastAutoBackupSnapshot()
+      }
     });
     return;
   }
@@ -1141,7 +1233,41 @@ async function handleApi(request, response, url) {
 
     sendJson(response, 200, {
       backup: serializeBackup(backup),
-      backups: backups.map(serializeBackup)
+      backups: backups.map(serializeBackup),
+      autoBackup: {
+        enabled: config.autoBackupEnabled,
+        intervalHours: config.autoBackupIntervalHours,
+        minIntervalMinutes: config.autoBackupMinIntervalMinutes,
+        last: await getLastAutoBackupSnapshot()
+      }
+    });
+    return;
+  }
+
+  if (request.method === 'POST' && url.pathname === '/api/backups/auto-run') {
+    const result = await runAutoBackupOnce({ force: true, reason: 'auto-manual-web' });
+    const backups = await store.listBackups({ limit: config.backupRetention });
+
+    sendJson(response, 200, {
+      autoBackup: {
+        enabled: config.autoBackupEnabled,
+        intervalHours: config.autoBackupIntervalHours,
+        minIntervalMinutes: config.autoBackupMinIntervalMinutes,
+        last: result
+      },
+      backups: backups.map(serializeBackup),
+      retention: config.backupRetention
+    });
+    return;
+  }
+
+  if (request.method === 'GET' && segments[0] === 'api' && segments[1] === 'backups' && segments[2] === 'preview') {
+    const preview = await store.previewBackup(url.searchParams.get('target'));
+    sendJson(response, 200, {
+      preview: {
+        ...preview,
+        backup: serializeBackup(preview.backup)
+      }
     });
     return;
   }
@@ -1157,7 +1283,13 @@ async function handleApi(request, response, url) {
       restored: true,
       backup: serializeBackup(result.backup),
       safetyBackup: serializeBackup(result.safetyBackup),
-      backups: backups.map(serializeBackup)
+      backups: backups.map(serializeBackup),
+      autoBackup: {
+        enabled: config.autoBackupEnabled,
+        intervalHours: config.autoBackupIntervalHours,
+        minIntervalMinutes: config.autoBackupMinIntervalMinutes,
+        last: await getLastAutoBackupSnapshot()
+      }
     });
     return;
   }
@@ -1170,7 +1302,13 @@ async function handleApi(request, response, url) {
       deleted: true,
       backup: serializeBackup(result.backup),
       backups: backups.map(serializeBackup),
-      retention: config.backupRetention
+      retention: config.backupRetention,
+      autoBackup: {
+        enabled: config.autoBackupEnabled,
+        intervalHours: config.autoBackupIntervalHours,
+        minIntervalMinutes: config.autoBackupMinIntervalMinutes,
+        last: await getLastAutoBackupSnapshot()
+      }
     });
     return;
   }
@@ -1319,6 +1457,9 @@ function listen(port, remainingAttempts = 20) {
     console.log(
       `KIS/Naver auto compare ${config.kisNaverAutoCompareEnabled ? `every ${config.kisNaverAutoCompareIntervalSeconds} seconds` : 'disabled'}`
     );
+    console.log(
+      `Auto backup ${config.autoBackupEnabled ? `every ${config.autoBackupIntervalHours} hours` : 'disabled'}`
+    );
   });
 }
 
@@ -1382,6 +1523,18 @@ const kisNaverAutoCompareInterval = config.kisNaverAutoCompareEnabled
     }, config.kisNaverAutoCompareIntervalSeconds * 1000)
   : null;
 
+const autoBackupInterval = config.autoBackupEnabled
+  ? setInterval(() => {
+      runAutoBackupOnce().catch((error) => {
+        lastAutoBackup = {
+          checkedAt: new Date().toISOString(),
+          error: error.message
+        };
+        console.error('Scheduled auto backup failed:', error);
+      });
+    }, config.autoBackupIntervalHours * 60 * 60 * 1000)
+  : null;
+
 runTelegramCommandPollOnce().catch((error) => {
   lastTelegramCommandPoll = {
     checkedAt: new Date().toISOString(),
@@ -1396,6 +1549,14 @@ runDividendEventAlertOnce().catch((error) => {
     error: error.message
   };
   console.error('Initial dividend event alert check failed:', error);
+});
+
+runAutoBackupOnce({ reason: 'auto-startup' }).catch((error) => {
+  lastAutoBackup = {
+    checkedAt: new Date().toISOString(),
+    error: error.message
+  };
+  console.error('Initial auto backup failed:', error);
 });
 
 async function closeServer() {
@@ -1421,6 +1582,9 @@ async function shutdown() {
   clearInterval(telegramCommandInterval);
   if (kisNaverAutoCompareInterval) {
     clearInterval(kisNaverAutoCompareInterval);
+  }
+  if (autoBackupInterval) {
+    clearInterval(autoBackupInterval);
   }
 
   try {

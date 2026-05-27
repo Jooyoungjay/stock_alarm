@@ -8,6 +8,7 @@ import {
   deleteBackup,
   getBackupDir,
   listBackups,
+  previewBackup,
   resolveBackup,
   restoreBackup
 } from '../src/backups.js';
@@ -150,6 +151,57 @@ test('backup functions can export and restore through store snapshots', async ()
   assert.equal(snapshot.stocks[0].symbol, 'OLD');
   assert.equal(result.safetyBackup.created, true);
   assert.ok(backups.some((item) => item.reason === 'before-restore'));
+});
+
+test('previewBackup returns counts and sample records without restoring', async () => {
+  const dataDir = await createDataDir();
+  const backup = await createBackup(dataDir, {
+    reason: 'preview',
+    maxBackups: 10,
+    readSnapshot: async () => ({
+      devices: [{ id: 'device-1' }],
+      stocks: [
+        {
+          symbol: 'AAPL',
+          displayName: 'Apple',
+          active: true,
+          positionStatus: 'holding'
+        },
+        {
+          symbol: 'TSLA',
+          displayName: 'Tesla',
+          active: false,
+          positionStatus: 'sold'
+        }
+      ],
+      alerts: [
+        {
+          symbol: 'AAPL',
+          displayName: 'Apple',
+          alertType: 'high_drawdown',
+          createdAt: '2026-05-20T01:00:00.000Z'
+        }
+      ],
+      meta: {
+        schemaVersion: 1,
+        createdAt: '2026-05-20T00:00:00.000Z',
+        updatedAt: '2026-05-20T01:00:00.000Z'
+      }
+    })
+  });
+
+  const preview = await previewBackup(dataDir, backup.name);
+
+  assert.equal(preview.backup.name, backup.name);
+  assert.deepEqual(preview.counts, {
+    stocks: 2,
+    activeStocks: 1,
+    alerts: 1,
+    devices: 1
+  });
+  assert.equal(preview.samples.stocks[0].displayName, 'Apple');
+  assert.equal(preview.samples.stocks[1].positionStatus, 'sold');
+  assert.equal(preview.samples.alerts[0].alertType, 'high_drawdown');
 });
 
 test('JsonStore exposes backup list restore and delete methods for the storage contract', async () => {

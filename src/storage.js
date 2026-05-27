@@ -5,6 +5,7 @@ import {
   createBackup as createFileBackup,
   deleteBackup as deleteFileBackup,
   listBackups as listFileBackups,
+  previewBackup as previewFileBackup,
   restoreBackup as restoreFileBackup
 } from './backups.js';
 import { buildDataModelInfo, normalizeStoreEnvelope, touchStoreEnvelope } from './dataModel.js';
@@ -27,6 +28,14 @@ export const ALERT_TYPES = Object.freeze({
 });
 
 export const DEFAULT_ALERT_TYPE = ALERT_TYPES.HIGH_DRAWDOWN;
+
+export const POSITION_STATUSES = Object.freeze({
+  HOLDING: 'holding',
+  WATCH: 'watch',
+  SOLD: 'sold'
+});
+
+export const DEFAULT_POSITION_STATUS = POSITION_STATUSES.HOLDING;
 
 async function ensureDataDir(dataDir) {
   await fs.mkdir(dataDir, { recursive: true });
@@ -149,7 +158,10 @@ export function normalizeStock(input, defaults) {
     thresholdPercent,
     targetPrice,
     alertCooldownMinutes,
-    active: true,
+    active: input.active === undefined ? true : Boolean(input.active),
+    positionStatus: normalizePositionStatus(input.positionStatus),
+    soldAt: normalizeOptionalDate(input.soldAt),
+    alertSnoozedUntil: normalizeIsoDateTime(input.alertSnoozedUntil) || null,
     highPrice: null,
     highPriceAt: null,
     highPriceSource: '',
@@ -192,6 +204,12 @@ export function normalizeStock(input, defaults) {
     createdAt: now,
     updatedAt: now
   };
+
+  if (stock.positionStatus === POSITION_STATUSES.SOLD) {
+    stock.active = false;
+    stock.soldAt = stock.soldAt || now.slice(0, 10);
+    stock.alertSnoozedUntil = null;
+  }
 
   validateAlertTypeFields(stock);
   return stock;
@@ -253,6 +271,22 @@ export function applyStockPatch(stock, patch) {
   if (patch.kisMarketDivCode !== undefined) {
     next.kisMarketDivCode = normalizeKisMarketDivCode(patch.kisMarketDivCode);
     alertConditionChanged = true;
+  }
+
+  if (patch.positionStatus !== undefined) {
+    next.positionStatus = normalizePositionStatus(patch.positionStatus);
+
+    if (next.positionStatus === POSITION_STATUSES.SOLD) {
+      next.active = false;
+      next.soldAt = normalizeOptionalDate(patch.soldAt) || next.soldAt || next.updatedAt.slice(0, 10);
+      next.alertSnoozedUntil = null;
+    } else {
+      next.soldAt = patch.soldAt !== undefined ? normalizeOptionalDate(patch.soldAt) : '';
+    }
+  }
+
+  if (patch.soldAt !== undefined && next.positionStatus === POSITION_STATUSES.SOLD) {
+    next.soldAt = normalizeOptionalDate(patch.soldAt) || next.soldAt || next.updatedAt.slice(0, 10);
   }
 
   if (patch.purchasePrice !== undefined) {
@@ -347,8 +381,16 @@ export function applyStockPatch(stock, patch) {
     next.alertCooldownMinutes = alertCooldownMinutes;
   }
 
+  if (patch.alertSnoozedUntil !== undefined) {
+    next.alertSnoozedUntil = normalizeIsoDateTime(patch.alertSnoozedUntil) || null;
+  }
+
   if (patch.active !== undefined) {
-    next.active = Boolean(patch.active);
+    next.active = next.positionStatus === POSITION_STATUSES.SOLD ? false : Boolean(patch.active);
+
+    if (next.active && patch.alertSnoozedUntil === undefined) {
+      next.alertSnoozedUntil = null;
+    }
   }
 
   if (patch.resetHighPrice) {
@@ -389,6 +431,13 @@ export function normalizeStoredStock(stock) {
   return {
     ...stock,
     deviceId: normalizeDeviceId(stock.deviceId),
+    positionStatus: normalizePositionStatus(stock.positionStatus),
+    soldAt: normalizeStoredOptionalDate(stock.soldAt),
+    alertSnoozedUntil: normalizeIsoDateTime(stock.alertSnoozedUntil) || null,
+    active:
+      normalizePositionStatus(stock.positionStatus) === POSITION_STATUSES.SOLD
+        ? false
+        : stock.active !== false,
     purchasePrice:
       stock.purchasePrice === undefined || stock.purchasePrice === null || stock.purchasePrice === ''
         ? null
@@ -1333,6 +1382,16 @@ export function normalizeDeviceId(value) {
   return id || null;
 }
 
+export function normalizePositionStatus(value) {
+  const normalized = String(value || DEFAULT_POSITION_STATUS).trim().toLowerCase();
+
+  if (Object.values(POSITION_STATUSES).includes(normalized)) {
+    return normalized;
+  }
+
+  return DEFAULT_POSITION_STATUS;
+}
+
 function normalizeDevicePlatform(value) {
   const platform = String(value || 'unknown').trim().toLowerCase();
   const allowed = ['ios', 'android', 'web', 'unknown'];
@@ -1840,6 +1899,11 @@ export class JsonStore {
   async deleteBackup(target) {
     await this.ready;
     return deleteFileBackup(this.dataDir, target);
+  }
+
+  async previewBackup(target) {
+    await this.ready;
+    return previewFileBackup(this.dataDir, target);
   }
 
   async exportBackupSnapshot() {

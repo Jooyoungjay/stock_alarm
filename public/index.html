@@ -20,7 +20,7 @@
       href="https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=Noto+Sans+KR:wght@300;400;500;600;700&display=swap"
       rel="stylesheet"
     />
-    <link rel="stylesheet" href="/styles.css?v=20260521-kis-resend-policy" />
+    <link rel="stylesheet" href="/styles.css?v=20260526-dividend-dashboard" />
   </head>
   <body data-register-modal="closed">
     <header class="app-header">
@@ -40,6 +40,8 @@
     </header>
 
     <main class="page">
+      <section id="connectionBanner" class="connection-banner" aria-live="polite" hidden></section>
+
       <section
         class="registration-modal"
         id="tab-register"
@@ -113,6 +115,15 @@
                   <option value="J">KRX</option>
                   <option value="NX">NXT</option>
                   <option value="UN">통합</option>
+                </select>
+              </label>
+
+              <label class="form-group">
+                <span class="form-label">종목 상태</span>
+                <select class="form-input" name="positionStatus">
+                  <option value="holding" selected>보유중</option>
+                  <option value="watch">관심종목</option>
+                  <option value="sold">매도 완료</option>
                 </select>
               </label>
             </section>
@@ -207,7 +218,7 @@
                 />
               </label>
 
-              <div id="alertRuleSummary" class="alert-rule-summary"></div>
+              <div id="alertRuleSummary" class="alert-rule-summary" data-alert-rule-guide></div>
 
               <div class="form-row">
                 <label class="form-group">
@@ -328,6 +339,16 @@
               <button id="refreshDividendsButton" type="button" class="btn btn-outline btn-sm secondary-button">
                 배당 새로고침
               </button>
+              <button id="downloadCsvTemplateButton" type="button" class="btn btn-outline btn-sm secondary-button">
+                CSV 양식
+              </button>
+              <button id="exportCsvButton" type="button" class="btn btn-outline btn-sm secondary-button">
+                CSV 내보내기
+              </button>
+              <button id="importCsvButton" type="button" class="btn btn-outline btn-sm secondary-button">
+                CSV 가져오기
+              </button>
+              <input id="csvImportInput" type="file" accept=".csv,text/csv" hidden />
               <button id="sendBriefingButton" type="button" class="btn btn-outline btn-sm secondary-button">
                 브리핑 전송
               </button>
@@ -338,8 +359,11 @@
           </div>
 
           <div id="message" class="message" role="status" aria-live="polite"></div>
+          <div id="csvImportResult" class="csv-import-result" aria-live="polite" hidden></div>
           <div id="watchSummaryBar" class="watch-summary-bar" aria-live="polite"></div>
           <div id="portfolioSummaryBar" class="portfolio-summary-bar" aria-live="polite"></div>
+          <div id="todayActionPanel" class="today-action-panel" aria-live="polite"></div>
+          <div id="sellDecisionPanel" class="sell-decision-panel" aria-live="polite"></div>
           <div id="dividendCalendarPanel" class="dividend-calendar-panel" aria-live="polite"></div>
           <div class="watch-controls" aria-label="감시 종목 보기 설정">
             <div id="watchFilterButtons" class="segmented-control" role="group" aria-label="감시 종목 필터">
@@ -348,6 +372,9 @@
               <button type="button" data-watch-filter="alert">알림</button>
               <button type="button" data-watch-filter="error">조회 실패</button>
               <button type="button" data-watch-filter="inactive">알림 꺼짐</button>
+              <button type="button" data-watch-filter="holding">보유중</button>
+              <button type="button" data-watch-filter="watch">관심</button>
+              <button type="button" data-watch-filter="sold">매도 완료</button>
             </div>
             <label class="watch-sort-control">
               <span>정렬</span>
@@ -565,6 +592,21 @@
           <div id="roadmapPanel" class="roadmap-panel" aria-live="polite"></div>
         </div>
 
+        <div class="card" data-page-scope="admin" data-admin-protected="true">
+          <div class="card-header">
+            <div>
+              <h2 id="observationIssuesTitle" class="card-title">실사용 이슈</h2>
+              <p id="observationIssuesSummary" class="card-subtitle">관찰 리포트를 확인하는 중입니다.</p>
+            </div>
+            <div class="watch-actions">
+              <button id="refreshObservationIssuesButton" type="button" class="btn btn-outline btn-sm secondary-button">
+                새로고침
+              </button>
+            </div>
+          </div>
+          <div id="observationIssuesPanel" class="observation-issues-panel" aria-live="polite"></div>
+        </div>
+
         <div class="card" data-page-scope="user">
           <div class="card-header">
             <div>
@@ -586,6 +628,9 @@
               </button>
               <button id="createBackupButton" type="button" class="btn btn-primary btn-sm primary-button">
                 백업 생성
+              </button>
+              <button id="runAutoBackupButton" type="button" class="btn btn-ghost btn-sm secondary-button">
+                자동 백업 실행
               </button>
             </div>
           </div>
@@ -624,6 +669,6 @@
       </div>
     </nav>
 
-    <script src="/app.js?v=20260521-kis-resend-policy" type="module"></script>
+    <script src="/app.js?v=20260526-dividend-dashboard" type="module"></script>
   </body>
 </html>

@@ -196,6 +196,21 @@ test('cooldown blocks repeated alerts', () => {
   assert.equal(result.alertRepeatCount, 0);
 });
 
+test('snoozed alerts keep monitoring state without sending a notification', () => {
+  const stock = {
+    ...baseStock,
+    highPrice: 100,
+    alertSnoozedUntil: '2026-05-11T01:00:00.000Z'
+  };
+  const result = evaluateStock(stock, { price: 90, currency: 'USD' }, date('2026-05-11T00:10:00Z'));
+
+  assert.equal(result.alertDue, false);
+  assert.equal(result.alertSnoozed, true);
+  assert.equal(result.alertSuppressedReason, 'snoozed');
+  assert.equal(result.nextStock.alertState, 'triggered');
+  assert.equal(result.nextStock.alertRepeatCount, 0);
+});
+
 test('repeated alert increments the repeat count after cooldown', () => {
   const stock = {
     ...baseStock,
@@ -669,6 +684,36 @@ test('runAlertCheck skips stocks whose alert toggle is off', async () => {
 
   assert.equal(result.results[0].status, 'skipped');
   assert.equal(result.results[0].reason, 'inactive');
+  assert.equal(fetched, false);
+  assert.equal(store.alerts.length, 0);
+});
+
+test('runAlertCheck skips sold positions without fetching quotes', async () => {
+  const store = createMemoryStore({
+    ...baseStock,
+    positionStatus: 'sold',
+    active: false
+  });
+  let fetched = false;
+
+  const result = await runAlertCheck(
+    store,
+    {
+      telegramBotToken: 'token',
+      telegramChatId: 'chat',
+      quoteTimeoutMs: 10000
+    },
+    {
+      now: date('2026-05-11T00:46:30Z'),
+      fetchQuote: async () => {
+        fetched = true;
+        throw new Error('fetchQuote should not be called');
+      }
+    }
+  );
+
+  assert.equal(result.results[0].status, 'skipped');
+  assert.equal(result.results[0].reason, 'sold');
   assert.equal(fetched, false);
   assert.equal(store.alerts.length, 0);
 });

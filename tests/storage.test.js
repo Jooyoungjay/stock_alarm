@@ -234,6 +234,45 @@ test('JsonStore stores and updates per-stock KIS market settings', async () => {
   );
 });
 
+test('JsonStore stores position status and alert snooze metadata', async () => {
+  const store = await createStore();
+  const stock = await store.addStock(stockInput({ positionStatus: 'watch' }));
+
+  assert.equal(stock.positionStatus, 'watch');
+  assert.equal(stock.active, true);
+  assert.equal(stock.soldAt, '');
+  assert.equal(stock.alertSnoozedUntil, null);
+
+  const snoozed = await store.updateStock(stock.id, {
+    alertSnoozedUntil: '2026-05-21T05:00:00.000Z'
+  });
+  assert.equal(snoozed.alertSnoozedUntil, '2026-05-21T05:00:00.000Z');
+
+  const activeSnoozed = await store.updateStock(stock.id, {
+    alertSnoozedUntil: '2026-05-21T06:00:00.000Z',
+    active: true
+  });
+  assert.equal(activeSnoozed.alertSnoozedUntil, '2026-05-21T06:00:00.000Z');
+
+  const resumed = await store.updateStock(stock.id, { active: true });
+  assert.equal(resumed.alertSnoozedUntil, null);
+
+  const sold = await store.updateStock(stock.id, { positionStatus: 'sold' });
+  assert.equal(sold.positionStatus, 'sold');
+  assert.equal(sold.active, false);
+  assert.match(sold.soldAt, /^\d{4}-\d{2}-\d{2}$/);
+  assert.equal(sold.alertSnoozedUntil, null);
+
+  const holding = await store.updateStock(stock.id, {
+    positionStatus: 'holding',
+    active: true,
+    soldAt: ''
+  });
+  assert.equal(holding.positionStatus, 'holding');
+  assert.equal(holding.active, true);
+  assert.equal(holding.soldAt, '');
+});
+
 test('JsonStore records recent KIS and Naver comparison history', async () => {
   const store = await createStore();
   const history = await store.recordKisNaverCompareHistory({

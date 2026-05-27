@@ -20,6 +20,7 @@ out/
 # Local app data
 data/*.json
 data/backups/
+data/visual-regression/
 
 # Logs
 *.log

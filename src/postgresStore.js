@@ -3,6 +3,7 @@ import {
   createBackup as createFileBackup,
   deleteBackup as deleteFileBackup,
   listBackups as listFileBackups,
+  previewBackup as previewFileBackup,
   restoreBackup as restoreFileBackup
 } from './backups.js';
 import { buildDataModelInfo, normalizeStoreEnvelope, touchStoreEnvelope } from './dataModel.js';
@@ -416,6 +417,11 @@ export class PostgresStore {
   async deleteBackup(target) {
     assertBackupDataDir(this.dataDir);
     return deleteFileBackup(this.dataDir, target);
+  }
+
+  async previewBackup(target) {
+    assertBackupDataDir(this.dataDir);
+    return previewFileBackup(this.dataDir, target);
   }
 
   async exportBackupSnapshot() {

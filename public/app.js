@@ -6,17 +6,211 @@ const APP_MODES = Object.freeze({
 });
 
 const ADMIN_TOKEN_STORAGE_KEY = 'stock_alarm_admin_token';
+const CONNECTION_RETRY_DELAY_MS = 1500;
 const KIS_MARKET_DIV_CODE_OPTIONS = Object.freeze([
   { value: '', label: '서버 기본값' },
   { value: 'J', label: 'KRX' },
   { value: 'NX', label: 'NXT' },
   { value: 'UN', label: '통합' }
 ]);
+const CONNECTION_ERROR_MESSAGE = '서버에 연결하지 못했습니다. 캐시된 화면일 수 있습니다.';
+const CONNECTION_ERROR_ACTION_MESSAGE =
+  '서버 연결을 확인하지 못했습니다. 상단 안내에서 다시 연결하거나 캐시를 초기화하세요.';
+const TODAY_ACTION_LIMIT = 5;
+const TODAY_ACTION_SOON_DAYS = 7;
+const TODAY_ACTION_MAX_PER_STOCK = 2;
+const WATCH_VIEW_STORAGE_KEY = 'stock_alarm_watch_view';
+const WATCH_FILTER_OPTIONS = Object.freeze([
+  'all',
+  'attention',
+  'alert',
+  'error',
+  'inactive',
+  'holding',
+  'watch',
+  'sold'
+]);
+const WATCH_SORT_OPTIONS = Object.freeze(['risk', 'distance', 'profit', 'checked', 'name']);
+const DEFAULT_WATCH_FILTER = 'all';
+const DEFAULT_WATCH_SORT = 'risk';
+const CSV_IMPORT_MAX_FILE_SIZE_BYTES = 2 * 1024 * 1024;
+const CSV_STOCK_FIELDS = Object.freeze([
+  { key: 'symbol', label: '종목코드', aliases: ['symbol', 'ticker', '티커', '코드'] },
+  { key: 'displayName', label: '표시이름', aliases: ['displayName', 'display_name', 'name', '종목명', '이름'] },
+  { key: 'positionStatus', label: '종목상태', aliases: ['positionStatus', 'position_status', 'status', '상태'] },
+  { key: 'purchasePrice', label: '매수가', aliases: ['purchasePrice', 'purchase_price', 'averagePrice', '평단가', '평균단가'] },
+  { key: 'quantity', label: '보유수량', aliases: ['quantity', 'qty', '수량'] },
+  { key: 'purchaseDate', label: '매수일', aliases: ['purchaseDate', 'purchase_date', '구매일', '매수일자'] },
+  { key: 'alertType', label: '알림기준', aliases: ['alertType', 'alert_type', '기준'] },
+  { key: 'thresholdPercent', label: '기준비율', aliases: ['thresholdPercent', 'threshold_percent', '하락률', '반납률', '손절률'] },
+  { key: 'targetPrice', label: '직접기준가', aliases: ['targetPrice', 'target_price', '알림기준가'] },
+  { key: 'alertCooldownMinutes', label: '반복분', aliases: ['alertCooldownMinutes', 'alert_cooldown_minutes', 'cooldown', '반복알림분'] },
+  { key: 'kisMarketDivCode', label: 'KIS시장', aliases: ['kisMarketDivCode', 'kis_market_div_code', 'market', '시장'] },
+  { key: 'annualDividendPerShare', label: '주당연배당금', aliases: ['annualDividendPerShare', 'annual_dividend_per_share', '연배당', '주당배당금'] },
+  { key: 'dividendFrequency', label: '배당주기', aliases: ['dividendFrequency', 'dividend_frequency', 'frequency'] },
+  { key: 'dividendMonths', label: '배당지급월', aliases: ['dividendMonths', 'dividend_months', '지급월'] },
+  { key: 'investmentReason', label: '매수이유', aliases: ['investmentReason', 'investment_reason', 'buyReason', 'buy_reason'] },
+  { key: 'investmentTargetPrice', label: '투자목표가', aliases: ['investmentTargetPrice', 'investment_target_price', '목표가'] },
+  { key: 'sellCondition', label: '매도조건', aliases: ['sellCondition', 'sell_condition'] },
+  { key: 'reviewDate', label: '실적체크일', aliases: ['reviewDate', 'review_date', '점검일'] },
+  { key: 'notes', label: '메모', aliases: ['notes', 'note', '기타메모'] },
+  { key: 'active', label: '알림켜짐', aliases: ['active', 'alertActive', 'alert_active', '알림상태'] }
+]);
+const CSV_HEADER_ALIAS_MAP = new Map(
+  CSV_STOCK_FIELDS.flatMap((field) => [field.label, field.key, ...(field.aliases || [])].map((alias) => [
+    String(alias).trim().toLowerCase().replace(/[\s._-]+/g, ''),
+    field.key
+  ]))
+);
+const CSV_EXPORT_FILENAME_PREFIX = 'stock-alarm-stocks';
+const CSV_POSITION_STATUS_ALIASES = Object.freeze({
+  holding: 'holding',
+  hold: 'holding',
+  owned: 'holding',
+  보유: 'holding',
+  보유중: 'holding',
+  watch: 'watch',
+  watchlist: 'watch',
+  관심: 'watch',
+  관심종목: 'watch',
+  sold: 'sold',
+  sell: 'sold',
+  매도: 'sold',
+  매도완료: 'sold'
+});
+const CSV_ALERT_TYPE_ALIASES = Object.freeze({
+  highdrawdown: 'high_drawdown',
+  high: 'high_drawdown',
+  drawdown: 'high_drawdown',
+  최고가: 'high_drawdown',
+  고점: 'high_drawdown',
+  최고가대비하락률: 'high_drawdown',
+  profitretracement: 'profit_retracement',
+  profit: 'profit_retracement',
+  retracement: 'profit_retracement',
+  이익금반납률: 'profit_retracement',
+  이익반납: 'profit_retracement',
+  반납률: 'profit_retracement',
+  purchaseloss: 'purchase_loss',
+  loss: 'purchase_loss',
+  stoploss: 'purchase_loss',
+  손절: 'purchase_loss',
+  손절률: 'purchase_loss',
+  매수가대비손절률: 'purchase_loss',
+  targetprice: 'target_price',
+  target: 'target_price',
+  direct: 'target_price',
+  직접기준가: 'target_price',
+  알림기준가: 'target_price'
+});
+const CSV_DIVIDEND_FREQUENCY_ALIASES = Object.freeze({
+  monthly: 'monthly',
+  month: 'monthly',
+  월배당: 'monthly',
+  quarterly: 'quarterly',
+  quarter: 'quarterly',
+  분기배당: 'quarterly',
+  semiannual: 'semiannual',
+  semiannually: 'semiannual',
+  halfyear: 'semiannual',
+  반기배당: 'semiannual',
+  annual: 'annual',
+  yearly: 'annual',
+  연배당: 'annual',
+  custom: 'custom',
+  직접: 'custom',
+  직접입력: 'custom'
+});
+const CSV_BOOLEAN_ALIASES = Object.freeze({
+  true: true,
+  t: true,
+  yes: true,
+  y: true,
+  on: true,
+  '1': true,
+  켜짐: true,
+  사용: true,
+  예: true,
+  false: false,
+  f: false,
+  no: false,
+  n: false,
+  off: false,
+  '0': false,
+  꺼짐: false,
+  중지: false,
+  아니오: false
+});
 
 function getAppMode() {
   const pathname = window.location.pathname.replace(/\/+$/, '') || '/';
   return pathname === '/admin' ? APP_MODES.ADMIN : APP_MODES.USER;
 }
+
+function normalizeWatchFilter(value) {
+  return WATCH_FILTER_OPTIONS.includes(value) ? value : DEFAULT_WATCH_FILTER;
+}
+
+function normalizeWatchSort(value) {
+  return WATCH_SORT_OPTIONS.includes(value) ? value : DEFAULT_WATCH_SORT;
+}
+
+function loadWatchViewPreference() {
+  const fallback = {
+    filter: DEFAULT_WATCH_FILTER,
+    sort: DEFAULT_WATCH_SORT
+  };
+
+  try {
+    const raw = window.localStorage?.getItem(WATCH_VIEW_STORAGE_KEY);
+
+    if (!raw) {
+      return fallback;
+    }
+
+    const parsed = JSON.parse(raw);
+
+    return {
+      filter: normalizeWatchFilter(parsed?.filter),
+      sort: normalizeWatchSort(parsed?.sort)
+    };
+  } catch {
+    return fallback;
+  }
+}
+
+function saveWatchViewPreference() {
+  try {
+    window.localStorage?.setItem(
+      WATCH_VIEW_STORAGE_KEY,
+      JSON.stringify({
+        filter: normalizeWatchFilter(state.watchFilter),
+        sort: normalizeWatchSort(state.watchSort),
+        savedAt: new Date().toISOString()
+      })
+    );
+  } catch {
+    // Browsers can block localStorage in private or restricted contexts.
+  }
+}
+
+function setWatchFilter(value, options = {}) {
+  state.watchFilter = normalizeWatchFilter(value);
+
+  if (options.persist !== false) {
+    saveWatchViewPreference();
+  }
+}
+
+function setWatchSort(value, options = {}) {
+  state.watchSort = normalizeWatchSort(value);
+
+  if (options.persist !== false) {
+    saveWatchViewPreference();
+  }
+}
+
+const initialWatchViewPreference = loadWatchViewPreference();
 
 const state = {
   appMode: getAppMode(),
@@ -27,6 +221,7 @@ const state = {
   roadmap: null,
   dividendCalendar: null,
   quoteProviderStats: null,
+  observationIssues: null,
   kisQuoteSmokeTest: null,
   kisNaverQuoteComparison: null,
   kisNaverCompareHistory: [],
@@ -36,12 +231,16 @@ const state = {
   adminAuthRequired: false,
   adminAuthenticated: false,
   backupRetention: 0,
+  autoBackup: null,
+  connectionOnline: navigator.onLine !== false,
+  lastServerSyncAt: null,
+  lastConnectionError: '',
   loading: false,
   registrationModalOpen: false,
   registrationStep: 1,
   dividendCalendarFilter: 'all',
-  watchFilter: 'all',
-  watchSort: 'risk',
+  watchFilter: initialWatchViewPreference.filter,
+  watchSort: initialWatchViewPreference.sort,
   editingStockId: null
 };
 
@@ -59,8 +258,11 @@ const elements = {
   alertList: document.querySelector('#alertList'),
   message: document.querySelector('#message'),
   adminMessage: document.querySelector('#adminMessage'),
+  connectionBanner: document.querySelector('#connectionBanner'),
   watchSummaryBar: document.querySelector('#watchSummaryBar'),
   portfolioSummaryBar: document.querySelector('#portfolioSummaryBar'),
+  todayActionPanel: document.querySelector('#todayActionPanel'),
+  sellDecisionPanel: document.querySelector('#sellDecisionPanel'),
   quoteDiagnosticsPanel: document.querySelector('#quoteDiagnosticsPanel'),
   dividendDiagnosticsPanel: document.querySelector('#dividendDiagnosticsPanel'),
   dividendCalendarPanel: document.querySelector('#dividendCalendarPanel'),
@@ -79,6 +281,8 @@ const elements = {
   clearAdminTokenButton: document.querySelector('#clearAdminTokenButton'),
   roadmapPanel: document.querySelector('#roadmapPanel'),
   roadmapSummary: document.querySelector('#roadmapSummary'),
+  observationIssuesPanel: document.querySelector('#observationIssuesPanel'),
+  observationIssuesSummary: document.querySelector('#observationIssuesSummary'),
   summaryText: document.querySelector('#summaryText'),
   telegramStatus: document.querySelector('#telegramStatus'),
   quoteStatus: document.querySelector('#quoteStatus'),
@@ -95,12 +299,19 @@ const elements = {
   registerSteps: document.querySelectorAll('[data-register-step]'),
   checkNowButton: document.querySelector('#checkNowButton'),
   refreshDividendsButton: document.querySelector('#refreshDividendsButton'),
+  downloadCsvTemplateButton: document.querySelector('#downloadCsvTemplateButton'),
+  exportCsvButton: document.querySelector('#exportCsvButton'),
+  importCsvButton: document.querySelector('#importCsvButton'),
+  csvImportInput: document.querySelector('#csvImportInput'),
+  csvImportResult: document.querySelector('#csvImportResult'),
   sendBriefingButton: document.querySelector('#sendBriefingButton'),
   testTelegramButton: document.querySelector('#testTelegramButton'),
   createBackupButton: document.querySelector('#createBackupButton'),
+  runAutoBackupButton: document.querySelector('#runAutoBackupButton'),
   refreshBackupsButton: document.querySelector('#refreshBackupsButton'),
   refreshServerStatusButton: document.querySelector('#refreshServerStatusButton'),
   refreshRoadmapButton: document.querySelector('#refreshRoadmapButton'),
+  refreshObservationIssuesButton: document.querySelector('#refreshObservationIssuesButton'),
   kisSmokeTestForm: document.querySelector('#kisSmokeTestForm'),
   kisSmokeSymbolInput: document.querySelector('#kisSmokeSymbolInput'),
   kisSmokeMarketSelect: document.querySelector('#kisSmokeMarketSelect'),
@@ -149,7 +360,10 @@ elements.alertRuleSummary?.addEventListener('click', (event) => {
 });
 
 elements.form.addEventListener('input', (event) => {
-  if (event.target === elements.form.elements.thresholdPercent) {
+  if (
+    event.target === elements.form.elements.thresholdPercent ||
+    event.target === elements.form.elements.targetPrice
+  ) {
     renderAlertRuleSummary();
   }
 
@@ -217,6 +431,17 @@ window.addEventListener('keydown', (event) => {
     closeRegistrationModal();
   }
 });
+window.addEventListener('online', () => {
+  state.connectionOnline = true;
+  state.lastConnectionError = '';
+  updateConnectionBanner();
+  window.setTimeout(() => {
+    void retryConnection();
+  }, CONNECTION_RETRY_DELAY_MS);
+});
+window.addEventListener('offline', () => {
+  setConnectionProblem('브라우저가 오프라인 상태입니다.');
+});
 
 elements.adminAuthForm?.addEventListener('submit', async (event) => {
   event.preventDefault();
@@ -270,6 +495,7 @@ elements.form.addEventListener('submit', async (event) => {
     elements.form.reset();
     elements.form.elements.thresholdPercent.value = 5;
     elements.form.elements.alertCooldownMinutes.value = 30;
+    elements.form.elements.positionStatus.value = 'holding';
     syncAlertTypeControls(elements.form);
     hideSymbolSuggestions();
     renderQuotePreview(null);
@@ -315,6 +541,31 @@ elements.refreshDividendsButton.addEventListener('click', async () => {
   });
 });
 
+elements.downloadCsvTemplateButton?.addEventListener('click', () => {
+  downloadCsvTemplate();
+});
+
+elements.exportCsvButton?.addEventListener('click', () => {
+  exportStocksCsv();
+});
+
+elements.importCsvButton?.addEventListener('click', () => {
+  elements.csvImportInput?.click();
+});
+
+elements.csvImportInput?.addEventListener('change', async (event) => {
+  const file = event.target.files?.[0];
+
+  if (!file) {
+    return;
+  }
+
+  await withBusy(elements.importCsvButton, async () => {
+    await importStocksCsv(file);
+  });
+  event.target.value = '';
+});
+
 elements.dividendCalendarPanel?.addEventListener('click', (event) => {
   const button = event.target.closest('[data-dividend-calendar-filter]');
 
@@ -353,6 +604,7 @@ elements.createBackupButton.addEventListener('click', async () => {
   await withBusy(elements.createBackupButton, async () => {
     const result = await api('/api/backups', { method: 'POST' });
     state.backups = result.backups || [];
+    state.autoBackup = result.autoBackup || state.autoBackup;
     renderBackups();
 
     if (result.backup?.created === false) {
@@ -361,6 +613,17 @@ elements.createBackupButton.addEventListener('click', async () => {
     }
 
     showMessage('현재 데이터를 백업했습니다.');
+  });
+});
+
+elements.runAutoBackupButton?.addEventListener('click', async () => {
+  await withBusy(elements.runAutoBackupButton, async () => {
+    const result = await api('/api/backups/auto-run', { method: 'POST' });
+    state.backups = result.backups || [];
+    state.backupRetention = result.retention || state.backupRetention;
+    state.autoBackup = result.autoBackup || state.autoBackup;
+    renderBackups();
+    showMessage('자동 백업을 즉시 실행했습니다.');
   });
 });
 
@@ -374,6 +637,10 @@ elements.refreshServerStatusButton.addEventListener('click', async () => {
 
 elements.refreshRoadmapButton.addEventListener('click', async () => {
   await withBusy(elements.refreshRoadmapButton, loadRoadmap);
+});
+
+elements.refreshObservationIssuesButton?.addEventListener('click', async () => {
+  await withBusy(elements.refreshObservationIssuesButton, loadObservationIssues);
 });
 
 elements.kisSmokeTestForm?.addEventListener('submit', async (event) => {
@@ -412,13 +679,13 @@ elements.kisNaverCompareHistoryPanel?.addEventListener('click', async (event) =>
 
 elements.watchFilterButtons.forEach((button) => {
   button.addEventListener('click', () => {
-    state.watchFilter = button.dataset.watchFilter || 'all';
+    setWatchFilter(button.dataset.watchFilter);
     renderStocks();
   });
 });
 
 elements.watchSortSelect.addEventListener('change', () => {
-  state.watchSort = elements.watchSortSelect.value || 'risk';
+  setWatchSort(elements.watchSortSelect.value);
   renderStocks();
 });
 
@@ -449,7 +716,7 @@ async function loadAdminSession() {
     state.adminAuthRequired = true;
     state.adminAuthenticated = false;
     renderAdminAuth();
-    showMessage(error.message, true);
+    showErrorMessage(error);
     return false;
   }
 }
@@ -497,7 +764,7 @@ async function loadData() {
     renderStocks();
     renderDividendCalendar(state.dividendCalendar);
     renderQuoteDiagnostics(data.quoteProviderStats);
-    renderDividendDiagnostics(data.lastDividendRefresh);
+    renderDividendDiagnostics(data.lastDividendRefresh, data);
     renderAlerts();
     renderKisNaverCompareResult(state.kisNaverQuoteComparison);
     renderKisNaverCompareHistory(
@@ -514,7 +781,7 @@ async function loadData() {
     }
   } catch (error) {
     handleAdminAuthFailure(error);
-    showMessage(error.message, true);
+    showErrorMessage(error);
   }
 }
 
@@ -529,15 +796,27 @@ async function loadRoadmap() {
   }
 }
 
+async function loadObservationIssues() {
+  try {
+    const data = await api('/api/observation-issues');
+    state.observationIssues = data.observationIssues || null;
+    renderObservationIssues(state.observationIssues);
+  } catch (error) {
+    handleAdminAuthFailure(error);
+    renderObservationIssuesError(error);
+  }
+}
+
 async function loadBackups() {
   try {
     const data = await api('/api/backups');
     state.backups = data.backups || [];
     state.backupRetention = data.retention || 0;
+    state.autoBackup = data.autoBackup || null;
     renderBackups();
   } catch (error) {
     handleAdminAuthFailure(error);
-    showMessage(error.message, true);
+    showErrorMessage(error);
   }
 }
 
@@ -694,10 +973,22 @@ async function api(path, options = {}) {
     headers['x-admin-token'] = adminToken;
   }
 
-  const response = await fetch(path, {
-    ...options,
-    headers
-  });
+  let response;
+
+  try {
+    response = await fetch(path, {
+      ...options,
+      headers
+    });
+  } catch (error) {
+    setConnectionProblem(CONNECTION_ERROR_MESSAGE);
+    const wrapped = new Error(CONNECTION_ERROR_MESSAGE);
+    wrapped.isConnectionError = true;
+    wrapped.cause = error;
+    throw wrapped;
+  }
+
+  markConnectionOk();
   const payload = await response.json().catch(() => ({}));
 
   if (!response.ok) {
@@ -709,6 +1000,82 @@ async function api(path, options = {}) {
   }
 
   return payload;
+}
+
+function markConnectionOk() {
+  state.connectionOnline = true;
+  state.lastServerSyncAt = new Date().toISOString();
+  state.lastConnectionError = '';
+  updateConnectionBanner();
+}
+
+function setConnectionProblem(message) {
+  state.connectionOnline = false;
+  state.lastConnectionError = message || '서버 연결이 끊겼습니다.';
+  updateConnectionBanner();
+}
+
+async function retryConnection() {
+  try {
+    if (isAdminMode()) {
+      const canLoadAdminData = await loadAdminSession();
+
+      if (canLoadAdminData) {
+        await loadAdminData();
+      }
+
+      return;
+    }
+
+    await loadData();
+  } catch (error) {
+    showErrorMessage(error);
+  }
+}
+
+function updateConnectionBanner() {
+  if (!elements.connectionBanner) {
+    return;
+  }
+
+  const hasProblem = !state.connectionOnline || state.lastConnectionError;
+  elements.connectionBanner.hidden = !hasProblem;
+
+  if (!hasProblem) {
+    elements.connectionBanner.innerHTML = '';
+    return;
+  }
+
+  const lastSync = state.lastServerSyncAt ? `마지막 서버 동기화 ${formatDate(state.lastServerSyncAt)}` : '서버 동기화 전';
+  elements.connectionBanner.innerHTML = `
+    <div>
+      <strong>서버 연결을 확인하지 못했습니다.</strong>
+      <span>${escapeHtml(state.lastConnectionError || '캐시된 화면을 보고 있을 수 있습니다.')} · ${escapeHtml(lastSync)}</span>
+    </div>
+    <div class="connection-actions">
+      <button type="button" class="btn btn-outline btn-sm secondary-button" data-connection-retry>다시 연결</button>
+      <button type="button" class="btn btn-ghost btn-sm secondary-button" data-cache-clear>캐시 초기화</button>
+    </div>
+  `;
+
+  elements.connectionBanner.querySelector('[data-connection-retry]')?.addEventListener('click', () => {
+    void retryConnection();
+  });
+  elements.connectionBanner.querySelector('[data-cache-clear]')?.addEventListener('click', clearAppCache);
+}
+
+async function clearAppCache() {
+  if ('serviceWorker' in navigator) {
+    const registrations = await navigator.serviceWorker.getRegistrations();
+    await Promise.all(registrations.map((registration) => registration.unregister()));
+  }
+
+  if ('caches' in window) {
+    const keys = await caches.keys();
+    await Promise.all(keys.map((key) => caches.delete(key)));
+  }
+
+  window.location.reload();
 }
 
 function isAdminMode() {
@@ -890,11 +1257,41 @@ function renderKisMarketDivCodeOptions(selectedValue) {
   ).join('');
 }
 
+function normalizePositionStatus(value) {
+  const normalized = String(value || 'holding').trim().toLowerCase();
+  return ['holding', 'watch', 'sold'].includes(normalized) ? normalized : 'holding';
+}
+
+function getPositionStatusLabel(value) {
+  const labels = {
+    holding: '보유중',
+    watch: '관심종목',
+    sold: '매도 완료'
+  };
+
+  return labels[normalizePositionStatus(value)] || labels.holding;
+}
+
+function renderPositionStatusOptions(selectedValue) {
+  const selected = normalizePositionStatus(selectedValue);
+  return [
+    ['holding', '보유중'],
+    ['watch', '관심종목'],
+    ['sold', '매도 완료']
+  ]
+    .map(
+      ([value, label]) =>
+        `<option value="${value}" ${selected === value ? 'selected' : ''}>${escapeHtml(label)}</option>`
+    )
+    .join('');
+}
+
 function normalizeStockPayload(payload) {
   const normalized = { ...payload };
 
   normalized.alertType = normalized.alertType || 'high_drawdown';
   normalized.kisMarketDivCode = normalizeKisMarketDivCode(normalized.kisMarketDivCode);
+  normalized.positionStatus = normalizePositionStatus(normalized.positionStatus);
   normalized.purchasePrice = normalized.purchasePrice ? Number(normalized.purchasePrice) : null;
   normalized.quantity = normalized.quantity ? Number(normalized.quantity) : null;
   normalized.annualDividendPerShare = normalized.annualDividendPerShare
@@ -920,6 +1317,600 @@ function normalizeStockPayload(payload) {
   return normalized;
 }
 
+function exportStocksCsv() {
+  renderCsvImportResult(null);
+
+  const rows = [
+    CSV_STOCK_FIELDS.map((field) => field.label),
+    ...state.stocks.map((stock) => CSV_STOCK_FIELDS.map((field) => getCsvStockValue(stock, field.key)))
+  ];
+  const filename = `${CSV_EXPORT_FILENAME_PREFIX}-${getTodayInputValue().replaceAll('-', '')}.csv`;
+
+  downloadTextFile(filename, `\uFEFF${createCsvText(rows)}`, 'text/csv;charset=utf-8');
+  showMessage(`${state.stocks.length}개 종목을 CSV로 내보냈습니다.`);
+}
+
+function downloadCsvTemplate() {
+  const rows = [
+    CSV_STOCK_FIELDS.map((field) => field.label),
+    [
+      '336260',
+      '두산퓨얼셀',
+      '보유중',
+      '88779',
+      '10',
+      '',
+      '이익금 반납률',
+      '10',
+      '',
+      '30',
+      'KRX',
+      '1200',
+      '분기배당',
+      '3,6,9,12',
+      '매수 이유',
+      '120000',
+      '매도 조건',
+      '2026-06-30',
+      '메모',
+      '켜짐'
+    ]
+  ];
+
+  renderCsvImportResult(null);
+  downloadTextFile('stock-alarm-import-template.csv', `\uFEFF${createCsvText(rows)}`, 'text/csv;charset=utf-8');
+  showMessage('CSV 양식을 내려받았습니다.');
+}
+
+async function importStocksCsv(file) {
+  renderCsvImportResult(null);
+
+  if (file.size > CSV_IMPORT_MAX_FILE_SIZE_BYTES) {
+    renderCsvImportResult({
+      status: 'error',
+      title: 'CSV 파일이 너무 큽니다.',
+      detail: '2MB 이하 파일만 가져올 수 있습니다.'
+    });
+    showMessage('CSV 파일이 너무 큽니다.', true);
+    return;
+  }
+
+  const text = await file.text();
+  let rows;
+
+  try {
+    rows = parseCsvText(text);
+  } catch (error) {
+    renderCsvImportResult({
+      status: 'error',
+      title: 'CSV 파일을 읽지 못했습니다.',
+      detail: getDisplayErrorMessage(error)
+    });
+    showMessage('CSV 파일을 읽지 못했습니다.', true);
+    return;
+  }
+
+  const validation = validateCsvStockRows(rows);
+
+  if (validation.errors.length) {
+    renderCsvImportResult({
+      status: 'error',
+      title: `${validation.errors.length}개 오류가 있어 가져오기를 중단했습니다.`,
+      detail: '오류를 수정한 뒤 다시 가져오세요. 기존 종목은 변경하지 않았습니다.',
+      items: validation.errors.slice(0, 8)
+    });
+    showMessage('CSV 오류를 먼저 수정해야 합니다.', true);
+    return;
+  }
+
+  if (!validation.payloads.length) {
+    renderCsvImportResult({
+      status: 'error',
+      title: '가져올 종목이 없습니다.',
+      detail: '헤더 아래에 종목 행을 1개 이상 입력하세요.'
+    });
+    showMessage('가져올 종목이 없습니다.', true);
+    return;
+  }
+
+  const confirmed = window.confirm(
+    `검증된 ${validation.payloads.length}개 종목을 등록할까요?\n기존 종목은 유지되고, 중복 종목은 가져오기 전에 차단됩니다.`
+  );
+
+  if (!confirmed) {
+    renderCsvImportResult({
+      status: 'ok',
+      title: 'CSV 가져오기를 취소했습니다.',
+      detail: '검증은 통과했지만 등록을 실행하지 않았습니다.'
+    });
+    showMessage('CSV 가져오기를 취소했습니다.', true);
+    return;
+  }
+
+  let importedCount = 0;
+
+  for (const item of validation.payloads) {
+    try {
+      await api('/api/stocks', {
+        method: 'POST',
+        body: JSON.stringify(item.payload)
+      });
+      importedCount += 1;
+    } catch (error) {
+      renderCsvImportResult({
+        status: 'error',
+        title: `${item.rowNumber}행 등록 중 오류가 발생했습니다.`,
+        detail: getDisplayErrorMessage(error)
+      });
+      throw new Error(`${item.rowNumber}행 등록 실패: ${getDisplayErrorMessage(error)}`);
+    }
+  }
+
+  await loadData();
+  renderCsvImportResult({
+    status: 'ok',
+    title: `${importedCount}개 종목을 가져왔습니다.`,
+    detail: '가져온 종목은 기존 등록 흐름과 같은 저장 규칙으로 처리했습니다.'
+  });
+  showMessage(`${importedCount}개 종목을 CSV에서 가져왔습니다.`);
+}
+
+function validateCsvStockRows(rows) {
+  const dataRows = rows.filter((row) => !isBlankCsvRow(row));
+  const errors = [];
+  const payloads = [];
+
+  if (!dataRows.length) {
+    return { errors: ['CSV 파일에 헤더와 종목 행이 없습니다.'], payloads };
+  }
+
+  const [headerRow, ...bodyRows] = dataRows;
+  const headerKeys = headerRow.map(mapCsvHeaderKey);
+  const knownHeaderKeys = headerKeys.filter(Boolean);
+  const seenHeaders = new Set();
+
+  if (!knownHeaderKeys.length) {
+    errors.push('헤더를 인식하지 못했습니다. CSV 양식을 내려받아 헤더를 맞춰 주세요.');
+  }
+
+  for (const key of knownHeaderKeys) {
+    if (seenHeaders.has(key)) {
+      errors.push(`중복 헤더가 있습니다: ${getCsvFieldLabel(key)}`);
+    }
+    seenHeaders.add(key);
+  }
+
+  if (!knownHeaderKeys.includes('symbol')) {
+    errors.push('필수 헤더가 없습니다: 종목코드');
+  }
+
+  const existingSymbols = new Set(state.stocks.map((stock) => normalizeSymbolForCompare(stock.symbol)));
+  const importedSymbols = new Set();
+
+  bodyRows.forEach((row, index) => {
+    const rowNumber = index + 2;
+
+    if (isBlankCsvRow(row)) {
+      return;
+    }
+
+    const raw = {};
+    headerKeys.forEach((key, cellIndex) => {
+      if (key && raw[key] === undefined) {
+        raw[key] = row[cellIndex] ?? '';
+      }
+    });
+
+    const result = buildCsvStockPayload(raw, rowNumber, existingSymbols, importedSymbols);
+
+    if (result.errors.length) {
+      errors.push(...result.errors);
+      return;
+    }
+
+    payloads.push({ rowNumber, payload: result.payload });
+  });
+
+  if (!bodyRows.length) {
+    errors.push('헤더 아래에 종목 행이 없습니다.');
+  }
+
+  return { errors, payloads: errors.length ? [] : payloads };
+}
+
+function buildCsvStockPayload(raw, rowNumber, existingSymbols, importedSymbols) {
+  const errors = [];
+  const symbol = cleanCsvText(raw.symbol).toUpperCase();
+  const comparableSymbol = normalizeSymbolForCompare(symbol);
+
+  if (!symbol) {
+    errors.push('종목코드를 입력하세요.');
+  } else if (existingSymbols.has(comparableSymbol)) {
+    errors.push(`${symbol}은 이미 등록된 종목입니다.`);
+  } else if (importedSymbols.has(comparableSymbol)) {
+    errors.push(`${symbol}이 CSV 안에서 중복되었습니다.`);
+  }
+
+  const alertType = normalizeCsvAlertType(raw.alertType, errors);
+  const positionStatus = normalizeCsvPositionStatus(raw.positionStatus, errors);
+  const purchasePrice = parseCsvPositiveNumber(raw.purchasePrice, '매수가', errors);
+  const quantity = parseCsvPositiveNumber(raw.quantity, '보유수량', errors);
+  const annualDividendPerShare = parseCsvPositiveNumber(raw.annualDividendPerShare, '주당연배당금', errors);
+  const thresholdPercent = parseCsvThresholdPercent(raw.thresholdPercent, errors);
+  const targetPrice = parseCsvPositiveNumber(raw.targetPrice, '직접기준가', errors);
+  const alertCooldownMinutes = parseCsvPositiveInteger(raw.alertCooldownMinutes, '반복분', errors) ?? 30;
+  const investmentTargetPrice = parseCsvPositiveNumber(raw.investmentTargetPrice, '투자목표가', errors);
+  const purchaseDate = parseCsvDate(raw.purchaseDate, '매수일', errors);
+  const reviewDate = parseCsvDate(raw.reviewDate, '실적체크일', errors);
+  const dividendFrequency = normalizeCsvDividendFrequency(raw.dividendFrequency, errors);
+  const dividendMonths = normalizeCsvDividendMonths(raw.dividendMonths, errors);
+  const kisMarketDivCode = normalizeKisMarketDivCode(raw.kisMarketDivCode);
+  const active = parseCsvBoolean(raw.active, '알림켜짐', errors);
+
+  if (
+    cleanCsvText(raw.kisMarketDivCode) &&
+    !kisMarketDivCode &&
+    !['서버기본값', '기본값', 'server', 'default'].includes(normalizeCsvToken(raw.kisMarketDivCode))
+  ) {
+    errors.push('KIS시장은 KRX, NXT, 통합, 서버 기본값 중 하나로 입력하세요.');
+  }
+
+  if ((alertType === 'profit_retracement' || alertType === 'purchase_loss') && purchasePrice === null) {
+    errors.push(`${getAlertTypeLabel({ alertType })} 기준은 매수가가 필요합니다.`);
+  }
+
+  if (alertType === 'target_price' && targetPrice === null) {
+    errors.push('직접 기준가 알림은 직접기준가가 필요합니다.');
+  }
+
+  if (!errors.length && comparableSymbol) {
+    importedSymbols.add(comparableSymbol);
+  }
+
+  return {
+    errors: errors.map((message) => `${rowNumber}행: ${message}`),
+    payload: {
+      symbol,
+      displayName: cleanCsvText(raw.displayName),
+      positionStatus,
+      purchasePrice,
+      quantity,
+      purchaseDate,
+      alertType,
+      ...(thresholdPercent === null ? {} : { thresholdPercent }),
+      targetPrice,
+      alertCooldownMinutes,
+      kisMarketDivCode,
+      annualDividendPerShare,
+      dividendFrequency,
+      dividendMonths,
+      investmentReason: cleanCsvText(raw.investmentReason),
+      investmentTargetPrice,
+      sellCondition: cleanCsvText(raw.sellCondition),
+      reviewDate,
+      notes: cleanCsvText(raw.notes),
+      ...(active === null ? {} : { active })
+    }
+  };
+}
+
+function parseCsvText(text) {
+  const source = String(text || '').replace(/^\uFEFF/, '');
+  const rows = [];
+  let row = [];
+  let field = '';
+  let inQuotes = false;
+
+  for (let index = 0; index < source.length; index += 1) {
+    const char = source[index];
+    const nextChar = source[index + 1];
+
+    if (inQuotes) {
+      if (char === '"' && nextChar === '"') {
+        field += '"';
+        index += 1;
+      } else if (char === '"') {
+        inQuotes = false;
+      } else {
+        field += char;
+      }
+      continue;
+    }
+
+    if (char === '"') {
+      inQuotes = true;
+    } else if (char === ',') {
+      row.push(field);
+      field = '';
+    } else if (char === '\r' || char === '\n') {
+      row.push(field);
+      rows.push(row);
+      row = [];
+      field = '';
+
+      if (char === '\r' && nextChar === '\n') {
+        index += 1;
+      }
+    } else {
+      field += char;
+    }
+  }
+
+  if (inQuotes) {
+    throw new Error('CSV 따옴표가 닫히지 않았습니다.');
+  }
+
+  if (field || row.length || source.endsWith(',')) {
+    row.push(field);
+    rows.push(row);
+  }
+
+  return rows;
+}
+
+function createCsvText(rows) {
+  return `${rows.map((row) => row.map(escapeCsvValue).join(',')).join('\r\n')}\r\n`;
+}
+
+function escapeCsvValue(value) {
+  const text = Array.isArray(value) ? value.join(',') : String(value ?? '');
+
+  if (/[",\r\n]/.test(text)) {
+    return `"${text.replaceAll('"', '""')}"`;
+  }
+
+  return text;
+}
+
+function downloadTextFile(filename, content, type) {
+  const blob = new Blob([content], { type });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement('a');
+
+  link.href = url;
+  link.download = filename;
+  document.body.append(link);
+  link.click();
+  link.remove();
+  window.setTimeout(() => URL.revokeObjectURL(url), 0);
+}
+
+function getCsvStockValue(stock, key) {
+  if (key === 'active') {
+    return stock.active === false ? '꺼짐' : '켜짐';
+  }
+
+  if (key === 'positionStatus') {
+    return getPositionStatusLabel(stock.positionStatus);
+  }
+
+  if (key === 'alertType') {
+    return getAlertTypeLabel(stock);
+  }
+
+  if (key === 'kisMarketDivCode') {
+    return formatKisMarketDivCodeLabel(stock.kisMarketDivCode);
+  }
+
+  if (key === 'dividendFrequency') {
+    return getDividendFrequencyLabel(stock.dividendFrequency);
+  }
+
+  if (key === 'dividendMonths') {
+    return formatDividendMonthInput(stock.dividendMonths);
+  }
+
+  return stock[key] ?? '';
+}
+
+function mapCsvHeaderKey(value) {
+  return CSV_HEADER_ALIAS_MAP.get(normalizeCsvToken(value)) || '';
+}
+
+function getCsvFieldLabel(key) {
+  return CSV_STOCK_FIELDS.find((field) => field.key === key)?.label || key;
+}
+
+function cleanCsvText(value) {
+  return String(value ?? '').trim();
+}
+
+function normalizeCsvToken(value) {
+  return cleanCsvText(value).toLowerCase().replace(/[\s._-]+/g, '');
+}
+
+function isBlankCsvRow(row) {
+  return !row.some((cell) => cleanCsvText(cell));
+}
+
+function normalizeCsvPositionStatus(value, errors) {
+  const text = cleanCsvText(value);
+
+  if (!text) {
+    return 'holding';
+  }
+
+  const normalized = CSV_POSITION_STATUS_ALIASES[normalizeCsvToken(text)];
+
+  if (!normalized) {
+    errors.push('종목상태는 보유중, 관심종목, 매도 완료 중 하나로 입력하세요.');
+    return 'holding';
+  }
+
+  return normalized;
+}
+
+function normalizeCsvAlertType(value, errors) {
+  const text = cleanCsvText(value);
+
+  if (!text) {
+    return 'high_drawdown';
+  }
+
+  const normalized = CSV_ALERT_TYPE_ALIASES[normalizeCsvToken(text)] || text;
+  const allowed = ['high_drawdown', 'profit_retracement', 'purchase_loss', 'target_price'];
+
+  if (!allowed.includes(normalized)) {
+    errors.push('알림기준은 최고가 대비 하락률, 이익금 반납률, 매수가 대비 손절률, 직접 기준가 중 하나로 입력하세요.');
+    return 'high_drawdown';
+  }
+
+  return normalized;
+}
+
+function normalizeCsvDividendFrequency(value, errors) {
+  const text = cleanCsvText(value);
+
+  if (!text || text === '-') {
+    return '';
+  }
+
+  const normalized = CSV_DIVIDEND_FREQUENCY_ALIASES[normalizeCsvToken(text)] || text.toLowerCase();
+  const allowed = ['', 'monthly', 'quarterly', 'semiannual', 'annual', 'custom'];
+
+  if (!allowed.includes(normalized)) {
+    errors.push('배당주기는 월배당, 분기배당, 반기배당, 연배당, 직접 입력 중 하나로 입력하세요.');
+    return '';
+  }
+
+  return normalized;
+}
+
+function normalizeCsvDividendMonths(value, errors) {
+  const text = cleanCsvText(value);
+
+  if (!text) {
+    return '';
+  }
+
+  const rawMonths = text.split(/[\s,]+/).filter(Boolean);
+  const months = rawMonths.map((item) => Number(item));
+
+  if (!rawMonths.length || months.some((month) => !Number.isInteger(month) || month < 1 || month > 12)) {
+    errors.push('배당지급월은 1부터 12까지 숫자를 쉼표로 구분해 입력하세요.');
+    return '';
+  }
+
+  return [...new Set(months)].sort((left, right) => left - right).join(',');
+}
+
+function parseCsvPositiveNumber(value, label, errors) {
+  const text = cleanCsvText(value);
+
+  if (!text) {
+    return null;
+  }
+
+  const number = Number(text.replaceAll(',', ''));
+
+  if (!Number.isFinite(number) || number <= 0) {
+    errors.push(`${label}은 0보다 큰 숫자로 입력하세요.`);
+    return null;
+  }
+
+  return number;
+}
+
+function parseCsvPositiveInteger(value, label, errors) {
+  const number = parseCsvPositiveNumber(value, label, errors);
+
+  if (number === null) {
+    return null;
+  }
+
+  if (!Number.isInteger(number)) {
+    errors.push(`${label}은 정수로 입력하세요.`);
+    return null;
+  }
+
+  return number;
+}
+
+function parseCsvThresholdPercent(value, errors) {
+  const text = cleanCsvText(value);
+
+  if (!text) {
+    return null;
+  }
+
+  const number = Number(text.replaceAll(',', ''));
+
+  if (!Number.isFinite(number) || number <= 0 || number >= 100) {
+    errors.push('기준비율은 0보다 크고 100보다 작은 숫자로 입력하세요.');
+    return null;
+  }
+
+  return number;
+}
+
+function parseCsvDate(value, label, errors) {
+  const text = cleanCsvText(value);
+
+  if (!text) {
+    return '';
+  }
+
+  const compact = text.replace(/\s+/g, '');
+  const match = compact.match(/^(\d{4})[-/.](\d{1,2})[-/.](\d{1,2})$/);
+
+  if (!match) {
+    errors.push(`${label}은 YYYY-MM-DD 형식으로 입력하세요.`);
+    return '';
+  }
+
+  const dateKey = `${match[1]}-${match[2].padStart(2, '0')}-${match[3].padStart(2, '0')}`;
+  const parsed = new Date(`${dateKey}T00:00:00.000Z`);
+
+  if (!Number.isFinite(parsed.getTime()) || parsed.toISOString().slice(0, 10) !== dateKey) {
+    errors.push(`${label} 날짜가 올바르지 않습니다.`);
+    return '';
+  }
+
+  return dateKey;
+}
+
+function parseCsvBoolean(value, label, errors) {
+  const text = cleanCsvText(value);
+
+  if (!text) {
+    return null;
+  }
+
+  const token = normalizeCsvToken(text);
+
+  if (Object.prototype.hasOwnProperty.call(CSV_BOOLEAN_ALIASES, token)) {
+    return CSV_BOOLEAN_ALIASES[token];
+  }
+
+  errors.push(`${label}은 켜짐/꺼짐 또는 true/false로 입력하세요.`);
+  return null;
+}
+
+function renderCsvImportResult(result) {
+  if (!elements.csvImportResult) {
+    return;
+  }
+
+  if (!result) {
+    elements.csvImportResult.hidden = true;
+    elements.csvImportResult.className = 'csv-import-result';
+    elements.csvImportResult.innerHTML = '';
+    return;
+  }
+
+  const items = Array.isArray(result.items) && result.items.length
+    ? `<ul>${result.items.map((item) => `<li>${escapeHtml(item)}</li>`).join('')}</ul>`
+    : '';
+
+  elements.csvImportResult.hidden = false;
+  elements.csvImportResult.className = `csv-import-result ${result.status === 'error' ? 'error' : 'ok'}`;
+  elements.csvImportResult.innerHTML = `
+    <strong>${escapeHtml(result.title || '')}</strong>
+    ${result.detail ? `<span>${escapeHtml(result.detail)}</span>` : ''}
+    ${items}
+  `;
+}
+
 function syncAlertTypeControls(form) {
   const alertType = form.elements.alertType?.value || 'high_drawdown';
   const usesTargetPrice = alertType === 'target_price';
@@ -927,6 +1918,9 @@ function syncAlertTypeControls(form) {
   const targetInput = form.elements.targetPrice;
   const thresholdInput = form.elements.thresholdPercent;
   const thresholdLabel = form.querySelector('[data-threshold-label]');
+  const guideContainer =
+    form.querySelector('[data-alert-rule-guide]') ||
+    (form === elements.form ? elements.alertRuleSummary : null);
 
   if (targetField) {
     targetField.hidden = !usesTargetPrice;
@@ -951,7 +1945,7 @@ function syncAlertTypeControls(form) {
           : '하락률 %';
   }
 
-  renderAlertRuleSummary(alertType);
+  renderAlertRuleSummary(alertType, guideContainer, form);
 }
 
 function applyAlertPreset(alertType, thresholdPercent) {
@@ -1044,69 +2038,200 @@ function validateRegistrationStep(step) {
   return true;
 }
 
-function renderAlertRuleSummary(alertType = elements.form.elements.alertType.value) {
+function renderAlertRuleSummary(
+  alertType = elements.form.elements.alertType.value,
+  container = elements.alertRuleSummary,
+  form = elements.form
+) {
+  if (!container || !form?.elements) {
+    return;
+  }
+
   const summaries = {
     high_drawdown: {
       value: '최고가 대비 하락률',
       detail: '매수일을 입력하면 매수일 이후 최고가, 비우면 등록 이후 감시 최고가에서 설정 비율만큼 내려올 때 알림을 보냅니다.',
-      fit: '추세를 따라가며 고점 이탈을 보고 싶을 때 적합합니다.',
+      fit: '고점 갱신에 따라 기준가도 같이 올라가는 방식입니다.',
       caution: '새 고점을 만들면 기준가도 같이 올라갑니다.'
     },
     profit_retracement: {
       value: '이익금 반납률',
       detail: '평단가 대비 최고 이익금 중 설정한 비율을 반납하면 알림을 보냅니다. 매수일을 비우면 등록 이후 감시 최고가를 씁니다.',
-      fit: '수익을 최대한 보존하고 싶을 때 가장 이해하기 쉽습니다.',
+      fit: '최대 수익금과 실제 반납 금액을 함께 보는 방식입니다.',
       caution: '고점이 평단가보다 높아야 기준가가 계산됩니다.'
     },
     purchase_loss: {
       value: '매수가 대비 손절률',
       detail: '매수가에서 설정한 비율만큼 손실이 나면 알림을 보냅니다.',
-      fit: '매수 직후 손실 제한선을 먼저 정해둘 때 적합합니다.',
+      fit: '고점 변화와 무관하게 평단 기준 손실선을 고정합니다.',
       caution: '수익이 난 뒤의 고점 반납은 반영하지 않습니다.'
     },
     target_price: {
       value: '직접 기준가',
       detail: '직접 입력한 기준가 이하가 되면 알림을 보냅니다.',
-      fit: '이미 정해둔 매도 가격이 있을 때 적합합니다.',
+      fit: '사용자가 정한 숫자 기준을 그대로 감시합니다.',
       caution: '현재가와 고점 변화에 따라 자동 조정되지 않습니다.'
     }
   };
   const summary = summaries[alertType] || summaries.high_drawdown;
-  const beginnerPick =
+  const quickValueHint =
     alertType === 'profit_retracement'
-      ? '현재 선택이 초보 추천 기준입니다.'
-      : '초보자는 이익금 반납률 10% 또는 15%부터 비교해보는 것을 권장합니다.';
+      ? '이익 10%, 15%는 요구사항 예시로 빠르게 비교할 수 있는 값입니다.'
+      : '자주 비교하는 값입니다. 실제 기준은 사용자가 직접 선택합니다.';
+  const showPresetPanel = form === elements.form;
+  const guides = buildAlertRuleGuides(form);
 
-  elements.alertRuleSummary.innerHTML = `
+  container.innerHTML = `
     <div class="alert-rule-item">
       <span class="alert-rule-label">선택한 알림 기준</span>
       <span class="alert-rule-value">${escapeHtml(summary.value)}</span>
       <span class="alert-rule-detail">${escapeHtml(summary.detail)}</span>
     </div>
     <div class="alert-rule-item">
-      <span class="alert-rule-label">추천 상황</span>
+      <span class="alert-rule-label">확인 포인트</span>
       <span class="alert-rule-value">${escapeHtml(summary.fit)}</span>
       <span class="alert-rule-detail">${escapeHtml(summary.caution)}</span>
     </div>
-    <div class="alert-preset-panel">
-      <div>
-        <span class="alert-rule-label">빠른 추천값</span>
-        <span class="alert-rule-detail">${escapeHtml(beginnerPick)}</span>
+    ${renderAlertRuleGuideComparison(guides, alertType)}
+    ${showPresetPanel ? `
+      <div class="alert-preset-panel">
+        <div>
+          <span class="alert-rule-label">빠른 기준값</span>
+          <span class="alert-rule-detail">${escapeHtml(quickValueHint)}</span>
+        </div>
+        <div class="alert-preset-list">
+          ${renderAlertPresetButton('profit_retracement', 10, '이익 10%', alertType, form)}
+          ${renderAlertPresetButton('profit_retracement', 15, '이익 15%', alertType, form)}
+          ${renderAlertPresetButton('high_drawdown', 5, '고점 -5%', alertType, form)}
+          ${renderAlertPresetButton('purchase_loss', 5, '손절 -5%', alertType, form)}
+        </div>
       </div>
-      <div class="alert-preset-list">
-        ${renderAlertPresetButton('profit_retracement', 10, '이익 10%', alertType)}
-        ${renderAlertPresetButton('profit_retracement', 15, '이익 15%', alertType)}
-        ${renderAlertPresetButton('high_drawdown', 5, '고점 -5%', alertType)}
-        ${renderAlertPresetButton('purchase_loss', 5, '손절 -5%', alertType)}
+    ` : ''}
+  `;
+}
+
+function buildAlertRuleGuides(form) {
+  const thresholdPercent = getGuideThresholdPercent(form);
+  const formattedPercent = formatGuidePercent(thresholdPercent);
+  const targetPrice = parseFiniteNumber(form.elements.targetPrice?.value);
+  const highExamplePrice = 100000;
+  const purchaseExamplePrice = 80000;
+  const profitExamplePrice = highExamplePrice - ((highExamplePrice - purchaseExamplePrice) * thresholdPercent) / 100;
+
+  return [
+    {
+      key: 'high_drawdown',
+      name: '최고가 대비 하락률',
+      required: '최고가, 기준비율. 매수일은 선택입니다.',
+      formula: '최고가 x (1 - 기준비율 / 100)',
+      example: `최고가 100,000원, ${formattedPercent} 기준이면 ${formatGuideWon(highExamplePrice * (1 - thresholdPercent / 100))} 이하에서 알림`,
+      note: '새 고점을 만들면 기준가가 다시 올라갑니다.'
+    },
+    {
+      key: 'profit_retracement',
+      name: '이익금 반납률',
+      required: '매수가, 최고가, 기준비율이 필요합니다.',
+      formula: '최고가 - ((최고가 - 매수가) x 기준비율 / 100)',
+      example: `매수가 80,000원, 최고가 100,000원, ${formattedPercent} 반납이면 ${formatGuideWon(profitExamplePrice)} 이하에서 알림`,
+      note: '최고가가 매수가보다 높아야 최대 수익금이 계산됩니다.'
+    },
+    {
+      key: 'purchase_loss',
+      name: '매수가 대비 손절률',
+      required: '매수가와 기준비율이 필요합니다.',
+      formula: '매수가 x (1 - 기준비율 / 100)',
+      example: `매수가 80,000원, ${formattedPercent} 기준이면 ${formatGuideWon(purchaseExamplePrice * (1 - thresholdPercent / 100))} 이하에서 알림`,
+      note: '고점 이후 수익 반납은 계산에 넣지 않습니다.'
+    },
+    {
+      key: 'target_price',
+      name: '직접 기준가',
+      required: '사용자가 직접 입력한 기준가가 필요합니다.',
+      formula: '현재가 <= 직접 기준가',
+      example: targetPrice
+        ? `직접 기준가 ${formatGuideWon(targetPrice)} 이하에서 알림`
+        : '예: 직접 기준가 93,000원 이하에서 알림',
+      note: '고점, 매수가, 수익률 변화로 자동 조정되지 않습니다.'
+    }
+  ];
+}
+
+function getGuideThresholdPercent(form) {
+  const value = parseFiniteNumber(form.elements.thresholdPercent?.value);
+
+  return value && value > 0 && value < 100 ? value : 5;
+}
+
+function formatGuidePercent(value) {
+  const number = parseFiniteNumber(value);
+
+  if (number === null) {
+    return '5%';
+  }
+
+  return `${Number.isInteger(number) ? number.toFixed(0) : number.toFixed(1)}%`;
+}
+
+function formatGuideWon(value) {
+  const number = parseFiniteNumber(value);
+
+  if (number === null) {
+    return '-';
+  }
+
+  return `${number.toLocaleString('ko-KR', { maximumFractionDigits: 0 })}원`;
+}
+
+function renderAlertRuleGuideComparison(guides, selectedAlertType) {
+  return `
+    <div class="alert-rule-guide" aria-label="알림 기준 계산 비교">
+      <div>
+        <span class="alert-rule-label">기준별 계산 비교</span>
+        <span class="alert-rule-detail">투자 권유가 아니라 알림 조건의 계산 방식과 필요한 입력값을 비교하는 안내입니다.</span>
+      </div>
+      <div class="alert-rule-guide-grid">
+        ${guides.map((guide) => renderAlertRuleGuideRow(guide, selectedAlertType)).join('')}
       </div>
     </div>
   `;
 }
 
-function renderAlertPresetButton(alertType, thresholdPercent, label, selectedAlertType) {
+function renderAlertRuleGuideRow(guide, selectedAlertType) {
+  const selected = guide.key === selectedAlertType;
+
+  return `
+    <article class="alert-rule-guide-row ${selected ? 'selected' : ''}">
+      <div class="alert-rule-guide-title">
+        <strong>${escapeHtml(guide.name)}</strong>
+        <span>${selected ? '현재 선택' : '비교'}</span>
+      </div>
+      <dl class="alert-rule-guide-meta">
+        <div>
+          <dt>필요 입력</dt>
+          <dd>${escapeHtml(guide.required)}</dd>
+        </div>
+        <div>
+          <dt>계산식</dt>
+          <dd>${escapeHtml(guide.formula)}</dd>
+        </div>
+        <div>
+          <dt>예시</dt>
+          <dd>${escapeHtml(guide.example)}</dd>
+        </div>
+        <div>
+          <dt>주의</dt>
+          <dd>${escapeHtml(guide.note)}</dd>
+        </div>
+      </dl>
+    </article>
+  `;
+}
+
+function renderAlertPresetButton(alertType, thresholdPercent, label, selectedAlertType, form = elements.form) {
+  const currentThreshold = parseFiniteNumber(form.elements.thresholdPercent?.value);
   const selected =
     selectedAlertType === alertType &&
-    Number(elements.form.elements.thresholdPercent.value) === Number(thresholdPercent);
+    currentThreshold === Number(thresholdPercent);
 
   return `
     <button
@@ -1299,7 +2424,7 @@ async function withBusy(button, callback) {
     await callback();
   } catch (error) {
     handleAdminAuthFailure(error);
-    showMessage(error.message, true);
+    showErrorMessage(error);
   } finally {
     button.disabled = false;
     button.textContent = previousText;
@@ -1597,6 +2722,7 @@ function renderRegistrationSummary() {
   const form = elements.form;
   const symbol = form.elements.symbol.value.trim().toUpperCase() || '-';
   const displayName = form.elements.displayName.value.trim();
+  const positionStatus = normalizePositionStatus(form.elements.positionStatus?.value);
   const purchasePrice = parseFiniteNumber(form.elements.purchasePrice.value);
   const quantity = parseFiniteNumber(form.elements.quantity.value);
   const annualDividendPerShare = parseFiniteNumber(form.elements.annualDividendPerShare.value);
@@ -1652,6 +2778,7 @@ function renderRegistrationSummary() {
   elements.registrationSummary.innerHTML = `
     <div class="registration-summary-grid">
       ${renderSummaryItem('종목', displayName ? `${displayName} · ${symbol}` : symbol)}
+      ${renderSummaryItem('종목 상태', getPositionStatusLabel(positionStatus), positionStatus === 'sold' ? '매도 기록으로 보관' : positionStatus === 'watch' ? '관심 종목으로 분리' : '계좌 요약에 포함')}
       ${renderSummaryItem('시세 기준', formatKisMarketDivCodeLabel(kisMarketDivCode), 'KIS provider 사용 시 적용')}
       ${renderSummaryItem('매수가', formatMoney(purchasePrice), purchaseDateDetail)}
       ${renderSummaryItem('보유 수량', quantity ? formatQuantity(quantity) : '-', purchaseAmount ? `총 ${formatMoney(purchaseAmount)}` : '선택 입력')}
@@ -1711,6 +2838,12 @@ function renderServerStatus(health) {
       ${renderServerMetric('데이터', shortenPath(health.dataDir), formatStorageEngine(health.storageEngine))}
       ${renderServerMetric('데이터 모델', formatDataModelVersion(health.dataModel), formatDataModelStoreSummary(health.dataModel?.store))}
       ${renderServerMetric('실행 방식', health.railwayRuntime ? 'Railway' : '로컬 PC', health.cwd || '')}
+      ${renderServerMetric('종료 안전장치', health.runtimeVerified ? 'Stock Alarm 확인됨' : '확인 필요', health.safeStop?.message || '헬스 체크로 PID를 검증합니다.')}
+      ${renderServerMetric('자동 백업', formatAutoBackupSummary({
+        enabled: health.autoBackupEnabled,
+        intervalHours: health.autoBackupIntervalHours,
+        last: health.lastAutoBackup
+      }), `최소 간격 ${health.autoBackupMinIntervalMinutes || '-'}분`)}
     </div>
     <div class="server-access">
       <div class="server-url-list">
@@ -2712,6 +3845,195 @@ function getRoadmapStatusLabel(status) {
   return '예정';
 }
 
+function renderObservationIssues(observationIssues) {
+  if (!elements.observationIssuesPanel || !elements.observationIssuesSummary) {
+    return;
+  }
+
+  if (!observationIssues) {
+    renderObservationIssuesError(new Error('관찰 리포트를 찾지 못했습니다.'));
+    return;
+  }
+
+  const summary = observationIssues.summary || {};
+  const issues = Array.isArray(observationIssues.issues) ? observationIssues.issues : [];
+  const checklist = Array.isArray(observationIssues.checklist) ? observationIssues.checklist : [];
+  const checklistSummary = observationIssues.checklistSummary || {};
+  const priorityQueue = Array.isArray(observationIssues.priorityQueue)
+    ? observationIssues.priorityQueue
+    : [];
+  const total = summary.total || 0;
+  const open = summary.open || 0;
+  const resolved = summary.resolved || 0;
+  const paused = summary.paused || 0;
+  const pendingChecks = checklistSummary.pending || 0;
+
+  elements.observationIssuesSummary.textContent =
+    `${observationIssues.dateLabel || '날짜 미상'} · 열린 이슈 ${open}개 · 체크 미실행 ${pendingChecks}개`;
+  elements.observationIssuesPanel.innerHTML = `
+    <div class="observation-issue-hero">
+      <div class="observation-issue-next">
+        <span class="roadmap-eyebrow">우선 처리</span>
+        <strong>${escapeHtml(priorityQueue[0]?.id || '열린 이슈 없음')}</strong>
+        <p>${escapeHtml(priorityQueue[0]?.content || observationIssues.nextAction || '장중 관찰을 이어가며 새 OBS를 기록합니다.')}</p>
+      </div>
+      <div class="roadmap-stats" aria-label="실사용 이슈 현황">
+        ${renderRoadmapStat('전체', String(total), 'OBS 기록', 'pending')}
+        ${renderRoadmapStat('열림', String(open), '처리 필요', 'active')}
+        ${renderRoadmapStat('해결', String(resolved), '조치 완료', 'done')}
+        ${renderRoadmapStat('보류', String(paused), '후속 확인', 'paused')}
+      </div>
+    </div>
+    ${
+      priorityQueue.length
+        ? `<div class="roadmap-order" aria-label="실사용 이슈 우선순위">
+            ${priorityQueue
+              .map((issue, index) => `<span><b>${index + 1}</b>${escapeHtml(issue.id)} · ${escapeHtml(issue.severity)}</span>`)
+              .join('')}
+          </div>`
+        : ''
+    }
+    ${renderObservationChecklist(checklist, checklistSummary, observationIssues.nextChecklistItem)}
+    <div class="observation-issue-list">
+      ${issues.map(renderObservationIssueItem).join('')}
+    </div>
+    <div class="roadmap-note">문서: ${escapeHtml(observationIssues.source || 'docs/local-webapp-observation-2026-05-21.md')}</div>
+  `;
+}
+
+function renderObservationIssuesError(error) {
+  if (!elements.observationIssuesPanel || !elements.observationIssuesSummary) {
+    return;
+  }
+
+  elements.observationIssuesSummary.textContent = '관찰 리포트 확인 실패';
+  elements.observationIssuesPanel.innerHTML = `
+    <div class="message show error">${escapeHtml(error.message || '실사용 이슈를 확인하지 못했습니다.')}</div>
+  `;
+}
+
+function renderObservationChecklist(checklist, summary, nextChecklistItem) {
+  const total = summary.total || 0;
+  const pending = summary.pending || 0;
+  const passed = summary.passed || 0;
+  const failed = summary.failed || 0;
+  const paused = summary.paused || 0;
+  const nextItem = nextChecklistItem || checklist.find((item) => item.status !== 'passed') || null;
+
+  if (!checklist.length) {
+    return `
+      <section class="observation-checklist" aria-label="하루 관찰 체크리스트">
+        <div class="roadmap-note">관찰 체크리스트가 아직 문서에 없습니다.</div>
+      </section>
+    `;
+  }
+
+  return `
+    <section class="observation-checklist" aria-label="하루 관찰 체크리스트">
+      <div class="observation-checklist-head">
+        <div>
+          <span class="roadmap-eyebrow">하루 관찰 체크리스트</span>
+          <strong>다음 확인: ${escapeHtml(nextItem ? `${nextItem.timeSlot} · ${nextItem.item}` : '남은 항목 없음')}</strong>
+          <p>${escapeHtml(nextItem?.passCriteria || '모든 관찰 항목이 통과 상태입니다.')}</p>
+        </div>
+        <div class="roadmap-stats" aria-label="관찰 체크리스트 현황">
+          ${renderRoadmapStat('전체', String(total), '체크 항목', 'pending')}
+          ${renderRoadmapStat('미실행', String(pending), '확인 필요', 'active')}
+          ${renderRoadmapStat('통과', String(passed), '문제 없음', 'done')}
+          ${renderRoadmapStat('실패', String(failed + paused), '후속 조치', 'paused')}
+        </div>
+      </div>
+      <div class="observation-checklist-list">
+        ${checklist.map(renderObservationChecklistItem).join('')}
+      </div>
+    </section>
+  `;
+}
+
+function renderObservationChecklistItem(item) {
+  const statusClass = getObservationChecklistStatusClass(item.status);
+
+  return `
+    <div class="observation-checklist-row ${statusClass}">
+      <span class="roadmap-task-id">${escapeHtml(item.timeSlot || '-')}</span>
+      <div class="roadmap-task-main">
+        <strong>${escapeHtml(item.item || '-')}</strong>
+        <span>${escapeHtml(item.passCriteria || '-')}</span>
+      </div>
+      <span class="observation-checklist-record">${escapeHtml(item.record || item.statusLabel || '-')}</span>
+      <span class="roadmap-status-badge ${statusClass}">${escapeHtml(item.statusLabel || getObservationChecklistStatusLabel(item.status))}</span>
+    </div>
+  `;
+}
+
+function renderObservationIssueItem(issue) {
+  const statusClass = getObservationIssueStatusClass(issue.status);
+
+  return `
+    <div class="observation-issue-row ${statusClass}">
+      <span class="roadmap-task-id">${escapeHtml(issue.id || '-')}</span>
+      <div class="roadmap-task-main">
+        <strong>${escapeHtml(issue.content || '-')}</strong>
+        <span>${escapeHtml(issue.nextAction || '-')}</span>
+      </div>
+      <span class="roadmap-task-priority">${escapeHtml(issue.severity ? `심각도 ${issue.severity}` : '심각도 -')}</span>
+      <span class="roadmap-status-badge ${statusClass}">${escapeHtml(issue.statusLabel || getObservationIssueStatusLabel(issue.status))}</span>
+    </div>
+  `;
+}
+
+function getObservationIssueStatusClass(status) {
+  if (status === 'resolved') {
+    return 'completed';
+  }
+
+  if (status === 'paused') {
+    return 'paused';
+  }
+
+  return 'in-progress';
+}
+
+function getObservationIssueStatusLabel(status) {
+  if (status === 'resolved') {
+    return '해결';
+  }
+
+  if (status === 'paused') {
+    return '보류';
+  }
+
+  return '열림';
+}
+
+function getObservationChecklistStatusClass(status) {
+  if (status === 'passed') {
+    return 'completed';
+  }
+
+  if (status === 'failed' || status === 'paused') {
+    return 'paused';
+  }
+
+  return 'pending';
+}
+
+function getObservationChecklistStatusLabel(status) {
+  if (status === 'passed') {
+    return '통과';
+  }
+
+  if (status === 'failed') {
+    return '실패';
+  }
+
+  if (status === 'paused') {
+    return '보류';
+  }
+
+  return '미실행';
+}
+
 function renderServerMetric(label, value, detail = '') {
   return `
     <div class="server-metric">
@@ -3050,7 +4372,7 @@ function countDividendRefreshResults(result) {
   return counts;
 }
 
-function renderDividendDiagnostics(lastRefresh) {
+function renderDividendDiagnostics(lastRefresh, context = {}) {
   if (!elements.dividendDiagnosticsPanel) {
     return;
   }
@@ -3063,19 +4385,22 @@ function renderDividendDiagnostics(lastRefresh) {
     .filter((item) => item.diagnostic)
     .sort((left, right) => getDiagnosticTime(right.diagnostic) - getDiagnosticTime(left.diagnostic));
 
-  if (!state.stocks.length) {
-    elements.dividendDiagnosticsPanel.innerHTML = '';
-    return;
-  }
-
-  const counts = countDividendRefreshResults(lastRefresh);
+  const dashboard = buildDividendApiDashboard({
+    stocks: state.stocks,
+    diagnostics: stocksWithDiagnostics,
+    lastRefresh,
+    providers: context.dividendProviders,
+    intervalSeconds: context.dividendRefreshIntervalSeconds
+  });
+  const counts = dashboard.counts;
   const latestRows = stocksWithDiagnostics.slice(0, 5);
-  const checkedAt = lastRefresh?.checkedAt || latestRows[0]?.diagnostic?.checkedAt || '';
-  const summaryDetail = lastRefresh
-    ? `확인 ${counts.checked}개 · 업데이트 ${counts.updated}개 · 실패 ${counts.error}개`
-    : latestRows.length
-      ? `${latestRows.length}개 종목에 이전 진단 이력이 있습니다.`
-      : '아직 자동 갱신 이력이 없습니다.';
+  const summaryDetail = !state.stocks.length
+    ? '등록 종목이 없어 자동 검증 대상이 없습니다.'
+    : lastRefresh
+      ? `확인 ${counts.checked}개 · 업데이트 ${counts.updated}개 · 실패 ${counts.error}개 · 미검증 ${dashboard.missingDiagnostics}개`
+      : latestRows.length
+        ? `${latestRows.length}개 종목에 이전 진단 이력이 있습니다.`
+        : '아직 자동 갱신 이력이 없습니다.';
 
   elements.dividendDiagnosticsPanel.innerHTML = `
     <div class="dividend-diagnostics-head">
@@ -3083,14 +4408,376 @@ function renderDividendDiagnostics(lastRefresh) {
         <div class="dividend-diagnostics-title">배당 API 진단</div>
         <div class="dividend-diagnostics-subtitle">${escapeHtml(summaryDetail)}</div>
       </div>
-      <div class="dividend-diagnostics-time">${escapeHtml(formatDate(checkedAt))}</div>
+      <div class="dividend-diagnostics-time">${escapeHtml(formatDate(dashboard.checkedAt))}</div>
     </div>
+    ${renderDividendApiDashboard(dashboard)}
     ${
       latestRows.length
         ? `<div class="dividend-diagnostics-list">${latestRows.map(renderDividendDiagnosticRow).join('')}</div>`
         : '<div class="dividend-diagnostics-empty">배당 새로고침을 실행하면 provider별 성공/실패 내역이 표시됩니다.</div>'
     }
   `;
+}
+
+function buildDividendApiDashboard({ stocks, diagnostics, lastRefresh, providers, intervalSeconds }) {
+  const rows = Array.isArray(diagnostics) ? diagnostics : [];
+  const checkedAt = lastRefresh?.checkedAt || rows[0]?.diagnostic?.checkedAt || '';
+  const counts = countDividendRefreshResults(lastRefresh);
+  const missingDiagnostics = Math.max(0, (Array.isArray(stocks) ? stocks.length : 0) - rows.length);
+  const providerStats = buildDividendProviderDashboard({
+    providers,
+    diagnostics: rows,
+    lastRefresh
+  });
+  const interval = Number(intervalSeconds || 86400);
+  const nextRefreshAt = getNextDividendRefreshAt(checkedAt, interval);
+  const stale = isDividendRefreshStale(checkedAt, interval);
+  const status = getDividendDashboardStatus({
+    checkedAt,
+    counts,
+    missingDiagnostics,
+    providerStats,
+    stale
+  });
+  const nextActions = buildDividendDashboardNextActions({
+    checkedAt,
+    counts,
+    missingDiagnostics,
+    providerStats,
+    stale,
+    lastRefresh
+  });
+
+  return {
+    status,
+    checkedAt,
+    nextRefreshAt,
+    intervalSeconds: interval,
+    counts,
+    missingDiagnostics,
+    providerStats,
+    nextActions
+  };
+}
+
+function renderDividendApiDashboard(dashboard) {
+  return `
+    <div class="dividend-api-dashboard ${escapeHtml(dashboard.status.level)}">
+      <div class="dividend-api-dashboard-main">
+        <div>
+          <span class="dividend-api-eyebrow">AUTO CHECK</span>
+          <strong>${escapeHtml(dashboard.status.title)}</strong>
+          <p>${escapeHtml(dashboard.status.detail)}</p>
+        </div>
+        <span class="status-badge ${escapeHtml(dashboard.status.badgeClass)}">${escapeHtml(dashboard.status.label)}</span>
+      </div>
+      <div class="dividend-api-metrics">
+        ${renderDividendApiMetric('최근 확인', formatDate(dashboard.checkedAt), `주기 ${formatInterval(dashboard.intervalSeconds)}`)}
+        ${renderDividendApiMetric('다음 예상', formatDate(dashboard.nextRefreshAt), '서버가 켜져 있을 때 기준')}
+        ${renderDividendApiMetric('검증 결과', `${dashboard.counts.checked}개 확인`, `업데이트 ${dashboard.counts.updated} · 실패 ${dashboard.counts.error}`)}
+        ${renderDividendApiMetric('미검증 종목', `${dashboard.missingDiagnostics}개`, '최근 진단 이력이 없는 종목')}
+      </div>
+      ${renderDividendProviderDashboard(dashboard.providerStats)}
+      ${renderDividendDashboardNextActions(dashboard.nextActions)}
+    </div>
+  `;
+}
+
+function renderDividendApiMetric(label, value, detail) {
+  return `
+    <div class="dividend-api-metric">
+      <span>${escapeHtml(label)}</span>
+      <strong>${escapeHtml(value || '-')}</strong>
+      <small>${escapeHtml(detail || '-')}</small>
+    </div>
+  `;
+}
+
+function buildDividendProviderDashboard({ providers, diagnostics, lastRefresh }) {
+  const providerList = normalizeProviderList(providers);
+  const providerMap = new Map();
+
+  providerList.forEach((provider) => {
+    providerMap.set(provider, createDividendProviderAccumulator(provider));
+  });
+
+  for (const item of Array.isArray(diagnostics) ? diagnostics : []) {
+    collectDividendProviderAttempts(providerMap, item.diagnostic?.attempts, item.stock);
+  }
+
+  for (const item of Array.isArray(lastRefresh?.results) ? lastRefresh.results : []) {
+    collectDividendProviderAttempts(providerMap, item.attempts || item.diagnostic?.attempts, item);
+  }
+
+  return [...providerMap.values()]
+    .map(finalizeDividendProviderAccumulator)
+    .sort((left, right) => {
+      const leftIndex = providerList.indexOf(left.provider);
+      const rightIndex = providerList.indexOf(right.provider);
+
+      return (leftIndex === -1 ? 999 : leftIndex) - (rightIndex === -1 ? 999 : rightIndex);
+    });
+}
+
+function normalizeProviderList(value) {
+  if (Array.isArray(value)) {
+    return value.map((provider) => String(provider || '').trim().toLowerCase()).filter(Boolean);
+  }
+
+  return String(value || '')
+    .split(',')
+    .map((provider) => provider.trim().toLowerCase())
+    .filter(Boolean);
+}
+
+function createDividendProviderAccumulator(provider) {
+  return {
+    provider,
+    success: 0,
+    error: 0,
+    attempts: 0,
+    lastStatus: 'pending',
+    lastError: '',
+    lastCheckedAt: '',
+    symbols: new Set()
+  };
+}
+
+function collectDividendProviderAttempts(providerMap, attempts, stock) {
+  if (!Array.isArray(attempts)) {
+    return;
+  }
+
+  attempts.forEach((attempt) => {
+    const provider = String(attempt.provider || '').trim().toLowerCase();
+
+    if (!provider) {
+      return;
+    }
+
+    const stats = providerMap.get(provider) || createDividendProviderAccumulator(provider);
+    const status = attempt.status === 'success' ? 'success' : 'error';
+    const checkedAt = attempt.finishedAt || attempt.startedAt || stock?.checkedAt || stock?.diagnostic?.checkedAt || '';
+
+    stats.attempts += 1;
+    stats.lastStatus = status;
+    stats.lastCheckedAt = checkedAt || stats.lastCheckedAt;
+
+    if (status === 'success') {
+      stats.success += 1;
+      stats.lastError = '';
+    } else {
+      stats.error += 1;
+      stats.lastError = attempt.error || stats.lastError;
+    }
+
+    if (stock?.symbol) {
+      stats.symbols.add(stock.symbol);
+    }
+
+    providerMap.set(provider, stats);
+  });
+}
+
+function finalizeDividendProviderAccumulator(stats) {
+  const status =
+    stats.success > 0
+      ? 'success'
+      : stats.error > 0
+        ? 'error'
+        : 'pending';
+
+  return {
+    provider: stats.provider,
+    label: getProviderLabel(stats.provider),
+    status,
+    attempts: stats.attempts,
+    success: stats.success,
+    error: stats.error,
+    lastStatus: stats.lastStatus,
+    lastError: stats.lastError,
+    lastCheckedAt: stats.lastCheckedAt,
+    symbolCount: stats.symbols.size,
+    action: getDividendProviderNextAction(stats.provider, status, stats.lastError)
+  };
+}
+
+function renderDividendProviderDashboard(providerStats) {
+  const providers = Array.isArray(providerStats) ? providerStats : [];
+
+  if (!providers.length) {
+    return '';
+  }
+
+  return `
+    <div class="dividend-provider-grid">
+      ${providers.map(renderDividendProviderCard).join('')}
+    </div>
+  `;
+}
+
+function renderDividendProviderCard(provider) {
+  const statusClass = provider.status === 'success' ? 'ok' : provider.status === 'error' ? 'error' : 'muted';
+  const statusLabel = provider.status === 'success' ? '성공' : provider.status === 'error' ? '실패' : '대기';
+  const attemptDetail =
+    provider.attempts > 0
+      ? `성공 ${provider.success} · 실패 ${provider.error}`
+      : '아직 시도 없음';
+  const providerDetail = provider.lastCheckedAt
+    ? `${attemptDetail} · ${formatDate(provider.lastCheckedAt)}`
+    : attemptDetail;
+
+  return `
+    <div class="dividend-provider-card ${statusClass}">
+      <div class="dividend-provider-head">
+        <strong>${escapeHtml(provider.label)}</strong>
+        <span class="status-badge ${statusClass}">${escapeHtml(statusLabel)}</span>
+      </div>
+      <span>${escapeHtml(providerDetail)}</span>
+      <small>${escapeHtml(provider.action)}</small>
+      ${provider.lastError ? `<em>${escapeHtml(provider.lastError)}</em>` : ''}
+    </div>
+  `;
+}
+
+function renderDividendDashboardNextActions(actions) {
+  const items = Array.isArray(actions) ? actions : [];
+
+  if (!items.length) {
+    return '';
+  }
+
+  return `
+    <div class="dividend-next-actions">
+      <strong>다음 조치</strong>
+      <ul>
+        ${items.map((item) => `<li>${escapeHtml(item)}</li>`).join('')}
+      </ul>
+    </div>
+  `;
+}
+
+function getDividendDashboardStatus({ checkedAt, counts, missingDiagnostics, providerStats, stale }) {
+  if (!checkedAt) {
+    return {
+      level: 'pending',
+      badgeClass: 'muted',
+      label: '대기',
+      title: '아직 배당 API 검증 이력이 없습니다.',
+      detail: '배당 새로고침을 실행하면 provider별 성공/실패와 다음 조치가 표시됩니다.'
+    };
+  }
+
+  if (counts.error > 0 || providerStats.some((provider) => provider.status === 'error' && provider.success === 0)) {
+    return {
+      level: 'error',
+      badgeClass: 'error',
+      label: '점검 필요',
+      title: '일부 배당 API 검증이 실패했습니다.',
+      detail: '실패 종목과 provider 오류를 확인하고 필요한 API 키나 종목 매칭을 점검하세요.'
+    };
+  }
+
+  if (stale || missingDiagnostics > 0) {
+    return {
+      level: 'warning',
+      badgeClass: 'alert',
+      label: '주의',
+      title: '검증 공백이 있는 종목이 있습니다.',
+      detail: '마지막 검증 시각과 미검증 종목을 확인하고 필요하면 수동 새로고침을 실행하세요.'
+    };
+  }
+
+  return {
+    level: 'ok',
+    badgeClass: 'ok',
+    label: '정상',
+    title: '최근 배당 API 검증이 정상입니다.',
+    detail: '다음 자동 확인 시각까지 서버를 켜 두면 같은 provider 순서로 다시 검증합니다.'
+  };
+}
+
+function buildDividendDashboardNextActions({ checkedAt, counts, missingDiagnostics, providerStats, stale, lastRefresh }) {
+  const actions = [];
+
+  if (!checkedAt) {
+    actions.push('배당 새로고침을 눌러 첫 provider 검증을 실행하세요.');
+  }
+
+  if (lastRefresh?.skipped) {
+    actions.push(`최근 검증이 건너뛰어졌습니다. 사유: ${lastRefresh.reason || '실행 중 중복 요청'}`);
+  }
+
+  if (counts.error > 0) {
+    actions.push('실패 종목의 배당 재시도 버튼으로 단일 종목 provider 응답을 다시 확인하세요.');
+  }
+
+  if (missingDiagnostics > 0) {
+    actions.push(`${missingDiagnostics}개 종목은 최근 배당 진단 이력이 없습니다. 전체 배당 새로고침으로 검증 범위를 채우세요.`);
+  }
+
+  if (stale) {
+    actions.push('마지막 검증이 자동 주기보다 오래됐습니다. 서버가 계속 실행 중인지 확인하세요.');
+  }
+
+  providerStats
+    .filter((provider) => provider.status === 'error' && provider.success === 0)
+    .slice(0, 3)
+    .forEach((provider) => {
+      actions.push(`${provider.label}: ${provider.action}`);
+    });
+
+  if (!actions.length) {
+    actions.push('추가 조치 없음. 다음 자동 확인 시각까지 서버를 켜 두면 됩니다.');
+  }
+
+  return actions;
+}
+
+function getDividendProviderNextAction(provider, status, error = '') {
+  if (status === 'success') {
+    return '최근 검증에서 정상 응답을 받았습니다.';
+  }
+
+  if (status === 'pending') {
+    return '아직 최근 검증에서 호출되지 않았습니다.';
+  }
+
+  const setupHints = {
+    publicdata: 'DATA_GO_KR_SERVICE_KEY와 금융위원회_주식배당정보 활용 권한을 확인하세요.',
+    opendart: 'OPEN_DART_API_KEY와 회사명 매칭을 확인하세요.',
+    alphavantage: 'ALPHA_VANTAGE_API_KEY와 호출 한도를 확인하세요.',
+    yahoo: 'Yahoo 심볼 매핑과 네트워크 응답을 확인하세요.'
+  };
+  const text = String(error || '').toLowerCase();
+
+  if (text.includes('key') || text.includes('service') || text.includes('인증') || text.includes('권한')) {
+    return setupHints[provider] || 'API 키와 provider 설정을 확인하세요.';
+  }
+
+  return setupHints[provider] || 'provider 오류와 종목 코드 매핑을 확인하세요.';
+}
+
+function getNextDividendRefreshAt(checkedAt, intervalSeconds) {
+  const baseTime = new Date(checkedAt || '').getTime();
+  const interval = Number(intervalSeconds);
+
+  if (!Number.isFinite(baseTime) || !Number.isFinite(interval) || interval <= 0) {
+    return '';
+  }
+
+  return new Date(baseTime + interval * 1000).toISOString();
+}
+
+function isDividendRefreshStale(checkedAt, intervalSeconds) {
+  const baseTime = new Date(checkedAt || '').getTime();
+  const interval = Number(intervalSeconds);
+
+  if (!Number.isFinite(baseTime) || !Number.isFinite(interval) || interval <= 0) {
+    return false;
+  }
+
+  return Date.now() - baseTime > interval * 2 * 1000;
 }
 
 function renderQuoteDiagnostics(stats) {
@@ -3360,6 +5047,8 @@ function renderStocks() {
 
   renderWatchSummary(decoratedStocks, visibleStocks.length);
   renderPortfolioSummary(decoratedStocks);
+  renderTodayActionPanel(decoratedStocks);
+  renderSellDecisionPanel(decoratedStocks);
   renderWatchControls();
 
   if (!state.stocks.length) {
@@ -3376,6 +5065,7 @@ function renderStocks() {
     ...visibleStocks.map(({ stock, watchStatus }) => {
       const row = document.createElement('article');
       row.className = `stock-row ${watchStatus.level}`;
+      row.dataset.stockId = stock.id;
       const alertMetric = calculateAlertMetric(stock, stock.lastPrice);
       const thresholdPrice = calculateAlertThreshold(stock);
       const lastPrice = parseFiniteNumber(stock.lastPrice);
@@ -3383,10 +5073,13 @@ function renderStocks() {
       const quoteSourceSummary = formatQuoteSourceSummary(stock);
       const quoteSourceDetail = formatQuoteSourceDetail(stock);
       const highPriceDetail = formatHighPriceDetail(stock);
+      const quoteQuality = getQuoteQuality(stock);
       const stockMeta = [
         stock.symbol,
+        getPositionStatusLabel(stock.positionStatus),
         stock.kisMarketDivCode ? `KIS ${formatKisMarketDivCodeLabel(stock.kisMarketDivCode)}` : '',
-        stock.active ? '' : '알림 꺼짐'
+        stock.active ? '' : '알림 꺼짐',
+        isAlertSnoozed(stock) ? '일시중지' : ''
       ].filter(Boolean).join(' · ');
 
       row.innerHTML = `
@@ -3420,6 +5113,7 @@ function renderStocks() {
           </div>
         </div>
         ${renderHoldingSummary(stock)}
+        ${renderSellDecisionCard(stock, watchStatus)}
         ${renderAveragingCalculator(stock)}
         ${renderDividendEventSummary(stock)}
         ${renderRetryFailurePanel(stock)}
@@ -3431,6 +5125,7 @@ function renderStocks() {
             ${quoteSourceSummary ? `<span class="status-src">시세 ${escapeHtml(quoteSourceSummary)}</span>` : ''}
             ${quoteSourceDetail ? `<span class="status-src">${escapeHtml(quoteSourceDetail)}</span>` : ''}
             ${stock.quoteRegularMarketTime ? `<span class="status-src">시세 시각 ${escapeHtml(formatDate(stock.quoteRegularMarketTime))}</span>` : ''}
+            <span class="status-src quote-quality ${escapeHtml(quoteQuality.level)}">시세 품질 ${escapeHtml(quoteQuality.label)} · ${escapeHtml(quoteQuality.detail)}</span>
             ${stock.lastError ? `<span class="metric-error">${escapeHtml(stock.lastError)}</span>` : ''}
           </div>
         </div>
@@ -3439,8 +5134,21 @@ function renderStocks() {
       const actions = document.createElement('div');
       actions.className = 'stock-actions';
       actions.append(
-        alertToggle(stock),
-        manualTestForm(stock),
+        ...(normalizePositionStatus(stock.positionStatus) === 'sold'
+          ? [alertToggle(stock)]
+          : [
+              alertToggle(stock),
+              actionButton('1시간 끄기', 'btn btn-ghost btn-sm secondary-button', () => snoozeStockAlert(stock, 60)),
+              actionButton('오늘 끄기', 'btn btn-ghost btn-sm secondary-button', () => snoozeStockAlertUntilTomorrow(stock)),
+              manualTestForm(stock)
+            ]),
+        ...(normalizePositionStatus(stock.positionStatus) !== 'sold' && isAlertSnoozed(stock)
+          ? [
+              actionButton('알림 재개', 'btn btn-outline btn-sm secondary-button', () =>
+                patchStock(stock.id, { alertSnoozedUntil: null, active: true })
+              )
+            ]
+          : []),
         ...(stock.lastCheckStatus === 'error'
           ? [
               actionButton('시세 재시도', 'btn btn-outline btn-sm secondary-button', () =>
@@ -3482,11 +5190,15 @@ function renderWatchSummary(items, visibleCount) {
     alert: 0,
     warning: 0,
     error: 0,
-    inactive: 0
+    inactive: 0,
+    holding: 0,
+    watch: 0,
+    sold: 0
   };
 
   for (const item of items) {
     counts[item.watchStatus.level] = (counts[item.watchStatus.level] || 0) + 1;
+    counts[normalizePositionStatus(item.stock.positionStatus)] += 1;
   }
 
   elements.summaryText.textContent = `${visibleCount}개 표시 · 전체 ${counts.total}개`;
@@ -3495,7 +5207,10 @@ function renderWatchSummary(items, visibleCount) {
     createWatchSummaryItem('알림', counts.alert, 'alert'),
     createWatchSummaryItem('주의', counts.warning, 'warning'),
     createWatchSummaryItem('조회 실패', counts.error, 'error'),
-    createWatchSummaryItem('알림 꺼짐', counts.inactive, 'inactive')
+    createWatchSummaryItem('알림 꺼짐', counts.inactive, 'inactive'),
+    createWatchSummaryItem('보유중', counts.holding, 'holding'),
+    createWatchSummaryItem('관심', counts.watch, 'watch'),
+    createWatchSummaryItem('매도 완료', counts.sold, 'sold')
   );
 }
 
@@ -3510,7 +5225,7 @@ function createWatchSummaryItem(label, value, level) {
     <span class="watch-summary-value">${Number(value || 0)}</span>
   `;
   item.addEventListener('click', () => {
-    state.watchFilter = item.dataset.watchFilter;
+    setWatchFilter(item.dataset.watchFilter);
     renderStocks();
   });
   return item;
@@ -3605,10 +5320,551 @@ function renderPortfolioSummary(items) {
   );
 }
 
+function renderTodayActionPanel(items) {
+  if (!elements.todayActionPanel) {
+    return;
+  }
+
+  const actions = buildTodayActions(items);
+
+  if (!state.stocks.length) {
+    elements.todayActionPanel.innerHTML = `
+      <section class="today-action-box today-action-empty" aria-label="오늘 확인할 일">
+        <div>
+          <strong>오늘 확인할 일</strong>
+          <span>종목을 등록하면 가격, 배당, 알림 상태에서 먼저 볼 항목을 모아 보여줍니다.</span>
+        </div>
+      </section>
+    `;
+    return;
+  }
+
+  if (!actions.length) {
+    elements.todayActionPanel.innerHTML = `
+      <section class="today-action-box today-action-empty" aria-label="오늘 확인할 일">
+        <div>
+          <strong>오늘 확인할 일</strong>
+          <span>긴급 확인 항목이 없습니다. 시세, 배당, 알림 상태에 당장 확인할 신호가 없습니다.</span>
+        </div>
+        <span class="today-action-badge info">정상</span>
+      </section>
+    `;
+    return;
+  }
+
+  elements.todayActionPanel.innerHTML = `
+    <section class="today-action-box" aria-label="오늘 확인할 일">
+      <div class="today-action-head">
+        <div>
+          <span class="today-action-eyebrow">Daily Check</span>
+          <strong>오늘 확인할 일</strong>
+          <p>${escapeHtml(actions.length)}개 우선 확인</p>
+        </div>
+      </div>
+      <div class="today-action-list">
+        ${actions.map(renderTodayActionItem).join('')}
+      </div>
+    </section>
+  `;
+
+  elements.todayActionPanel
+    .querySelectorAll('[data-today-action-stock]')
+    .forEach((button) => {
+      button.addEventListener('click', () => {
+        focusTodayActionStock(button.dataset.todayActionStock);
+      });
+    });
+}
+
+function buildTodayActions(items) {
+  const stockActions = items.flatMap(buildStockTodayActions);
+  const dividendActions = buildDividendEventTodayActions(items.map(({ stock }) => stock));
+  return limitTodayActions([...stockActions, ...dividendActions]);
+}
+
+function buildStockTodayActions({ stock, watchStatus }) {
+  if (normalizePositionStatus(stock.positionStatus) === 'sold') {
+    return [];
+  }
+
+  const actions = [];
+  const name = getStockDisplayName(stock);
+
+  if (watchStatus.level === 'alert') {
+    actions.push(
+      createTodayAction({
+        type: 'threshold-alert',
+        stock,
+        name,
+        priority: 'critical',
+        rank: 0,
+        title: '알림 기준 도달',
+        detail: watchStatus.detail || '현재가가 설정한 알림 기준에 닿았습니다.',
+        meta: '가격 알림'
+      })
+    );
+  }
+
+  if (stock.lastCheckStatus === 'error' || String(stock.lastError || '').trim()) {
+    actions.push(
+      createTodayAction({
+        type: 'quote-error',
+        stock,
+        name,
+        priority: 'critical',
+        rank: 10,
+        title: '시세 조회 실패',
+        detail: stock.lastError || '최근 시세 조회에 실패했습니다.',
+        meta: getProviderLabel(stock.quoteProvider) || '시세'
+      })
+    );
+  }
+
+  if (String(stock.dividendLastError || '').trim()) {
+    actions.push(
+      createTodayAction({
+        type: 'dividend-error',
+        stock,
+        name,
+        priority: 'warning',
+        rank: 20,
+        title: '배당 조회 실패',
+        detail: stock.dividendLastError,
+        meta: getProviderLabel(stock.dividendProvider) || '배당'
+      })
+    );
+  }
+
+  if (watchStatus.level === 'warning') {
+    actions.push(
+      createTodayAction({
+        type: 'threshold-near',
+        stock,
+        name,
+        priority: 'warning',
+        rank: 30,
+        title: '알림 기준 근접',
+        detail: watchStatus.detail || '설정한 알림 기준에 가까워졌습니다.',
+        meta: '가격 알림'
+      })
+    );
+  }
+
+  const positionStatus = normalizePositionStatus(stock.positionStatus);
+  const alertSnoozed = isAlertSnoozed(stock);
+
+  if (positionStatus === 'holding' && (alertSnoozed || !stock.active)) {
+    actions.push(
+      createTodayAction({
+        type: alertSnoozed ? 'alert-snoozed' : 'alert-off',
+        stock,
+        name,
+        priority: 'info',
+        rank: 40,
+        title: alertSnoozed ? '보유 종목 알림 일시중지' : '보유 종목 알림 꺼짐',
+        detail: alertSnoozed
+          ? `재개 ${formatDate(stock.alertSnoozedUntil)}`
+          : '자동 가격 확인과 텔레그램 알림을 쉬고 있습니다.',
+        meta: '알림 상태'
+      })
+    );
+  }
+
+  const reviewAction = buildReviewDateTodayAction(stock);
+
+  if (reviewAction) {
+    actions.push(reviewAction);
+  }
+
+  return actions;
+}
+
+function buildReviewDateTodayAction(stock) {
+  const dateInfo = getDateDistanceInfo(stock.reviewDate);
+
+  if (!dateInfo || dateInfo.days > TODAY_ACTION_SOON_DAYS) {
+    return null;
+  }
+
+  const days = dateInfo.days;
+  const priority = days <= 0 ? 'warning' : 'info';
+  const rank = days < 0 ? 14 : days === 0 ? 16 : 50 + days;
+  const title = days < 0 ? '실적 체크일 지남' : days === 0 ? '오늘 실적 체크' : '실적 체크일 임박';
+
+  return createTodayAction({
+    type: 'review-date',
+    stock,
+    name: getStockDisplayName(stock),
+    priority,
+    rank,
+    title,
+    detail: `${formatDateOnly(dateInfo.dateKey)} · ${formatDateDistance(dateInfo)}`,
+    meta: '투자 계획'
+  });
+}
+
+function buildDividendEventTodayActions(stocks) {
+  const stockIndex = buildTodayActionStockIndex(stocks);
+  const months = Array.isArray(state.dividendCalendar?.months) ? state.dividendCalendar.months : [];
+  const actions = [];
+
+  for (const month of months) {
+    for (const event of Array.isArray(month.events) ? month.events : []) {
+      const dateValue = getDividendEventTodayActionDate(event);
+      const dateInfo = getDateDistanceInfo(dateValue);
+
+      if (!dateInfo || dateInfo.days < 0 || dateInfo.days > TODAY_ACTION_SOON_DAYS) {
+        continue;
+      }
+
+      const stock = findTodayActionStockForDividendEvent(event, stockIndex);
+
+      if (stock && normalizePositionStatus(stock.positionStatus) === 'sold') {
+        continue;
+      }
+
+      const isExDividend = event.type === 'ex_dividend' || Boolean(event.exDividendDate);
+      const dateLabel = isExDividend ? '배당락' : '지급';
+      const amount =
+        event.amount === null || event.amount === undefined
+          ? ''
+          : ` · ${formatMoney(event.amount, event.currency)}`;
+
+      actions.push(
+        createTodayAction({
+          type: `dividend-event-${event.type || 'unknown'}-${dateInfo.dateKey}`,
+          stock,
+          name: stock ? getStockDisplayName(stock) : event.displayName || event.symbol || '배당 일정',
+          priority: dateInfo.days <= 1 ? 'warning' : 'info',
+          rank: dateInfo.days === 0 ? 24 : 55 + dateInfo.days,
+          title: isExDividend ? '배당락일 임박' : '배당 지급일 임박',
+          detail: `${dateLabel} ${formatDateOnly(dateInfo.dateKey)} · ${formatDateDistance(dateInfo)}${amount}`,
+          meta: '배당 일정'
+        })
+      );
+    }
+  }
+
+  return actions;
+}
+
+function buildTodayActionStockIndex(stocks) {
+  const byId = new Map();
+  const bySymbol = new Map();
+
+  for (const stock of stocks) {
+    if (stock.id) {
+      byId.set(String(stock.id), stock);
+    }
+
+    for (const key of getTodayActionStockKeys(stock)) {
+      bySymbol.set(key, stock);
+    }
+  }
+
+  return { byId, bySymbol };
+}
+
+function getTodayActionStockKeys(stock) {
+  return [stock.symbol, stock.code, stock.normalizedSymbol]
+    .flatMap((value) => {
+      const normalized = normalizeTodayActionSymbol(value);
+      return normalized.includes('.') ? [normalized, normalized.split('.')[0]] : [normalized];
+    })
+    .filter(Boolean);
+}
+
+function normalizeTodayActionSymbol(value) {
+  return String(value || '').trim().toUpperCase();
+}
+
+function findTodayActionStockForDividendEvent(event, stockIndex) {
+  if (event.stockId && stockIndex.byId.has(String(event.stockId))) {
+    return stockIndex.byId.get(String(event.stockId));
+  }
+
+  for (const key of [event.symbol, event.code, event.normalizedSymbol].map(normalizeTodayActionSymbol)) {
+    if (stockIndex.bySymbol.has(key)) {
+      return stockIndex.bySymbol.get(key);
+    }
+
+    if (key.includes('.') && stockIndex.bySymbol.has(key.split('.')[0])) {
+      return stockIndex.bySymbol.get(key.split('.')[0]);
+    }
+  }
+
+  return null;
+}
+
+function getDividendEventTodayActionDate(event) {
+  if (event.type === 'ex_dividend' && event.exDividendDate) {
+    return event.exDividendDate;
+  }
+
+  return event.paymentDate || event.dividendDate || event.exDividendDate || event.date || '';
+}
+
+function createTodayAction({
+  type,
+  stock,
+  name,
+  priority,
+  rank,
+  title,
+  detail,
+  meta
+}) {
+  return {
+    id: `${type}-${stock?.id || stock?.symbol || name || title}`,
+    stock,
+    name: name || (stock ? getStockDisplayName(stock) : '확인 항목'),
+    priority,
+    priorityLabel: getTodayActionPriorityLabel(priority),
+    rank,
+    title,
+    detail,
+    meta
+  };
+}
+
+function getTodayActionPriorityLabel(priority) {
+  const labels = {
+    critical: '확인 필요',
+    warning: '주의',
+    info: '확인'
+  };
+
+  return labels[priority] || labels.info;
+}
+
+function limitTodayActions(actions) {
+  const selected = [];
+  const stockCounts = new Map();
+  const sorted = actions.filter(Boolean).sort(compareTodayActions);
+
+  for (const action of sorted) {
+    if (selected.length >= TODAY_ACTION_LIMIT) {
+      break;
+    }
+
+    const stockKey = action.stock?.id || action.stock?.symbol || action.name || action.id;
+    const count = stockCounts.get(stockKey) || 0;
+
+    if (count >= TODAY_ACTION_MAX_PER_STOCK) {
+      continue;
+    }
+
+    selected.push(action);
+    stockCounts.set(stockKey, count + 1);
+  }
+
+  return selected;
+}
+
+function compareTodayActions(left, right) {
+  if (left.rank !== right.rank) {
+    return left.rank - right.rank;
+  }
+
+  return String(left.name || '').localeCompare(String(right.name || ''), 'ko-KR', {
+    numeric: true
+  });
+}
+
+function renderTodayActionItem(action) {
+  const stockId = action.stock?.id ? String(action.stock.id) : '';
+  const focusButton = stockId
+    ? `<button type="button" class="btn btn-outline btn-sm" data-today-action-stock="${escapeHtml(stockId)}">종목 보기</button>`
+    : '';
+
+  return `
+    <article class="today-action-item ${escapeHtml(action.priority)}">
+      <div class="today-action-main">
+        <span class="today-action-badge ${escapeHtml(action.priority)}">${escapeHtml(action.priorityLabel)}</span>
+        <strong>${escapeHtml(action.name)}</strong>
+        <span>${escapeHtml(action.title)}</span>
+        ${action.detail ? `<em>${escapeHtml(action.detail)}</em>` : ''}
+      </div>
+      <div class="today-action-meta">
+        <span>${escapeHtml(action.meta || '')}</span>
+        ${focusButton}
+      </div>
+    </article>
+  `;
+}
+
+function focusTodayActionStock(stockId) {
+  if (!stockId || !elements.stockList) {
+    return;
+  }
+
+  setWatchFilter('all', { persist: false });
+  renderStocks();
+
+  requestAnimationFrame(() => {
+    const row = Array.from(elements.stockList.querySelectorAll('[data-stock-id]')).find(
+      (item) => item.dataset.stockId === stockId
+    );
+
+    if (!row) {
+      return;
+    }
+
+    row.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    row.classList.add('stock-row-focus');
+    window.setTimeout(() => row.classList.remove('stock-row-focus'), 1600);
+  });
+}
+
+function getDateDistanceInfo(value) {
+  const dateKey = normalizeDateKey(value);
+
+  if (!dateKey) {
+    return null;
+  }
+
+  const today = new Date(`${getTodayInputValue()}T00:00:00`);
+  const target = new Date(`${dateKey}T00:00:00`);
+  const days = Math.round((target.getTime() - today.getTime()) / 86400000);
+
+  if (!Number.isFinite(days)) {
+    return null;
+  }
+
+  return { dateKey, days };
+}
+
+function normalizeDateKey(value) {
+  if (!value) {
+    return '';
+  }
+
+  const text = String(value);
+  const match = text.match(/^(\d{4})-(\d{2})-(\d{2})/);
+
+  if (match) {
+    return `${match[1]}-${match[2]}-${match[3]}`;
+  }
+
+  const date = new Date(value);
+
+  if (Number.isNaN(date.getTime())) {
+    return '';
+  }
+
+  date.setMinutes(date.getMinutes() - date.getTimezoneOffset());
+  return date.toISOString().slice(0, 10);
+}
+
+function formatDateDistance(dateInfo) {
+  if (!dateInfo) {
+    return '';
+  }
+
+  if (dateInfo.days < 0) {
+    return `${Math.abs(dateInfo.days)}일 지남`;
+  }
+
+  if (dateInfo.days === 0) {
+    return '오늘';
+  }
+
+  if (dateInfo.days === 1) {
+    return '내일';
+  }
+
+  return `${dateInfo.days}일 남음`;
+}
+
+function renderSellDecisionPanel(items) {
+  if (!elements.sellDecisionPanel) {
+    return;
+  }
+
+  const candidates = items
+    .filter(({ stock }) => normalizePositionStatus(stock.positionStatus) === 'holding')
+    .map(({ stock, watchStatus }) => ({
+      stock,
+      watchStatus,
+      thresholdPrice: calculateAlertThreshold(stock),
+      lastPrice: parseFiniteNumber(stock.lastPrice),
+      metrics: calculateHoldingMetrics(stock)
+    }))
+    .filter((item) => item.thresholdPrice !== null || item.metrics.maximumProfitAmount !== null)
+    .sort((left, right) => getSellDecisionSortValue(left) - getSellDecisionSortValue(right))
+    .slice(0, 3);
+
+  if (!candidates.length) {
+    elements.sellDecisionPanel.innerHTML =
+      '<div class="portfolio-summary-empty">매도 판단에 필요한 현재가와 알림 기준이 확인되면 위험 종목이 표시됩니다.</div>';
+    return;
+  }
+
+  elements.sellDecisionPanel.innerHTML = `
+    <div class="sell-decision-head">
+      <strong>매도 판단 요약</strong>
+      <span>기준가까지 가까운 보유 종목 순서</span>
+    </div>
+    <div class="sell-decision-list">
+      ${candidates.map(renderSellDecisionSummaryItem).join('')}
+    </div>
+  `;
+}
+
+function getSellDecisionSortValue(item) {
+  if (item.watchStatus.level === 'alert') {
+    return -1000;
+  }
+
+  if (item.watchStatus.level === 'error') {
+    return 1000;
+  }
+
+  const threshold = Number(item.thresholdPrice);
+  const lastPrice = Number(item.lastPrice);
+
+  if (Number.isFinite(threshold) && threshold > 0 && Number.isFinite(lastPrice)) {
+    return ((lastPrice - threshold) / threshold) * 100;
+  }
+
+  return 500;
+}
+
+function renderSellDecisionSummaryItem(item) {
+  const { stock, watchStatus, thresholdPrice, lastPrice, metrics } = item;
+  const distance =
+    thresholdPrice !== null && lastPrice !== null ? lastPrice - thresholdPrice : null;
+  const distancePercent =
+    distance !== null && thresholdPrice > 0 ? (distance / thresholdPrice) * 100 : null;
+  const distanceText =
+    distance === null
+      ? '거리 계산 전'
+      : distance <= 0
+        ? `기준가 하회 ${formatMoney(Math.abs(distance), stock.currency)}`
+        : `기준가까지 ${formatMoney(distance, stock.currency)} · ${distancePercent.toFixed(2)}%`;
+
+  return `
+    <article class="sell-decision-item ${escapeHtml(watchStatus.level)}">
+      <div>
+        <strong>${escapeHtml(stock.displayName || stock.symbol)}</strong>
+        <span>${escapeHtml(watchStatus.label)} · ${escapeHtml(distanceText)}</span>
+      </div>
+      <div>
+        <span>최대 ${escapeHtml(metrics.maximumProfitAmount === null ? '-' : formatMoney(metrics.maximumProfitAmount, stock.currency))}</span>
+        <span>반납 ${escapeHtml(metrics.retracedProfitPercent === null ? '-' : formatPercent(metrics.retracedProfitPercent))}</span>
+      </div>
+    </article>
+  `;
+}
+
 function buildPortfolioSummaryGroups(stocks) {
   const groups = new Map();
 
   for (const stock of stocks) {
+    if (normalizePositionStatus(stock.positionStatus) !== 'holding') {
+      continue;
+    }
+
     const metrics = calculateHoldingMetrics(stock);
 
     if (!metrics.hasQuantity || metrics.investmentAmount === null) {
@@ -4191,6 +6447,9 @@ function formatCurrencyTotals(totals) {
 }
 
 function renderWatchControls() {
+  state.watchFilter = normalizeWatchFilter(state.watchFilter);
+  state.watchSort = normalizeWatchSort(state.watchSort);
+
   elements.watchFilterButtons.forEach((button) => {
     button.classList.toggle('active', button.dataset.watchFilter === state.watchFilter);
   });
@@ -4198,7 +6457,7 @@ function renderWatchControls() {
 }
 
 function filterWatchStocks(items) {
-  const filter = state.watchFilter;
+  const filter = normalizeWatchFilter(state.watchFilter);
 
   if (filter === 'all') {
     return items;
@@ -4210,11 +6469,15 @@ function filterWatchStocks(items) {
     );
   }
 
+  if (['holding', 'watch', 'sold'].includes(filter)) {
+    return items.filter(({ stock }) => normalizePositionStatus(stock.positionStatus) === filter);
+  }
+
   return items.filter(({ watchStatus }) => watchStatus.level === filter);
 }
 
 function compareWatchStocks(left, right) {
-  const sort = state.watchSort;
+  const sort = normalizeWatchSort(state.watchSort);
   const leftStatus = left.watchStatus;
   const rightStatus = right.watchStatus;
 
@@ -4278,6 +6541,11 @@ function getTimeValue(value) {
   return Number.isFinite(time) ? time : 0;
 }
 
+function isAlertSnoozed(stock, now = new Date()) {
+  const until = new Date(stock?.alertSnoozedUntil || 0).getTime();
+  return Number.isFinite(until) && until > now.getTime();
+}
+
 function editStockForm(stock) {
   const form = document.createElement('form');
   form.className = 'stock-edit-form';
@@ -4285,6 +6553,16 @@ function editStockForm(stock) {
     <label>
       <span>표시 이름</span>
       <input name="displayName" value="${escapeHtml(stock.displayName || '')}" autocomplete="off" />
+    </label>
+    <label>
+      <span>종목 상태</span>
+      <select name="positionStatus">
+        ${renderPositionStatusOptions(stock.positionStatus)}
+      </select>
+    </label>
+    <label>
+      <span>매도일</span>
+      <input name="soldAt" type="date" value="${escapeHtml(stock.soldAt || '')}" />
     </label>
     <label>
       <span>매수가</span>
@@ -4344,6 +6622,7 @@ function editStockForm(stock) {
       <span>반복 분</span>
       <input name="alertCooldownMinutes" type="text" inputmode="numeric" pattern="[0-9]*" value="${escapeHtml(stock.alertCooldownMinutes)}" required />
     </label>
+    <div class="alert-rule-summary compact" data-alert-rule-guide></div>
     <label>
       <span>투자 목표가</span>
       <input name="investmentTargetPrice" type="text" inputmode="decimal" pattern="[0-9]*[.]?[0-9]*" value="${escapeHtml(stock.investmentTargetPrice || '')}" />
@@ -4377,6 +6656,11 @@ function editStockForm(stock) {
   });
 
   form.elements.alertType.addEventListener('change', () => syncAlertTypeControls(form));
+  form.addEventListener('input', (event) => {
+    if (event.target === form.elements.thresholdPercent || event.target === form.elements.targetPrice) {
+      renderAlertRuleSummary(form.elements.alertType.value, form.querySelector('[data-alert-rule-guide]'), form);
+    }
+  });
 
   form.addEventListener('submit', async (event) => {
     event.preventDefault();
@@ -4451,10 +6735,12 @@ function manualTestForm(stock) {
 function alertToggle(stock) {
   const button = document.createElement('button');
   const enabled = stock.active !== false;
+  const sold = normalizePositionStatus(stock.positionStatus) === 'sold';
   const displayName = stock.displayName || stock.symbol;
 
   button.type = 'button';
   button.className = `alert-toggle ${enabled ? 'on' : 'off'}`;
+  button.disabled = sold;
   button.setAttribute('role', 'switch');
   button.setAttribute('aria-checked', enabled ? 'true' : 'false');
   button.setAttribute('aria-label', `${displayName} 알림 ${enabled ? '끄기' : '켜기'}`);
@@ -4462,7 +6748,7 @@ function alertToggle(stock) {
     <span class="alert-toggle-track" aria-hidden="true">
       <span class="alert-toggle-thumb"></span>
     </span>
-    <span class="alert-toggle-text">${enabled ? '알림 켜짐' : '알림 꺼짐'}</span>
+    <span class="alert-toggle-text">${sold ? '매도 완료' : enabled ? '알림 켜짐' : '알림 꺼짐'}</span>
   `;
 
   button.addEventListener('click', () =>
@@ -4544,7 +6830,8 @@ function renderBackups() {
   }
 
   const retentionText = state.backupRetention ? `최대 ${state.backupRetention}개 보관` : '백업 보관';
-  elements.backupSummary.textContent = `${state.backups.length}개 백업 · ${retentionText}`;
+  const autoText = formatAutoBackupSummary(state.autoBackup);
+  elements.backupSummary.textContent = `${state.backups.length}개 백업 · ${retentionText} · ${autoText}`;
 
   if (!state.backups.length) {
     elements.backupList.innerHTML = '<div class="empty">백업 파일이 없습니다.</div>';
@@ -4577,12 +6864,55 @@ function renderBackups() {
       `;
 
       row.querySelector('.backup-actions').append(
+        actionButton('미리보기', 'btn btn-outline btn-sm secondary-button', () => previewBackupItem(backup)),
         actionButton('복구', 'btn btn-danger btn-sm danger-button', () => restoreBackupItem(backup)),
         actionButton('삭제', 'btn btn-outline btn-sm secondary-button', () => deleteBackupItem(backup))
       );
 
       return row;
     })
+  );
+}
+
+function formatAutoBackupSummary(autoBackup) {
+  if (!autoBackup) {
+    return '자동 백업 확인 전';
+  }
+
+  if (!autoBackup.enabled) {
+    return '자동 백업 꺼짐';
+  }
+
+  const interval = autoBackup.intervalHours ? `${autoBackup.intervalHours}시간 주기` : '자동 백업 켜짐';
+  const last = autoBackup.last?.createdAt || autoBackup.last?.checkedAt;
+  return last ? `${interval} · 최근 ${formatDate(last)}` : interval;
+}
+
+async function previewBackupItem(backup) {
+  const result = await api(`/api/backups/preview?target=${encodeURIComponent(backup.name)}`);
+  const preview = result.preview || {};
+  const counts = preview.counts || {};
+  const samples = Array.isArray(preview.samples?.stocks) ? preview.samples.stocks : [];
+  const stockLines = samples.length
+    ? samples
+        .map((stock) => `- ${stock.displayName || stock.symbol || '-'} · ${getPositionStatusLabel(stock.positionStatus)}${stock.active ? '' : ' · 알림 꺼짐'}`)
+        .join('\n')
+    : '- 샘플 종목 없음';
+
+  window.alert(
+    [
+      '백업 미리보기',
+      '',
+      `파일: ${preview.backup?.name || backup.name}`,
+      `종목: ${counts.stocks || 0}개 · 활성 ${counts.activeStocks || 0}개`,
+      `알림 기록: ${counts.alerts || 0}개 · 기기: ${counts.devices || 0}개`,
+      preview.meta?.updatedAt ? `마지막 저장: ${formatDate(preview.meta.updatedAt)}` : '',
+      '',
+      '샘플 종목',
+      stockLines
+    ]
+      .filter((line) => line !== '')
+      .join('\n')
   );
 }
 
@@ -4609,17 +6939,21 @@ async function deleteBackupItem(backup) {
 
   state.backups = result.backups || [];
   state.backupRetention = result.retention || state.backupRetention;
+  state.autoBackup = result.autoBackup || state.autoBackup;
   renderBackups();
   showMessage('선택한 백업을 삭제했습니다.');
 }
 
 async function restoreBackupItem(backup) {
+  const preview = await api(`/api/backups/preview?target=${encodeURIComponent(backup.name)}`).catch(() => null);
+  const counts = preview?.preview?.counts || {};
   const confirmed = window.confirm(
     [
       '선택한 백업으로 데이터를 복구합니다.',
       '',
       `백업: ${backup.name}`,
       `생성 시각: ${formatDate(backup.createdAt)}`,
+      `복구될 데이터: 종목 ${counts.stocks || 0}개 · 알림 ${counts.alerts || 0}개`,
       '',
       '현재 데이터는 복구 전에 안전 백업으로 먼저 저장됩니다.',
       '계속할까요?'
@@ -4720,6 +7054,14 @@ function renderDividendRetryMessage(stock, result) {
 }
 
 function getStockStatusLabel(stock) {
+  if (normalizePositionStatus(stock.positionStatus) === 'sold') {
+    return '매도 완료';
+  }
+
+  if (isAlertSnoozed(stock)) {
+    return '알림 일시중지';
+  }
+
   if (!stock.active) {
     return '알림 꺼짐';
   }
@@ -4742,6 +7084,14 @@ function getStockStatusLabel(stock) {
 }
 
 function getStockStatusClass(stock) {
+  if (normalizePositionStatus(stock.positionStatus) === 'sold') {
+    return 'muted';
+  }
+
+  if (isAlertSnoozed(stock)) {
+    return 'muted';
+  }
+
   if (!stock.active) {
     return 'muted';
   }
@@ -4763,6 +7113,7 @@ function getStockStatusClass(stock) {
 }
 
 function getWatchStatus(stock) {
+  const positionStatus = normalizePositionStatus(stock.positionStatus);
   const thresholdPrice = calculateAlertThreshold(stock);
   const lastPrice = parseFiniteNumber(stock.lastPrice);
   const distance =
@@ -4770,6 +7121,24 @@ function getWatchStatus(stock) {
   const distancePercent =
     distance !== null && thresholdPrice && thresholdPrice > 0 ? (distance / thresholdPrice) * 100 : null;
   const distanceText = formatDistanceToThreshold(distance, distancePercent, stock.currency);
+
+  if (positionStatus === 'sold') {
+    return {
+      level: 'sold',
+      label: '매도 완료',
+      detail: stock.soldAt ? `매도일 ${formatDateOnly(stock.soldAt)}` : '매도 기록으로 보관 중입니다.',
+      distancePercent
+    };
+  }
+
+  if (isAlertSnoozed(stock)) {
+    return {
+      level: 'inactive',
+      label: '알림 일시중지',
+      detail: `재개 ${formatDate(stock.alertSnoozedUntil)}`,
+      distancePercent
+    };
+  }
 
   if (!stock.active) {
     return {
@@ -4839,6 +7208,14 @@ function formatLastChecked(value) {
 }
 
 function formatStockStatusDetail(stock) {
+  if (normalizePositionStatus(stock.positionStatus) === 'sold') {
+    return stock.soldAt ? `매도일 ${formatDateOnly(stock.soldAt)}` : '자동 알림 제외';
+  }
+
+  if (isAlertSnoozed(stock)) {
+    return `재개 ${formatDate(stock.alertSnoozedUntil)}`;
+  }
+
   if (stock.lastCheckStatus === 'high_initialized' && stock.highPriceAt) {
     return `최고가 기준 ${formatDateOnly(stock.highPriceAt)}`;
   }
@@ -4884,6 +7261,61 @@ function formatQuoteSourceDetail(source) {
   ]
     .filter(Boolean)
     .join(' · ');
+}
+
+function getQuoteQuality(stock) {
+  if (stock.lastCheckStatus === 'error') {
+    return {
+      level: 'bad',
+      label: '조회 실패',
+      detail: stock.lastError || '최근 시세를 가져오지 못했습니다.'
+    };
+  }
+
+  if (!stock.lastCheckedAt) {
+    return {
+      level: 'pending',
+      label: '확인 전',
+      detail: '아직 서버에서 시세를 확인하지 않았습니다.'
+    };
+  }
+
+  const checkedAgeMinutes = getAgeMinutes(stock.lastCheckedAt);
+  const quoteAgeMinutes = getAgeMinutes(stock.quoteRegularMarketTime || stock.lastCheckedAt);
+  const delay = String(stock.quoteDataDelay || '').toLowerCase();
+  const provider = getProviderLabel(stock.quoteProvider);
+
+  if (checkedAgeMinutes !== null && checkedAgeMinutes > 180) {
+    return {
+      level: 'stale',
+      label: '오래됨',
+      detail: `${Math.round(checkedAgeMinutes)}분 전 확인 · ${provider || 'provider 미상'}`
+    };
+  }
+
+  if (delay.includes('delayed') || delay.includes('eod') || quoteAgeMinutes > 60) {
+    return {
+      level: 'delayed',
+      label: '지연 가능',
+      detail: `${provider || 'provider 미상'} · ${getQuoteDataDelayLabel(stock.quoteDataDelay)}`
+    };
+  }
+
+  return {
+    level: 'ok',
+    label: '정상',
+    detail: `${provider || 'provider 미상'} · ${formatDate(stock.lastCheckedAt)}`
+  };
+}
+
+function getAgeMinutes(value) {
+  const time = new Date(value || 0).getTime();
+
+  if (!Number.isFinite(time) || time <= 0) {
+    return null;
+  }
+
+  return (Date.now() - time) / 60000;
 }
 
 function getQuoteDataDelayLabel(value) {
@@ -5065,6 +7497,43 @@ function renderHoldingSummary(stock) {
       ${renderHoldingMetric('배당 지급월', formatDividendMonths(metrics.dividendMonths))}
       ${renderHoldingMetric('배당 갱신', formatDividendRefreshStatus(stock), stock.dividendLastError ? 'down' : '')}
     </div>
+  `;
+}
+
+function renderSellDecisionCard(stock, watchStatus) {
+  const thresholdPrice = calculateAlertThreshold(stock);
+  const lastPrice = parseFiniteNumber(stock.lastPrice);
+  const metrics = calculateHoldingMetrics(stock);
+
+  if (normalizePositionStatus(stock.positionStatus) !== 'holding') {
+    return '';
+  }
+
+  const distance =
+    thresholdPrice !== null && lastPrice !== null ? lastPrice - thresholdPrice : null;
+  const distanceText =
+    distance === null
+      ? '현재가 확인 후 계산'
+      : distance <= 0
+        ? `기준가보다 ${formatMoney(Math.abs(distance), stock.currency)} 낮음`
+        : `기준가까지 ${formatMoney(distance, stock.currency)}`;
+  const retracementText =
+    metrics.retracedProfitPercent === null
+      ? '최대 수익금 계산 전'
+      : `${formatPercent(metrics.retracedProfitPercent)} 반납`;
+
+  return `
+    <section class="sell-decision-card" aria-label="매도 판단">
+      <div>
+        <span>매도 판단</span>
+        <strong>${escapeHtml(watchStatus.label)}</strong>
+      </div>
+      <div>
+        <span>${escapeHtml(distanceText)}</span>
+        <span>최대 수익금 ${escapeHtml(metrics.maximumProfitAmount === null ? '-' : formatMoney(metrics.maximumProfitAmount, stock.currency))}</span>
+        <span>${escapeHtml(retracementText)}</span>
+      </div>
+    </section>
   `;
 }
 
@@ -5617,6 +8086,20 @@ async function patchStock(id, patch) {
   await loadData();
 }
 
+async function snoozeStockAlert(stock, minutes) {
+  const until = new Date(Date.now() + Number(minutes || 60) * 60 * 1000).toISOString();
+  await patchStock(stock.id, { alertSnoozedUntil: until, active: true });
+  showMessage(`${stock.displayName || stock.symbol} 알림을 ${minutes}분 동안 중지했습니다.`);
+}
+
+async function snoozeStockAlertUntilTomorrow(stock) {
+  const now = new Date();
+  const until = new Date(now);
+  until.setHours(23, 59, 59, 999);
+  await patchStock(stock.id, { alertSnoozedUntil: until.toISOString(), active: true });
+  showMessage(`${stock.displayName || stock.symbol} 알림을 오늘까지 중지했습니다.`);
+}
+
 async function deleteStock(id) {
   await api(`/api/stocks/${id}`, {
     method: 'DELETE'
@@ -5639,6 +8122,34 @@ function showMessage(text, isError = false) {
   showMessage.timer = window.setTimeout(() => {
     messageElement.className = 'message';
   }, 4500);
+}
+
+function showErrorMessage(error) {
+  showMessage(getDisplayErrorMessage(error), true);
+}
+
+function getDisplayErrorMessage(error) {
+  if (isConnectionError(error)) {
+    return CONNECTION_ERROR_ACTION_MESSAGE;
+  }
+
+  return error?.message || '요청 처리 중 오류가 발생했습니다.';
+}
+
+function isConnectionError(error) {
+  const message = String(error?.message || error || '');
+  const causeMessage = String(error?.cause?.message || '');
+
+  return Boolean(
+    error?.isConnectionError ||
+      message.includes(CONNECTION_ERROR_MESSAGE) ||
+      message.includes('Failed to fetch') ||
+      message.includes('Load failed') ||
+      message.includes('NetworkError') ||
+      causeMessage.includes('Failed to fetch') ||
+      causeMessage.includes('Load failed') ||
+      causeMessage.includes('NetworkError')
+  );
 }
 
 async function copyText(text) {
@@ -6292,6 +8803,7 @@ function escapeHtml(value) {
     .replaceAll("'", '&#039;');
 }
 
+updateConnectionBanner();
 syncResponsiveTabs();
 initWebApp();
 initializeDashboard();
@@ -6320,7 +8832,7 @@ async function initializeDashboard() {
 }
 
 async function loadAdminData() {
-  await Promise.all([loadHealth(), loadData(), loadBackups()]);
+  await Promise.all([loadHealth(), loadData(), loadBackups(), loadObservationIssues()]);
 }
 
 function initWebApp() {
