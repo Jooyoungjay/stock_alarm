@@ -247,6 +247,8 @@ test('local webapp stabilization docs cover cache, status, backups, and quote qu
   assert.match(readme, /check:visual/);
   assert.match(readme, /check:observation/);
   assert.match(readme, /--live-session/);
+  assert.match(readme, /--save-history/);
+  assert.match(readme, /data\/observation-history/);
   assert.match(readme, /check-local-observation\.js/);
   assert.match(readme, /local-webapp-observation-2026-05-21\.md/);
   assert.match(readme, /local-webapp-ux-review-2026-05-26\.md/);
@@ -276,6 +278,7 @@ test('local webapp stabilization docs cover cache, status, backups, and quote qu
   assert.match(roadmap, /배당 API 자동 검증 대시보드 확장/);
   assert.match(roadmap, /로컬 장중 실사용 재검증/);
   assert.match(roadmap, /로컬 점검 결과 저장\/히스토리/);
+  assert.match(roadmap, /로컬 점검 히스토리 관리자 화면 노출/);
   assert.match(roadmap, /텔레그램 편의 명령 확장/);
 
   assert.match(uxReview, /로컬 웹앱 사용자 편의 개선 회고/);
@@ -286,6 +289,7 @@ test('local webapp stabilization docs cover cache, status, backups, and quote qu
   assert.match(uxReview, /배당 API 자동 검증 대시보드 확장/);
   assert.match(uxReview, /로컬 장중 실사용 재검증/);
   assert.match(uxReview, /로컬 점검 결과 저장\/히스토리/);
+  assert.match(uxReview, /로컬 점검 히스토리 관리자 화면 노출/);
   assert.match(uxReview, /위험 종목/);
   assert.match(uxReview, /시세 또는 배당 조회 실패/);
   assert.match(uxReview, /주문, 자동 매매, 매수\/매도 추천 문구는 넣지 않습니다/);
@@ -399,9 +403,11 @@ test('local webapp observation report documents daily use checks and issue track
   assert.match(markdown, /OBS-008/);
   assert.match(markdown, /OBS-009/);
   assert.match(markdown, /OBS-010/);
+  assert.match(markdown, /OBS-011/);
   assert.match(markdown, /check:observation/);
   assert.match(markdown, /--run-state-check/);
   assert.match(markdown, /--live-session/);
+  assert.match(markdown, /--save-history/);
   assert.match(markdown, /상태 변경 검증 결과/);
   assert.match(markdown, /실사용 회고 결과/);
   assert.match(markdown, /실패 항목 \| 0개/);
@@ -415,6 +421,7 @@ test('local webapp observation report documents daily use checks and issue track
   assert.match(markdown, /배당 API 자동 검증 대시보드 확장/);
   assert.match(markdown, /로컬 장중 실사용 재검증/);
   assert.match(markdown, /로컬 점검 결과 저장\/히스토리/);
+  assert.match(markdown, /로컬 점검 히스토리 관리자 화면 노출/);
 });
 
 test('full regression execution report records results and fixed defects', async () => {

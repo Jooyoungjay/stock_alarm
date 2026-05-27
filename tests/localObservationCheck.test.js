@@ -113,6 +113,54 @@ test('runLocalObservationCheck adds live-session checks for real registered stoc
   assert.match(formatLocalObservationReport(result), /장중 시세 최신성/);
 });
 
+test('runLocalObservationCheck saves history and compares the previous result', async () => {
+  const rootDir = await createObservationFixture();
+  const historyDir = path.join(rootDir, 'observation-history-test');
+  const first = await runLocalObservationCheck({
+    rootDir,
+    baseUrl: 'http://127.0.0.1:3001',
+    adminToken: 'admin-token',
+    now: '2026-05-22T09:00:00.000Z',
+    saveHistory: true,
+    historyDir,
+    historyLimit: 1,
+    fetchImpl: createObservationFetch()
+  });
+
+  assert.equal(first.history.enabled, true);
+  assert.equal(first.history.saved, true);
+  assert.equal(first.history.comparison.hasPrevious, false);
+  assert.match(first.history.fileName, /^observation-2026-05-22T09-00-00-000Z\.json$/);
+  assert.match(formatLocalObservationReport(first), /히스토리/);
+  assert.ok(await fileExists(first.history.filePath));
+
+  const second = await runLocalObservationCheck({
+    rootDir,
+    baseUrl: 'http://127.0.0.1:3001',
+    adminToken: 'admin-token',
+    now: '2026-05-22T09:30:00.000Z',
+    saveHistory: true,
+    historyDir,
+    historyLimit: 1,
+    fetchImpl: async () => {
+      throw new Error('connect ECONNREFUSED');
+    }
+  });
+
+  assert.equal(second.ready, false);
+  assert.equal(second.history.saved, true);
+  assert.equal(second.history.comparison.hasPrevious, true);
+  assert.ok(second.history.comparison.delta.failed > 0);
+  assert.ok(
+    second.history.comparison.changedResults.some(
+      (item) => item.id === 'server-start' && item.from === 'passed' && item.to === 'failed'
+    )
+  );
+
+  const files = await fs.readdir(historyDir);
+  assert.equal(files.filter((name) => name.endsWith('.json')).length, 1);
+});
+
 test('runLocalObservationCheck fails when the server cannot be reached', async () => {
   const rootDir = await createObservationFixture();
   const result = await runLocalObservationCheck({
@@ -141,7 +189,11 @@ test('local observation args and CLI support help, json, and manual strict mode'
     '--live-session',
     '--live-max-age-minutes',
     '45',
-    '--live-dividend-max-age-hours=96'
+    '--live-dividend-max-age-hours=96',
+    '--save-history',
+    '--history-dir',
+    'data/custom-observation-history',
+    '--history-limit=7'
   ]);
 
   assert.equal(parsed.baseUrl, 'http://127.0.0.1:3002');
@@ -153,9 +205,13 @@ test('local observation args and CLI support help, json, and manual strict mode'
   assert.equal(parsed.liveSession, true);
   assert.equal(parsed.liveMaxAgeMinutes, '45');
   assert.equal(parsed.liveDividendMaxAgeHours, '96');
+  assert.equal(parsed.saveHistory, true);
+  assert.equal(parsed.historyDir, 'data/custom-observation-history');
+  assert.equal(parsed.historyLimit, '7');
   assert.match(getLocalObservationHelp(), /check:observation/);
   assert.match(getLocalObservationHelp(), /--run-state-check/);
   assert.match(getLocalObservationHelp(), /--live-session/);
+  assert.match(getLocalObservationHelp(), /--save-history/);
 
   const helpOutput = createWritableBuffer();
   const helpCode = await runLocalObservationCli(['--help'], {
@@ -348,4 +404,13 @@ function createWritableBuffer() {
       this.text += value;
     }
   };
+}
+
+async function fileExists(filePath) {
+  try {
+    await fs.access(filePath);
+    return true;
+  } catch {
+    return false;
+  }
 }

@@ -5,6 +5,8 @@ const defaultBaseUrl = 'http://127.0.0.1:3000';
 const defaultTimeoutMs = 10000;
 const defaultLiveMaxAgeMinutes = 30;
 const defaultLiveDividendMaxAgeHours = 72;
+const defaultHistoryLimit = 30;
+const defaultHistoryDirName = 'observation-history';
 const defaultEnv = process.env;
 
 const statusLabels = {
@@ -26,7 +28,10 @@ export function parseLocalObservationArgs(args = [], options = {}) {
     runStateCheck: false,
     liveSession: false,
     liveMaxAgeMinutes: defaultLiveMaxAgeMinutes,
-    liveDividendMaxAgeHours: defaultLiveDividendMaxAgeHours
+    liveDividendMaxAgeHours: defaultLiveDividendMaxAgeHours,
+    saveHistory: false,
+    historyDir: '',
+    historyLimit: defaultHistoryLimit
   };
 
   for (let index = 0; index < args.length; index += 1) {
@@ -42,6 +47,8 @@ export function parseLocalObservationArgs(args = [], options = {}) {
       parsed.runStateCheck = true;
     } else if (arg === '--live-session') {
       parsed.liveSession = true;
+    } else if (arg === '--save-history') {
+      parsed.saveHistory = true;
     } else if (arg === '--base-url') {
       parsed.baseUrl = args[index + 1] || '';
       index += 1;
@@ -67,6 +74,16 @@ export function parseLocalObservationArgs(args = [], options = {}) {
       index += 1;
     } else if (arg.startsWith('--live-dividend-max-age-hours=')) {
       parsed.liveDividendMaxAgeHours = arg.slice('--live-dividend-max-age-hours='.length);
+    } else if (arg === '--history-dir') {
+      parsed.historyDir = args[index + 1] || '';
+      index += 1;
+    } else if (arg.startsWith('--history-dir=')) {
+      parsed.historyDir = arg.slice('--history-dir='.length);
+    } else if (arg === '--history-limit') {
+      parsed.historyLimit = args[index + 1] || '';
+      index += 1;
+    } else if (arg.startsWith('--history-limit=')) {
+      parsed.historyLimit = arg.slice('--history-limit='.length);
     } else {
       throw new Error(`알 수 없는 옵션입니다: ${arg}`);
     }
@@ -89,12 +106,16 @@ export function getLocalObservationHelp() {
     '  --live-session         실제 등록 종목의 장중 시세/배당/알림 상태를 추가 검증',
     `  --live-max-age-minutes <분>       장중 시세 최신성 기준. 기본값 ${defaultLiveMaxAgeMinutes}`,
     `  --live-dividend-max-age-hours <시간> 배당 진단 최신성 기준. 기본값 ${defaultLiveDividendMaxAgeHours}`,
+    '  --save-history         점검 결과를 JSON 파일로 저장하고 직전 결과와 비교',
+    `  --history-dir <path>   히스토리 저장 폴더. 기본값 DATA_DIR/${defaultHistoryDirName}`,
+    `  --history-limit <개수> 보관할 최근 히스토리 파일 수. 기본값 ${defaultHistoryLimit}`,
     '  --help                 도움말 출력',
     '',
     '주의:',
     '  기본 점검은 읽기 중심 smoke check입니다.',
     '  --run-state-check는 사전 백업 후 검증용 종목을 만들고 삭제하는 데이터 변경 점검입니다.',
-    '  --live-session은 읽기 전용이며, 장중 즉시 확인이나 배당 새로고침을 실행한 뒤 쓰면 실데이터 상태를 검증합니다.'
+    '  --live-session은 읽기 전용이며, 장중 즉시 확인이나 배당 새로고침을 실행한 뒤 쓰면 실데이터 상태를 검증합니다.',
+    `  --save-history는 기본적으로 data/${defaultHistoryDirName}/ 아래에 점검 기록을 남깁니다.`
   ].join('\n');
 }
 
@@ -117,7 +138,7 @@ export async function runLocalObservationCheck(input = {}) {
   };
 
   if (!isHttpUrl(values.baseUrl)) {
-    return buildResult({
+    return buildAndMaybeSaveResult({
       generatedAt,
       values,
       results: [
@@ -190,7 +211,7 @@ export async function runLocalObservationCheck(input = {}) {
     );
   }
 
-  return buildResult({ generatedAt, values, results, stateCheck: context.stateCheck });
+  return buildAndMaybeSaveResult({ generatedAt, values, results, stateCheck: context.stateCheck });
 }
 
 export function formatLocalObservationReport(result) {
@@ -234,6 +255,35 @@ export function formatLocalObservationReport(result) {
     '',
     `요약: failed=${result.summary.failed}, manual=${result.summary.manual}, passed=${result.summary.passed}`
   );
+
+  if (result.history?.enabled) {
+    lines.push('', '히스토리:');
+    if (result.history.saved) {
+      lines.push(`- 저장 파일: ${result.history.filePath}`);
+      lines.push(`- 보관 폴더: ${result.history.historyDir}`);
+
+      if (result.history.comparison?.hasPrevious) {
+        const comparison = result.history.comparison;
+        lines.push(`- 직전 점검: ${comparison.previous.generatedAt} · ${comparison.previous.ready ? 'READY' : 'NOT READY'}`);
+        lines.push(`- 변화: ${formatHistoryDelta(comparison.delta)}`);
+
+        if (comparison.changedResults.length) {
+          lines.push(
+            `- 상태 변경: ${comparison.changedResults
+              .slice(0, 5)
+              .map((item) => `${item.item} ${formatStatusLabel(item.from)}→${formatStatusLabel(item.to)}`)
+              .join(', ')}`
+          );
+        } else {
+          lines.push('- 상태 변경: 없음');
+        }
+      } else {
+        lines.push('- 직전 점검: 없음. 이번 결과가 비교 기준입니다.');
+      }
+    } else {
+      lines.push(`- 저장 실패: ${result.history.error || '원인 미상'}`);
+    }
+  }
 
   if (result.suggestedIssue) {
     lines.push(
@@ -758,6 +808,21 @@ function checkLiveAlertReadiness(context, generatedAt) {
   );
 }
 
+async function buildAndMaybeSaveResult({ generatedAt, values, results, stateCheck = null }) {
+  const result = buildResult({ generatedAt, values, results, stateCheck });
+
+  if (values.saveHistory) {
+    result.history = await saveLocalObservationHistory(result, values);
+  } else {
+    result.history = {
+      enabled: false,
+      saved: false
+    };
+  }
+
+  return result;
+}
+
 function buildResult({ generatedAt, values, results, stateCheck = null }) {
   const summary = results.reduce(
     (counts, item) => {
@@ -778,7 +843,10 @@ function buildResult({ generatedAt, values, results, stateCheck = null }) {
       runStateCheck: Boolean(values.runStateCheck),
       liveSession: Boolean(values.liveSession),
       liveMaxAgeMinutes: values.liveMaxAgeMinutes,
-      liveDividendMaxAgeHours: values.liveDividendMaxAgeHours
+      liveDividendMaxAgeHours: values.liveDividendMaxAgeHours,
+      saveHistory: Boolean(values.saveHistory),
+      historyDir: values.historyDir,
+      historyLimit: values.historyLimit
     },
     summary,
     results,
@@ -793,6 +861,256 @@ function buildResult({ generatedAt, values, results, stateCheck = null }) {
           }
         : null
   };
+}
+
+async function saveLocalObservationHistory(result, values) {
+  const historyDir = values.historyDir;
+
+  try {
+    const previousEntries = await readLocalObservationHistory(historyDir, {
+      limit: values.historyLimit
+    });
+    const previous = previousEntries[0] || null;
+    const snapshot = createObservationHistorySnapshot(result);
+    const fileName = createObservationHistoryFileName(result.generatedAt);
+    const filePath = path.join(historyDir, fileName);
+
+    await fs.mkdir(historyDir, { recursive: true });
+    await fs.writeFile(filePath, `${JSON.stringify(snapshot, null, 2)}\n`, 'utf8');
+    await pruneLocalObservationHistory(historyDir, values.historyLimit);
+
+    const recent = await readLocalObservationHistory(historyDir, {
+      limit: Math.min(values.historyLimit, 5)
+    });
+
+    return {
+      enabled: true,
+      saved: true,
+      historyDir,
+      fileName,
+      filePath,
+      previous: previous ? summarizeObservationHistoryEntry(previous) : null,
+      comparison: compareObservationHistory(result, previous),
+      recent: recent.map(summarizeObservationHistoryEntry)
+    };
+  } catch (error) {
+    return {
+      enabled: true,
+      saved: false,
+      historyDir,
+      fileName: '',
+      filePath: '',
+      previous: null,
+      comparison: null,
+      recent: [],
+      error: error.message
+    };
+  }
+}
+
+async function readLocalObservationHistory(historyDir, options = {}) {
+  const limit = normalizeBoundedNumber(options.limit, defaultHistoryLimit, { min: 1, max: 10000 });
+  let names = [];
+
+  try {
+    names = await fs.readdir(historyDir);
+  } catch {
+    return [];
+  }
+
+  const entries = await Promise.all(
+    names
+      .filter((name) => name.startsWith('observation-') && name.endsWith('.json'))
+      .map(async (name) => {
+        const filePath = path.join(historyDir, name);
+
+        try {
+          const [content, stat] = await Promise.all([
+            fs.readFile(filePath, 'utf8'),
+            fs.stat(filePath)
+          ]);
+          const data = JSON.parse(content);
+
+          return {
+            ...data,
+            fileName: name,
+            filePath,
+            mtimeMs: stat.mtimeMs,
+            generatedAt: normalizeIsoDateTime(data.generatedAt) || new Date(stat.mtimeMs).toISOString()
+          };
+        } catch {
+          return null;
+        }
+      })
+  );
+
+  return entries
+    .filter(Boolean)
+    .sort((left, right) => {
+      const rightTime = new Date(right.generatedAt).getTime();
+      const leftTime = new Date(left.generatedAt).getTime();
+
+      if (rightTime !== leftTime) {
+        return rightTime - leftTime;
+      }
+
+      return right.mtimeMs - left.mtimeMs;
+    })
+    .slice(0, limit);
+}
+
+async function pruneLocalObservationHistory(historyDir, historyLimit) {
+  const entries = await readLocalObservationHistory(historyDir, { limit: 10000 });
+  const staleEntries = entries.slice(historyLimit);
+
+  await Promise.all(
+    staleEntries.map((entry) =>
+      fs.unlink(entry.filePath).catch(() => {})
+    )
+  );
+}
+
+function createObservationHistorySnapshot(result) {
+  return {
+    schemaVersion: 1,
+    generatedAt: result.generatedAt,
+    ready: result.ready,
+    summary: normalizeHistorySummary(result.summary),
+    values: {
+      baseUrl: result.values.baseUrl,
+      hasAdminToken: result.values.hasAdminToken,
+      timeoutMs: result.values.timeoutMs,
+      runStateCheck: result.values.runStateCheck,
+      liveSession: result.values.liveSession,
+      liveMaxAgeMinutes: result.values.liveMaxAgeMinutes,
+      liveDividendMaxAgeHours: result.values.liveDividendMaxAgeHours
+    },
+    results: result.results.map((item) => ({
+      id: item.id,
+      item: item.item,
+      status: item.status,
+      statusLabel: item.statusLabel,
+      evidence: item.evidence,
+      nextAction: item.nextAction || ''
+    })),
+    stateCheck: result.stateCheck
+      ? {
+          ok: Boolean(result.stateCheck.ok),
+          backupName: result.stateCheck.backupName || '',
+          symbol: result.stateCheck.symbol || '',
+          cleanedUp: Boolean(result.stateCheck.cleanedUp),
+          error: result.stateCheck.error || '',
+          steps: result.stateCheck.steps || []
+        }
+      : null,
+    suggestedIssue: result.suggestedIssue
+  };
+}
+
+function createObservationHistoryFileName(generatedAt) {
+  return `observation-${String(generatedAt || new Date().toISOString()).replace(/[:.]/g, '-')}.json`;
+}
+
+function compareObservationHistory(current, previous) {
+  if (!previous) {
+    return {
+      hasPrevious: false,
+      previous: null,
+      delta: { failed: 0, manual: 0, passed: 0 },
+      changedResults: []
+    };
+  }
+
+  const previousSummary = normalizeHistorySummary(previous.summary);
+  const currentSummary = normalizeHistorySummary(current.summary);
+  const previousResults = new Map((previous.results || []).map((item) => [item.id, item]));
+  const currentResults = new Map((current.results || []).map((item) => [item.id, item]));
+  const resultIds = [...new Set([...previousResults.keys(), ...currentResults.keys()])];
+  const changedResults = resultIds
+    .map((id) => {
+      const previousItem = previousResults.get(id);
+      const currentItem = currentResults.get(id);
+      const from = previousItem?.status || 'missing';
+      const to = currentItem?.status || 'missing';
+
+      if (from === to) {
+        return null;
+      }
+
+      return {
+        id,
+        item: currentItem?.item || previousItem?.item || id,
+        from,
+        to
+      };
+    })
+    .filter(Boolean);
+
+  return {
+    hasPrevious: true,
+    previous: summarizeObservationHistoryEntry(previous),
+    delta: {
+      failed: currentSummary.failed - previousSummary.failed,
+      manual: currentSummary.manual - previousSummary.manual,
+      passed: currentSummary.passed - previousSummary.passed
+    },
+    changedResults
+  };
+}
+
+function summarizeObservationHistoryEntry(entry) {
+  const summary = normalizeHistorySummary(entry.summary);
+
+  return {
+    fileName: entry.fileName || '',
+    filePath: entry.filePath || '',
+    generatedAt: entry.generatedAt || '',
+    ready: Boolean(entry.ready),
+    summary,
+    failedResultIds: (entry.results || [])
+      .filter((item) => item.status === 'failed')
+      .map((item) => item.id)
+  };
+}
+
+function normalizeHistorySummary(summary = {}) {
+  return {
+    failed: normalizeCount(summary.failed),
+    manual: normalizeCount(summary.manual),
+    passed: normalizeCount(summary.passed)
+  };
+}
+
+function normalizeCount(value) {
+  const number = Number(value);
+
+  return Number.isFinite(number) && number > 0 ? Math.trunc(number) : 0;
+}
+
+function formatHistoryDelta(delta = {}) {
+  return [
+    `failed ${formatSignedNumber(delta.failed)}`,
+    `manual ${formatSignedNumber(delta.manual)}`,
+    `passed ${formatSignedNumber(delta.passed)}`
+  ].join(', ');
+}
+
+function formatSignedNumber(value) {
+  const number = Number(value || 0);
+
+  if (number > 0) {
+    return `+${number}`;
+  }
+
+  return String(number);
+}
+
+function formatStatusLabel(status) {
+  if (status === 'missing') {
+    return '없음';
+  }
+
+  return statusLabels[status] || status;
 }
 
 function createResult(id, item, passCriteria, status, evidence, nextAction = '') {
@@ -897,6 +1215,13 @@ async function fetchText(endpoint, values, fetchImpl, options = {}) {
 }
 
 function normalizeValues(rootDir, env, input) {
+  const dataDir = input.dataDir || firstValue(env.DATA_DIR) || path.join(rootDir, 'data');
+  const historyDir = normalizeHistoryDir(
+    rootDir,
+    input.historyDir || firstValue(env.LOCAL_OBSERVATION_HISTORY_DIR),
+    dataDir
+  );
+
   return {
     rootDir,
     baseUrl: trimTrailingSlash(
@@ -920,6 +1245,13 @@ function normalizeValues(rootDir, env, input) {
       input.liveDividendMaxAgeHours || firstValue(env.LOCAL_OBSERVATION_DIVIDEND_MAX_AGE_HOURS),
       defaultLiveDividendMaxAgeHours,
       { min: 1, max: 720 }
+    ),
+    saveHistory: Boolean(input.saveHistory),
+    historyDir,
+    historyLimit: normalizeBoundedNumber(
+      input.historyLimit || firstValue(env.LOCAL_OBSERVATION_HISTORY_LIMIT),
+      defaultHistoryLimit,
+      { min: 1, max: 365 }
     )
   };
 }
@@ -1297,6 +1629,18 @@ function normalizeBoundedNumber(value, fallback, limits = {}) {
   }
 
   return Math.min(number, max);
+}
+
+function normalizeHistoryDir(rootDir, value, dataDir) {
+  const input = String(value || '').trim();
+  const base = String(dataDir || '').trim() || path.join(rootDir, 'data');
+  const target = input || path.join(base, defaultHistoryDirName);
+
+  if (path.isAbsolute(target)) {
+    return path.normalize(target);
+  }
+
+  return path.resolve(rootDir, target);
 }
 
 function isHttpUrl(value) {
