@@ -256,6 +256,8 @@ test('local webapp stabilization docs cover cache, status, backups, and quote qu
   assert.match(readme, /\/api\/observation-issues/);
   assert.match(readme, /관리자 실사용 이슈 우선순위 표시/);
   assert.match(readme, /실사용 관찰 체크리스트/);
+  assert.match(readme, /점검 히스토리/);
+  assert.match(readme, /\/api\/observation-history/);
   assert.match(readme, /감시 종목 필터와 정렬 선택을 브라우저에 저장/);
   assert.match(readme, /CSV 양식/);
   assert.match(readme, /행 검증 후 일괄 가져오기/);
@@ -279,6 +281,7 @@ test('local webapp stabilization docs cover cache, status, backups, and quote qu
   assert.match(roadmap, /로컬 장중 실사용 재검증/);
   assert.match(roadmap, /로컬 점검 결과 저장\/히스토리/);
   assert.match(roadmap, /로컬 점검 히스토리 관리자 화면 노출/);
+  assert.match(roadmap, /관리자 점검 실행\/히스토리 저장/);
   assert.match(roadmap, /텔레그램 편의 명령 확장/);
 
   assert.match(uxReview, /로컬 웹앱 사용자 편의 개선 회고/);
@@ -290,6 +293,7 @@ test('local webapp stabilization docs cover cache, status, backups, and quote qu
   assert.match(uxReview, /로컬 장중 실사용 재검증/);
   assert.match(uxReview, /로컬 점검 결과 저장\/히스토리/);
   assert.match(uxReview, /로컬 점검 히스토리 관리자 화면 노출/);
+  assert.match(uxReview, /관리자 점검 실행\/히스토리 저장/);
   assert.match(uxReview, /위험 종목/);
   assert.match(uxReview, /시세 또는 배당 조회 실패/);
   assert.match(uxReview, /주문, 자동 매매, 매수\/매도 추천 문구는 넣지 않습니다/);
@@ -404,6 +408,7 @@ test('local webapp observation report documents daily use checks and issue track
   assert.match(markdown, /OBS-009/);
   assert.match(markdown, /OBS-010/);
   assert.match(markdown, /OBS-011/);
+  assert.match(markdown, /OBS-012/);
   assert.match(markdown, /check:observation/);
   assert.match(markdown, /--run-state-check/);
   assert.match(markdown, /--live-session/);
@@ -422,6 +427,7 @@ test('local webapp observation report documents daily use checks and issue track
   assert.match(markdown, /로컬 장중 실사용 재검증/);
   assert.match(markdown, /로컬 점검 결과 저장\/히스토리/);
   assert.match(markdown, /로컬 점검 히스토리 관리자 화면 노출/);
+  assert.match(markdown, /관리자 점검 실행\/히스토리 저장/);
 });
 
 test('full regression execution report records results and fixed defects', async () => {
@@ -526,15 +532,24 @@ test('admin page exposes the KIS and Naver comparison controls', async () => {
 test('admin page exposes local observation issue controls', async () => {
   const html = await fs.readFile(new URL('../public/index.html', import.meta.url), 'utf8');
   const script = await fs.readFile(new URL('../public/app.js', import.meta.url), 'utf8');
+  const styles = await fs.readFile(new URL('../public/styles.css', import.meta.url), 'utf8');
 
   assert.match(html, /실사용 이슈/);
   assert.match(html, /observationIssuesPanel/);
   assert.match(html, /refreshObservationIssuesButton/);
+  assert.match(html, /점검 히스토리/);
+  assert.match(html, /observationHistoryPanel/);
+  assert.match(html, /refreshObservationHistoryButton/);
   assert.match(script, /\/api\/observation-issues/);
+  assert.match(script, /\/api\/observation-history/);
   assert.match(script, /renderObservationIssues/);
   assert.match(script, /renderObservationChecklist/);
+  assert.match(script, /renderObservationHistory/);
+  assert.match(script, /formatHistoryDeltaText/);
   assert.match(script, /nextChecklistItem/);
   assert.match(script, /priorityQueue/);
+  assert.match(styles, /observation-history-panel/);
+  assert.match(styles, /observation-history-row/);
 });
 
 test('user stock forms expose per-stock KIS market settings', async () => {

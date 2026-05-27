@@ -8,6 +8,7 @@ import {
   formatLocalObservationReport,
   getLocalObservationHelp,
   parseLocalObservationArgs,
+  readLocalObservationHistoryReport,
   runLocalObservationCheck
 } from '../src/localObservationCheck.js';
 import { main as runLocalObservationCli } from '../scripts/check-local-observation.js';
@@ -159,6 +160,16 @@ test('runLocalObservationCheck saves history and compares the previous result', 
 
   const files = await fs.readdir(historyDir);
   assert.equal(files.filter((name) => name.endsWith('.json')).length, 1);
+
+  const report = await readLocalObservationHistoryReport({
+    rootDir,
+    historyDir,
+    limit: 5
+  });
+  assert.equal(report.count, 1);
+  assert.equal(report.latest.ready, false);
+  assert.equal(report.recent[0].summary.failed, second.summary.failed);
+  assert.equal(report.comparison.hasPrevious, false);
 });
 
 test('runLocalObservationCheck fails when the server cannot be reached', async () => {
@@ -378,7 +389,7 @@ function createObservationFetch(options = {}) {
     }
 
     if (method === 'GET' && parsed.pathname === '/admin') {
-      return textResponse('<div id="serverStatusPanel"></div><div id="backupList"></div><div id="observationIssuesPanel"></div>');
+      return textResponse('<div id="serverStatusPanel"></div><div id="backupList"></div><div id="observationIssuesPanel"></div><div id="observationHistoryPanel"></div>');
     }
 
     return textResponse('', 404);

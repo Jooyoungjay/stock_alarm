@@ -222,6 +222,7 @@ const state = {
   dividendCalendar: null,
   quoteProviderStats: null,
   observationIssues: null,
+  observationHistory: null,
   kisQuoteSmokeTest: null,
   kisNaverQuoteComparison: null,
   kisNaverCompareHistory: [],
@@ -283,6 +284,8 @@ const elements = {
   roadmapSummary: document.querySelector('#roadmapSummary'),
   observationIssuesPanel: document.querySelector('#observationIssuesPanel'),
   observationIssuesSummary: document.querySelector('#observationIssuesSummary'),
+  observationHistoryPanel: document.querySelector('#observationHistoryPanel'),
+  observationHistorySummary: document.querySelector('#observationHistorySummary'),
   summaryText: document.querySelector('#summaryText'),
   telegramStatus: document.querySelector('#telegramStatus'),
   quoteStatus: document.querySelector('#quoteStatus'),
@@ -312,6 +315,7 @@ const elements = {
   refreshServerStatusButton: document.querySelector('#refreshServerStatusButton'),
   refreshRoadmapButton: document.querySelector('#refreshRoadmapButton'),
   refreshObservationIssuesButton: document.querySelector('#refreshObservationIssuesButton'),
+  refreshObservationHistoryButton: document.querySelector('#refreshObservationHistoryButton'),
   kisSmokeTestForm: document.querySelector('#kisSmokeTestForm'),
   kisSmokeSymbolInput: document.querySelector('#kisSmokeSymbolInput'),
   kisSmokeMarketSelect: document.querySelector('#kisSmokeMarketSelect'),
@@ -643,6 +647,10 @@ elements.refreshObservationIssuesButton?.addEventListener('click', async () => {
   await withBusy(elements.refreshObservationIssuesButton, loadObservationIssues);
 });
 
+elements.refreshObservationHistoryButton?.addEventListener('click', async () => {
+  await withBusy(elements.refreshObservationHistoryButton, loadObservationHistory);
+});
+
 elements.kisSmokeTestForm?.addEventListener('submit', async (event) => {
   event.preventDefault();
   await runKisSmokeTest();
@@ -804,6 +812,17 @@ async function loadObservationIssues() {
   } catch (error) {
     handleAdminAuthFailure(error);
     renderObservationIssuesError(error);
+  }
+}
+
+async function loadObservationHistory() {
+  try {
+    const data = await api('/api/observation-history?limit=8');
+    state.observationHistory = data.observationHistory || null;
+    renderObservationHistory(state.observationHistory);
+  } catch (error) {
+    handleAdminAuthFailure(error);
+    renderObservationHistoryError(error);
   }
 }
 
@@ -3910,6 +3929,200 @@ function renderObservationIssuesError(error) {
   elements.observationIssuesPanel.innerHTML = `
     <div class="message show error">${escapeHtml(error.message || '실사용 이슈를 확인하지 못했습니다.')}</div>
   `;
+}
+
+function renderObservationHistory(observationHistory) {
+  if (!elements.observationHistoryPanel || !elements.observationHistorySummary) {
+    return;
+  }
+
+  if (!observationHistory) {
+    renderObservationHistoryError(new Error('점검 히스토리를 찾지 못했습니다.'));
+    return;
+  }
+
+  const recent = Array.isArray(observationHistory.recent) ? observationHistory.recent : [];
+  const latest = observationHistory.latest || null;
+  const comparison = observationHistory.comparison || null;
+
+  elements.observationHistorySummary.textContent = latest
+    ? `${formatDate(latest.generatedAt)} · 최근 ${recent.length}개 · ${latest.ready ? 'READY' : 'NOT READY'}`
+    : '저장된 점검 기록이 없습니다.';
+
+  if (!recent.length) {
+    elements.observationHistoryPanel.innerHTML = `
+      <div class="observation-history-empty">
+        <strong>아직 저장된 점검 기록이 없습니다.</strong>
+        <span>장중 점검 후 아래 명령을 실행하면 이 카드에 기록이 쌓입니다.</span>
+        <code>npm run check:observation -- --live-session --save-history</code>
+      </div>
+    `;
+    return;
+  }
+
+  elements.observationHistoryPanel.innerHTML = `
+    <div class="observation-history-hero">
+      <div class="observation-history-latest">
+        <span class="roadmap-eyebrow">최근 점검</span>
+        <strong>${escapeHtml(latest.ready ? 'READY' : 'NOT READY')}</strong>
+        <p>${escapeHtml(formatDate(latest.generatedAt))}</p>
+        <small>${escapeHtml(latest.fileName || '')}</small>
+      </div>
+      <div class="roadmap-stats" aria-label="최근 점검 요약">
+        ${renderRoadmapStat('실패', latest.summary?.failed || 0, '자동 실패', 'failed')}
+        ${renderRoadmapStat('수동', latest.summary?.manual || 0, '확인 필요', 'pending')}
+        ${renderRoadmapStat('통과', latest.summary?.passed || 0, '자동 통과', 'done')}
+        ${renderRoadmapStat('항목', latest.resultCount || 0, '전체 점검', 'active')}
+      </div>
+    </div>
+    ${renderObservationHistoryComparison(comparison)}
+    <div class="observation-history-list">
+      ${recent.map(renderObservationHistoryItem).join('')}
+    </div>
+    <div class="roadmap-note">저장 폴더: ${escapeHtml(observationHistory.historyDir || 'data/observation-history')}</div>
+  `;
+}
+
+function renderObservationHistoryError(error) {
+  if (!elements.observationHistoryPanel || !elements.observationHistorySummary) {
+    return;
+  }
+
+  elements.observationHistorySummary.textContent = '점검 히스토리 확인 실패';
+  elements.observationHistoryPanel.innerHTML = `
+    <div class="message show error">${escapeHtml(error.message || '점검 히스토리를 확인하지 못했습니다.')}</div>
+  `;
+}
+
+function renderObservationHistoryComparison(comparison) {
+  if (!comparison) {
+    return '';
+  }
+
+  if (!comparison.hasPrevious) {
+    return `
+      <section class="observation-history-comparison">
+        <div class="roadmap-note">직전 점검 기록이 없어 이번 결과가 비교 기준입니다.</div>
+      </section>
+    `;
+  }
+
+  const changedResults = Array.isArray(comparison.changedResults) ? comparison.changedResults : [];
+
+  return `
+    <section class="observation-history-comparison" aria-label="직전 점검 대비 변화">
+      <div class="observation-checklist-head">
+        <div>
+          <span class="roadmap-eyebrow">직전 대비 변화</span>
+          <strong>${escapeHtml(formatHistoryDeltaText(comparison.delta))}</strong>
+          <p>직전 점검 ${escapeHtml(formatDate(comparison.previous?.generatedAt))}</p>
+        </div>
+        <span class="roadmap-status-badge ${changedResults.length ? 'pending' : 'completed'}">
+          ${changedResults.length ? `${changedResults.length}개 변경` : '변경 없음'}
+        </span>
+      </div>
+      ${
+        changedResults.length
+          ? `<div class="observation-history-change-list">
+              ${changedResults.slice(0, 5).map(renderObservationHistoryChange).join('')}
+            </div>`
+          : ''
+      }
+    </section>
+  `;
+}
+
+function renderObservationHistoryChange(item = {}) {
+  return `
+    <div class="observation-history-change">
+      <strong>${escapeHtml(item.item || item.id || '-')}</strong>
+      <span>${escapeHtml(getObservationResultStatusLabel(item.from))} → ${escapeHtml(getObservationResultStatusLabel(item.to))}</span>
+    </div>
+  `;
+}
+
+const observationResultLabels = {
+  'server-start': '서버 시작',
+  'user-home': '사용자 첫 화면',
+  'admin-home': '관리자 첫 화면',
+  'manual-check': '즉시 확인',
+  'quote-quality': '시세 품질',
+  'alert-controls': '알림 제어',
+  'position-status': '종목 상태',
+  'watch-view-preference': '목록 저장 필터',
+  'csv-import-export': 'CSV 가져오기/내보내기',
+  'alert-rule-guide': '알림 기준 설명',
+  'dividend-api-dashboard': '배당 API 자동 검증',
+  'sell-decision': '매도 판단',
+  'backup-preview': '백업 미리보기',
+  'connection-failure': '연결 실패 안내',
+  'safe-stop': '안전 종료',
+  'live-quote-freshness': '장중 시세 최신성',
+  'live-dividend-diagnostics': '장중 배당 진단',
+  'live-alert-readiness': '장중 알림 상태'
+};
+
+function renderObservationHistoryItem(item = {}) {
+  const readyClass = item.ready ? 'completed' : 'pending';
+  const failedIds = Array.isArray(item.failedResultIds) ? item.failedResultIds : [];
+  const manualIds = Array.isArray(item.manualResultIds) ? item.manualResultIds : [];
+  const issueText = [
+    formatObservationResultIdList('실패', failedIds),
+    formatObservationResultIdList('수동', manualIds)
+  ].filter(Boolean).join(' · ');
+
+  return `
+    <div class="observation-history-row ${readyClass}">
+      <span class="roadmap-task-id">${escapeHtml(item.ready ? 'READY' : 'NOT READY')}</span>
+      <div class="roadmap-task-main">
+        <strong>${escapeHtml(formatDate(item.generatedAt))}</strong>
+        <span>${escapeHtml(item.fileName || '')}</span>
+        ${issueText ? `<span>${escapeHtml(issueText)}</span>` : ''}
+      </div>
+      <span class="roadmap-task-priority">실패 ${escapeHtml(item.summary?.failed || 0)}</span>
+      <span class="roadmap-task-priority">수동 ${escapeHtml(item.summary?.manual || 0)}</span>
+      <span class="roadmap-status-badge ${readyClass}">${escapeHtml(item.ready ? '정상' : '확인')}</span>
+    </div>
+  `;
+}
+
+function formatObservationResultIdList(label, ids = []) {
+  if (!ids.length) {
+    return '';
+  }
+
+  const names = ids.slice(0, 3).map((id) => observationResultLabels[id] || id);
+  const suffix = ids.length > names.length ? ` 외 ${ids.length - names.length}개` : '';
+  return `${label} ${names.join(', ')}${suffix}`;
+}
+
+function formatHistoryDeltaText(delta = {}) {
+  return [
+    `실패 ${formatSignedDelta(delta.failed)}`,
+    `수동 ${formatSignedDelta(delta.manual)}`,
+    `통과 ${formatSignedDelta(delta.passed)}`
+  ].join(' · ');
+}
+
+function formatSignedDelta(value) {
+  const number = Number(value || 0);
+
+  if (number > 0) {
+    return `+${number}`;
+  }
+
+  return String(number);
+}
+
+function getObservationResultStatusLabel(status) {
+  const labels = {
+    passed: '통과',
+    failed: '실패',
+    manual: '수동',
+    missing: '없음'
+  };
+
+  return labels[status] || status || '-';
 }
 
 function renderObservationChecklist(checklist, summary, nextChecklistItem) {
@@ -8832,7 +9045,7 @@ async function initializeDashboard() {
 }
 
 async function loadAdminData() {
-  await Promise.all([loadHealth(), loadData(), loadBackups(), loadObservationIssues()]);
+  await Promise.all([loadHealth(), loadData(), loadBackups(), loadObservationIssues(), loadObservationHistory()]);
 }
 
 function initWebApp() {

@@ -51,6 +51,7 @@ import {
 } from './runtimeInfo.js';
 import { readRoadmap } from './roadmap.js';
 import { readObservationIssues } from './observationIssues.js';
+import { readLocalObservationHistoryReport } from './localObservationCheck.js';
 import { isTelegramConfigured, sendTelegramMessage } from './telegram.js';
 import { pollTelegramCommands } from './telegramCommands.js';
 import { normalizeSymbolInput, searchSymbols } from './symbols.js';
@@ -870,6 +871,19 @@ async function handleApi(request, response, url) {
   if (request.method === 'GET' && url.pathname === '/api/observation-issues') {
     sendJson(response, 200, {
       observationIssues: await readObservationIssues(config.rootDir)
+    });
+    return;
+  }
+
+  if (request.method === 'GET' && url.pathname === '/api/observation-history') {
+    const limit = Number(url.searchParams.get('limit') || 8);
+
+    sendJson(response, 200, {
+      observationHistory: await readLocalObservationHistoryReport({
+        rootDir: config.rootDir,
+        dataDir: config.dataDir,
+        limit: Number.isFinite(limit) ? limit : 8
+      })
     });
     return;
   }

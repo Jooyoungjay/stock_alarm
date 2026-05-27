@@ -80,6 +80,7 @@ test('parseRoadmapMarkdown extracts roadmap metadata and next task', async () =>
   assert.ok(roadmap.completedScope.some((item) => item.category === '배당 API 자동 검증 대시보드 확장'));
   assert.ok(roadmap.completedScope.some((item) => item.category === '로컬 장중 실사용 재검증'));
   assert.ok(roadmap.completedScope.some((item) => item.category === '로컬 점검 결과 저장/히스토리'));
+  assert.ok(roadmap.completedScope.some((item) => item.category === '로컬 점검 히스토리 관리자 화면 노출'));
   assert.ok(roadmap.completedScope.some((item) => item.category === '배당 이벤트 알림'));
   assert.ok(roadmap.completedScope.some((item) => item.category === '배당 성장률'));
   assert.ok(roadmap.completedScope.some((item) => item.category === '배당 캘린더'));
@@ -92,8 +93,8 @@ test('parseRoadmapMarkdown extracts roadmap metadata and next task', async () =>
   assert.ok(roadmap.completedScope.some((item) => item.category === 'Postgres 쿼리 어댑터'));
   assert.ok(roadmap.completedScope.some((item) => item.category === 'Postgres 연결 리허설'));
   assert.ok(roadmap.sections.length >= 12);
-  assert.equal(roadmap.recommendedOrder[0], '로컬 점검 히스토리 관리자 화면 노출');
-  assert.equal(roadmap.nextTask.title, '로컬 점검 히스토리 관리자 화면 노출');
+  assert.equal(roadmap.recommendedOrder[0], '관리자 점검 실행/히스토리 저장');
+  assert.equal(roadmap.nextTask.title, '관리자 점검 실행/히스토리 저장');
   assert.ok(roadmap.statusLegend.some((item) => item.status === 'pending' && item.label === '예정'));
   assert.ok(roadmap.summary.pending > 0);
   assert.ok(roadmap.summary.total > roadmap.summary.completed);
@@ -223,9 +224,12 @@ test('parseRoadmapMarkdown normalizes explicit WBS task statuses', async () => {
   const completedObservationHistoryTask = roadmap.sections
     .find((section) => section.id === '12')
     .tasks.find((task) => task.id === '12.23');
-  const pendingObservationHistoryAdminTask = roadmap.sections
+  const completedObservationHistoryAdminTask = roadmap.sections
     .find((section) => section.id === '12')
     .tasks.find((task) => task.id === '12.24');
+  const pendingObservationRunTask = roadmap.sections
+    .find((section) => section.id === '12')
+    .tasks.find((task) => task.id === '12.25');
   const completedProviderTask = roadmap.sections
     .find((section) => section.id === '6')
     .tasks.find((task) => task.id === '6.6');
@@ -315,7 +319,8 @@ test('parseRoadmapMarkdown normalizes explicit WBS task statuses', async () => {
   assert.equal(completedDividendApiDashboardTask.status, 'completed');
   assert.equal(completedLocalLiveValidationTask.status, 'completed');
   assert.equal(completedObservationHistoryTask.status, 'completed');
-  assert.equal(pendingObservationHistoryAdminTask.status, 'pending');
+  assert.equal(completedObservationHistoryAdminTask.status, 'completed');
+  assert.equal(pendingObservationRunTask.status, 'pending');
   assert.equal(completedDividendAlertTask.status, 'completed');
   assert.equal(completedDividendCalendarTask.status, 'completed');
   assert.equal(completedBackupStrategyTask.status, 'completed');

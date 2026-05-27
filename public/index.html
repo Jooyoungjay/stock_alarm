@@ -20,7 +20,7 @@
       href="https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=Noto+Sans+KR:wght@300;400;500;600;700&display=swap"
       rel="stylesheet"
     />
-    <link rel="stylesheet" href="/styles.css?v=20260526-dividend-dashboard" />
+    <link rel="stylesheet" href="/styles.css?v=20260527-observation-history-labels" />
   </head>
   <body data-register-modal="closed">
     <header class="app-header">
@@ -607,6 +607,21 @@
           <div id="observationIssuesPanel" class="observation-issues-panel" aria-live="polite"></div>
         </div>
 
+        <div class="card" data-page-scope="admin" data-admin-protected="true">
+          <div class="card-header">
+            <div>
+              <h2 id="observationHistoryTitle" class="card-title">점검 히스토리</h2>
+              <p id="observationHistorySummary" class="card-subtitle">로컬 점검 기록을 확인하는 중입니다.</p>
+            </div>
+            <div class="watch-actions">
+              <button id="refreshObservationHistoryButton" type="button" class="btn btn-outline btn-sm secondary-button">
+                새로고침
+              </button>
+            </div>
+          </div>
+          <div id="observationHistoryPanel" class="observation-history-panel" aria-live="polite"></div>
+        </div>
+
         <div class="card" data-page-scope="user">
           <div class="card-header">
             <div>
@@ -669,6 +684,6 @@
       </div>
     </nav>
 
-    <script src="/app.js?v=20260526-dividend-dashboard" type="module"></script>
+    <script src="/app.js?v=20260527-observation-history-labels" type="module"></script>
   </body>
 </html>

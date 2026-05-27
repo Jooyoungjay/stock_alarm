@@ -3037,6 +3037,11 @@ select:focus {
   gap: 14px;
 }
 
+.observation-history-panel {
+  display: grid;
+  gap: 14px;
+}
+
 .roadmap-hero {
   display: grid;
   grid-template-columns: minmax(0, 1fr) minmax(260px, 0.55fr);
@@ -3045,6 +3050,13 @@ select:focus {
 }
 
 .observation-issue-hero {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(260px, 0.55fr);
+  gap: 14px;
+  align-items: stretch;
+}
+
+.observation-history-hero {
   display: grid;
   grid-template-columns: minmax(0, 1fr) minmax(260px, 0.55fr);
   gap: 14px;
@@ -3071,6 +3083,24 @@ select:focus {
   background: var(--surface-2);
 }
 
+.observation-history-latest,
+.observation-history-empty {
+  display: grid;
+  gap: 6px;
+  min-width: 0;
+  padding: 14px;
+  border: 1px solid var(--border-soft);
+  border-radius: var(--radius-sm);
+  background: var(--surface-2);
+}
+
+.observation-history-empty code {
+  overflow-wrap: anywhere;
+  color: var(--accent-hover);
+  font-size: 12px;
+  font-weight: 800;
+}
+
 .roadmap-eyebrow {
   color: var(--accent);
   font-size: 10px;
@@ -3091,6 +3121,13 @@ select:focus {
   font-weight: 900;
 }
 
+.observation-history-latest strong,
+.observation-history-empty strong {
+  color: var(--text);
+  font-size: 18px;
+  font-weight: 900;
+}
+
 .roadmap-next p {
   color: var(--muted);
   font-size: 12px;
@@ -3098,6 +3135,14 @@ select:focus {
 }
 
 .observation-issue-next p {
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.observation-history-latest p,
+.observation-history-latest small,
+.observation-history-empty span {
   color: var(--muted);
   font-size: 12px;
   font-weight: 700;
@@ -3154,6 +3199,10 @@ select:focus {
 
 .roadmap-stat.paused strong {
   color: #d29922;
+}
+
+.roadmap-stat.failed strong {
+  color: var(--red);
 }
 
 .roadmap-stat.pending strong {
@@ -3264,7 +3313,22 @@ select:focus {
   gap: 6px;
 }
 
+.observation-history-list,
+.observation-history-change-list {
+  display: grid;
+  gap: 6px;
+}
+
 .observation-checklist {
+  display: grid;
+  gap: 12px;
+  padding: 14px;
+  border: 1px solid var(--border-soft);
+  border-radius: var(--radius-sm);
+  background: var(--surface-2);
+}
+
+.observation-history-comparison {
   display: grid;
   gap: 12px;
   padding: 14px;
@@ -3327,6 +3391,18 @@ select:focus {
   background: var(--bg);
 }
 
+.observation-history-row {
+  display: grid;
+  grid-template-columns: 94px minmax(180px, 1fr) 72px 72px 72px;
+  gap: 10px;
+  align-items: center;
+  min-width: 0;
+  padding: 9px 10px;
+  border: 1px solid var(--border-soft);
+  border-radius: var(--radius-sm);
+  background: var(--bg);
+}
+
 .observation-checklist-row {
   display: grid;
   grid-template-columns: 86px minmax(180px, 1fr) minmax(120px, 0.5fr) 72px;
@@ -3337,6 +3413,32 @@ select:focus {
   border: 1px solid var(--border-soft);
   border-radius: var(--radius-sm);
   background: var(--bg);
+}
+
+.observation-history-change {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 8px 10px;
+  border: 1px solid var(--border-soft);
+  border-radius: var(--radius-sm);
+  background: var(--bg);
+}
+
+.observation-history-change strong,
+.observation-history-change span {
+  overflow-wrap: anywhere;
+  font-size: 11px;
+  font-weight: 800;
+}
+
+.observation-history-change strong {
+  color: var(--text);
+}
+
+.observation-history-change span {
+  color: var(--muted);
 }
 
 .observation-checklist-record {
@@ -3735,12 +3837,14 @@ select:focus {
 
   .roadmap-hero,
   .observation-issue-hero,
+  .observation-history-hero,
   .observation-checklist-head {
     grid-template-columns: 1fr;
   }
 
   .roadmap-task-row,
   .observation-issue-row,
+  .observation-history-row,
   .observation-checklist-row {
     grid-template-columns: 44px minmax(0, 1fr);
     gap: 6px 10px;

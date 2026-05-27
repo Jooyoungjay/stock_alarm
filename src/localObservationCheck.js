@@ -297,6 +297,35 @@ export function formatLocalObservationReport(result) {
   return `${lines.join('\n')}\n`;
 }
 
+export async function readLocalObservationHistoryReport(input = {}) {
+  const rootDir = input.rootDir || process.cwd();
+  const env = input.env || defaultEnv;
+  const dataDir = input.dataDir || firstValue(env.DATA_DIR) || path.join(rootDir, 'data');
+  const historyDir = normalizeHistoryDir(
+    rootDir,
+    input.historyDir || firstValue(env.LOCAL_OBSERVATION_HISTORY_DIR),
+    dataDir
+  );
+  const limit = normalizeBoundedNumber(
+    input.limit || firstValue(env.LOCAL_OBSERVATION_HISTORY_LIMIT),
+    defaultHistoryLimit,
+    { min: 1, max: 365 }
+  );
+  const entries = await readLocalObservationHistory(historyDir, { limit });
+  const latest = entries[0] || null;
+  const previous = entries[1] || null;
+
+  return {
+    schemaVersion: 1,
+    historyDir,
+    limit,
+    count: entries.length,
+    latest: latest ? summarizeObservationHistoryEntry(latest) : null,
+    comparison: latest ? compareObservationHistory(latest, previous) : null,
+    recent: entries.map(summarizeObservationHistoryEntry)
+  };
+}
+
 function checkServerAccess(context) {
   const health = context.health || {};
   const ok = Boolean(['Stock Alarm', 'stock_alarm'].includes(health.appName) && health.port);
@@ -332,7 +361,7 @@ function checkUserHome(context) {
 }
 
 function checkAdminHome(context) {
-  const ok = containsAll(context.adminHtml, ['serverStatusPanel', 'backupList', 'observationIssuesPanel']);
+  const ok = containsAll(context.adminHtml, ['serverStatusPanel', 'backupList', 'observationIssuesPanel', 'observationHistoryPanel']);
 
   return createResult(
     'admin-home',
@@ -1067,8 +1096,12 @@ function summarizeObservationHistoryEntry(entry) {
     generatedAt: entry.generatedAt || '',
     ready: Boolean(entry.ready),
     summary,
+    resultCount: Array.isArray(entry.results) ? entry.results.length : 0,
     failedResultIds: (entry.results || [])
       .filter((item) => item.status === 'failed')
+      .map((item) => item.id),
+    manualResultIds: (entry.results || [])
+      .filter((item) => item.status === 'manual')
       .map((item) => item.id)
   };
 }
