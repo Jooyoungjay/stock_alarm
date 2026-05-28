@@ -57,6 +57,7 @@ import {
 import { readRoadmap } from './roadmap.js';
 import { readObservationIssues } from './observationIssues.js';
 import {
+  readLocalObservationHistoryDetail,
   readLocalObservationHistoryReport,
   runAndSaveLocalObservationHistory
 } from './localObservationCheck.js';
@@ -914,6 +915,23 @@ async function handleApi(request, response, url) {
     });
 
     sendJson(response, 200, result);
+    return;
+  }
+
+  if (
+    request.method === 'GET' &&
+    segments[0] === 'api' &&
+    segments[1] === 'observation-history' &&
+    segments[2] &&
+    segments.length === 3
+  ) {
+    sendJson(response, 200, {
+      observationHistoryDetail: await readLocalObservationHistoryDetail({
+        rootDir: config.rootDir,
+        dataDir: config.dataDir,
+        fileName: decodeURIComponent(segments[2])
+      })
+    });
     return;
   }
 

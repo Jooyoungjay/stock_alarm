@@ -223,6 +223,7 @@ const state = {
   quoteProviderStats: null,
   observationIssues: null,
   observationHistory: null,
+  observationHistoryDetail: null,
   observationRun: null,
   kisQuoteSmokeTest: null,
   kisNaverQuoteComparison: null,
@@ -658,6 +659,32 @@ elements.runObservationCheckButton?.addEventListener('click', async () => {
   await withBusy(elements.runObservationCheckButton, runObservationCheckFromAdmin);
 });
 
+elements.observationHistoryPanel?.addEventListener('click', async (event) => {
+  const detailButton = event.target.closest('[data-observation-history-detail]');
+  const downloadButton = event.target.closest('[data-observation-history-download]');
+  const button = detailButton || downloadButton;
+
+  if (!button) {
+    return;
+  }
+
+  await withBusy(button, async () => {
+    const fileName =
+      button.dataset.observationHistoryDetail ||
+      button.dataset.observationHistoryDownload ||
+      '';
+    const detail = await loadObservationHistoryDetail(fileName);
+
+    if (downloadButton) {
+      downloadObservationHistoryDetail(detail);
+      showMessage('점검 히스토리 JSON을 다운로드했습니다.');
+      return;
+    }
+
+    showMessage('점검 히스토리 상세를 불러왔습니다.');
+  });
+});
+
 elements.kisSmokeTestForm?.addEventListener('submit', async (event) => {
   event.preventDefault();
   await runKisSmokeTest();
@@ -826,11 +853,36 @@ async function loadObservationHistory() {
   try {
     const data = await api('/api/observation-history?limit=8');
     state.observationHistory = data.observationHistory || null;
+    if (
+      state.observationHistoryDetail &&
+      !hasObservationHistoryFile(state.observationHistory, state.observationHistoryDetail.fileName)
+    ) {
+      state.observationHistoryDetail = null;
+    }
     renderObservationHistory(state.observationHistory);
   } catch (error) {
     handleAdminAuthFailure(error);
     renderObservationHistoryError(error);
   }
+}
+
+async function loadObservationHistoryDetail(fileName) {
+  const safeFileName = String(fileName || '').trim();
+
+  if (!safeFileName) {
+    throw new Error('점검 히스토리 파일을 찾지 못했습니다.');
+  }
+
+  const data = await api(`/api/observation-history/${encodeURIComponent(safeFileName)}`);
+  const detail = data.observationHistoryDetail || null;
+
+  if (!detail) {
+    throw new Error('점검 히스토리 상세를 찾지 못했습니다.');
+  }
+
+  state.observationHistoryDetail = detail;
+  renderObservationHistory(state.observationHistory);
+  return detail;
 }
 
 async function runObservationCheckFromAdmin() {
@@ -846,6 +898,7 @@ async function runObservationCheckFromAdmin() {
     });
     state.observationRun = data.observationResult || null;
     state.observationHistory = data.observationHistory || state.observationHistory;
+    state.observationHistoryDetail = null;
     renderObservationRunResult(state.observationRun);
     renderObservationHistory(state.observationHistory);
     showMessage(
@@ -4077,6 +4130,7 @@ function renderObservationHistory(observationHistory) {
   const recent = Array.isArray(observationHistory.recent) ? observationHistory.recent : [];
   const latest = observationHistory.latest || null;
   const comparison = observationHistory.comparison || null;
+  const selectedFileName = state.observationHistoryDetail?.fileName || '';
 
   elements.observationHistorySummary.textContent = latest
     ? `${formatDate(latest.generatedAt)} · 최근 ${recent.length}개 · ${latest.ready ? 'READY' : 'NOT READY'}`
@@ -4110,8 +4164,9 @@ function renderObservationHistory(observationHistory) {
     </div>
     ${renderObservationHistoryComparison(comparison)}
     <div class="observation-history-list">
-      ${recent.map(renderObservationHistoryItem).join('')}
+      ${recent.map((item) => renderObservationHistoryItem(item, selectedFileName)).join('')}
     </div>
+    ${renderObservationHistoryDetail(state.observationHistoryDetail)}
     <div class="roadmap-note">저장 폴더: ${escapeHtml(observationHistory.historyDir || 'data/observation-history')}</div>
   `;
 }
@@ -4195,17 +4250,18 @@ const observationResultLabels = {
   'live-alert-readiness': '장중 알림 상태'
 };
 
-function renderObservationHistoryItem(item = {}) {
+function renderObservationHistoryItem(item = {}, selectedFileName = '') {
   const readyClass = item.ready ? 'completed' : 'pending';
   const failedIds = Array.isArray(item.failedResultIds) ? item.failedResultIds : [];
   const manualIds = Array.isArray(item.manualResultIds) ? item.manualResultIds : [];
+  const isSelected = Boolean(item.fileName && item.fileName === selectedFileName);
   const issueText = [
     formatObservationResultIdList('실패', failedIds),
     formatObservationResultIdList('수동', manualIds)
   ].filter(Boolean).join(' · ');
 
   return `
-    <div class="observation-history-row ${readyClass}">
+    <div class="observation-history-row ${readyClass} ${isSelected ? 'selected' : ''}">
       <span class="roadmap-task-id">${escapeHtml(item.ready ? 'READY' : 'NOT READY')}</span>
       <div class="roadmap-task-main">
         <strong>${escapeHtml(formatDate(item.generatedAt))}</strong>
@@ -4215,8 +4271,140 @@ function renderObservationHistoryItem(item = {}) {
       <span class="roadmap-task-priority">실패 ${escapeHtml(item.summary?.failed || 0)}</span>
       <span class="roadmap-task-priority">수동 ${escapeHtml(item.summary?.manual || 0)}</span>
       <span class="roadmap-status-badge ${readyClass}">${escapeHtml(item.ready ? '정상' : '확인')}</span>
+      <div class="observation-history-actions">
+        <button
+          type="button"
+          class="btn btn-outline btn-sm secondary-button"
+          data-observation-history-detail="${escapeHtml(item.fileName || '')}"
+        >
+          상세
+        </button>
+        <button
+          type="button"
+          class="btn btn-ghost btn-sm secondary-button"
+          data-observation-history-download="${escapeHtml(item.fileName || '')}"
+        >
+          JSON
+        </button>
+      </div>
     </div>
   `;
+}
+
+function renderObservationHistoryDetail(detail) {
+  if (!detail) {
+    return '';
+  }
+
+  const results = Array.isArray(detail.results) ? detail.results : [];
+  const issueResults = results.filter((item) => item.status === 'failed' || item.status === 'manual');
+  const visibleResults = issueResults.length ? issueResults : results;
+
+  return `
+    <section class="observation-history-detail" aria-label="선택한 점검 상세">
+      <div class="observation-history-detail-head">
+        <div>
+          <span class="roadmap-eyebrow">선택한 점검 상세</span>
+          <strong>${escapeHtml(detail.ready ? 'READY' : 'NOT READY')}</strong>
+          <p>${escapeHtml(formatDate(detail.generatedAt))} · ${escapeHtml(detail.fileName || '')}</p>
+        </div>
+        <button
+          type="button"
+          class="btn btn-outline btn-sm secondary-button"
+          data-observation-history-download="${escapeHtml(detail.fileName || '')}"
+        >
+          JSON 다운로드
+        </button>
+      </div>
+      <div class="roadmap-stats" aria-label="선택한 점검 상세 요약">
+        ${renderRoadmapStat('실패', detail.summary?.failed || 0, '자동 실패', 'failed')}
+        ${renderRoadmapStat('수동', detail.summary?.manual || 0, '확인 필요', 'pending')}
+        ${renderRoadmapStat('통과', detail.summary?.passed || 0, '자동 통과', 'done')}
+        ${renderRoadmapStat('항목', detail.resultCount || results.length, '전체 점검', 'active')}
+      </div>
+      ${renderObservationHistoryDetailMeta(detail)}
+      <div class="observation-history-detail-list">
+        ${visibleResults.map(renderObservationHistoryDetailResult).join('')}
+      </div>
+      ${
+        issueResults.length
+          ? ''
+          : '<div class="roadmap-note">실패나 수동 확인 항목이 없어 전체 통과 항목을 표시합니다.</div>'
+      }
+    </section>
+  `;
+}
+
+function renderObservationHistoryDetailMeta(detail = {}) {
+  const values = detail.values || {};
+  const comparison = detail.comparison || {};
+  const changedCount = Array.isArray(comparison.changedResults) ? comparison.changedResults.length : 0;
+
+  return `
+    <div class="observation-history-detail-meta">
+      <div>
+        <span>기준 주소</span>
+        <strong>${escapeHtml(values.baseUrl || '-')}</strong>
+      </div>
+      <div>
+        <span>장중 점검</span>
+        <strong>${escapeHtml(values.liveSession ? '포함' : '미포함')}</strong>
+      </div>
+      <div>
+        <span>직전 대비</span>
+        <strong>${escapeHtml(comparison.hasPrevious ? `${changedCount}개 변경` : '비교 없음')}</strong>
+      </div>
+    </div>
+  `;
+}
+
+function renderObservationHistoryDetailResult(item = {}) {
+  const statusClass = getObservationResultStatusClass(item.status);
+
+  return `
+    <div class="observation-history-detail-result ${statusClass}">
+      <span class="roadmap-status-badge ${statusClass}">${escapeHtml(getObservationResultStatusLabel(item.status))}</span>
+      <div>
+        <strong>${escapeHtml(item.item || item.id || '-')}</strong>
+        <p>${escapeHtml(item.evidence || '-')}</p>
+        ${item.nextAction ? `<span>다음 조치: ${escapeHtml(item.nextAction)}</span>` : ''}
+      </div>
+    </div>
+  `;
+}
+
+function getObservationResultStatusClass(status) {
+  if (status === 'passed') {
+    return 'completed';
+  }
+
+  if (status === 'failed') {
+    return 'paused';
+  }
+
+  return 'pending';
+}
+
+function hasObservationHistoryFile(observationHistory, fileName) {
+  const safeFileName = String(fileName || '').trim();
+
+  if (!safeFileName) {
+    return false;
+  }
+
+  return (Array.isArray(observationHistory?.recent) ? observationHistory.recent : [])
+    .some((item) => item.fileName === safeFileName);
+}
+
+function downloadObservationHistoryDetail(detail) {
+  if (!detail) {
+    throw new Error('다운로드할 점검 히스토리 상세를 찾지 못했습니다.');
+  }
+
+  const fileName = detail.download?.fileName || detail.fileName || 'observation-history.json';
+  const content = `${JSON.stringify(detail.snapshot || detail, null, 2)}\n`;
+
+  downloadTextFile(fileName, content, detail.download?.contentType || 'application/json; charset=utf-8');
 }
 
 function formatObservationResultIdList(label, ids = []) {

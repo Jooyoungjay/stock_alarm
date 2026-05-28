@@ -3404,6 +3404,75 @@ select:focus {
   background: var(--surface-2);
 }
 
+.observation-history-detail {
+  display: grid;
+  gap: 12px;
+  padding: 14px;
+  border: 1px solid var(--border-soft);
+  border-radius: var(--radius-sm);
+  background: var(--surface-2);
+}
+
+.observation-history-detail-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.observation-history-detail-head > div:first-child {
+  display: grid;
+  gap: 5px;
+  min-width: 0;
+}
+
+.observation-history-detail-head strong {
+  color: var(--text);
+  font-size: 16px;
+  font-weight: 900;
+}
+
+.observation-history-detail-head p {
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 700;
+  overflow-wrap: anywhere;
+}
+
+.observation-history-detail-meta {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.observation-history-detail-meta div {
+  display: grid;
+  gap: 3px;
+  min-width: 0;
+  padding: 10px;
+  border: 1px solid var(--border-soft);
+  border-radius: var(--radius-sm);
+  background: var(--bg);
+}
+
+.observation-history-detail-meta span {
+  color: var(--dim);
+  font-size: 10px;
+  font-weight: 800;
+}
+
+.observation-history-detail-meta strong {
+  color: var(--text);
+  font-size: 12px;
+  font-weight: 900;
+  overflow-wrap: anywhere;
+}
+
+.observation-history-detail-list {
+  display: grid;
+  gap: 6px;
+}
+
 .observation-checklist-head {
   display: grid;
   grid-template-columns: minmax(0, 1fr) minmax(300px, 0.65fr);
@@ -3460,7 +3529,7 @@ select:focus {
 
 .observation-history-row {
   display: grid;
-  grid-template-columns: 94px minmax(180px, 1fr) 72px 72px 72px;
+  grid-template-columns: 94px minmax(180px, 1fr) 72px 72px 72px 132px;
   gap: 10px;
   align-items: center;
   min-width: 0;
@@ -3468,6 +3537,17 @@ select:focus {
   border: 1px solid var(--border-soft);
   border-radius: var(--radius-sm);
   background: var(--bg);
+}
+
+.observation-history-row.selected {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 1px var(--accent-glow);
+}
+
+.observation-history-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 6px;
 }
 
 .observation-checklist-row {
@@ -3506,6 +3586,39 @@ select:focus {
 
 .observation-history-change span {
   color: var(--muted);
+}
+
+.observation-history-detail-result {
+  display: grid;
+  grid-template-columns: 76px minmax(0, 1fr);
+  gap: 10px;
+  align-items: start;
+  min-width: 0;
+  padding: 9px 10px;
+  border: 1px solid var(--border-soft);
+  border-radius: var(--radius-sm);
+  background: var(--bg);
+}
+
+.observation-history-detail-result div {
+  display: grid;
+  gap: 3px;
+  min-width: 0;
+}
+
+.observation-history-detail-result strong {
+  color: var(--text);
+  font-size: 12px;
+  font-weight: 900;
+  overflow-wrap: anywhere;
+}
+
+.observation-history-detail-result p,
+.observation-history-detail-result span {
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 700;
+  overflow-wrap: anywhere;
 }
 
 .observation-checklist-record {
@@ -3905,6 +4018,7 @@ select:focus {
   .roadmap-hero,
   .observation-issue-hero,
   .observation-history-hero,
+  .observation-history-detail-meta,
   .observation-checklist-head {
     grid-template-columns: 1fr;
   }
@@ -3918,8 +4032,13 @@ select:focus {
   }
 
   .observation-run-card.running,
-  .observation-run-issue {
+  .observation-run-issue,
+  .observation-history-detail-result {
     grid-template-columns: 1fr;
+  }
+
+  .observation-history-detail-head {
+    flex-direction: column;
   }
 
   .roadmap-task-main {
@@ -3928,10 +4047,15 @@ select:focus {
 
   .roadmap-task-priority,
   .observation-checklist-record,
+  .observation-history-actions,
   .roadmap-status-badge,
   .roadmap-task-estimate {
     grid-column: 2;
     justify-self: start;
+  }
+
+  .observation-history-actions {
+    justify-content: flex-start;
   }
 
   .backup-row {

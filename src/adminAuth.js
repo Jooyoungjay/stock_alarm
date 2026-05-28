@@ -63,6 +63,10 @@ export function isAdminApiPath(method, pathname) {
     return true;
   }
 
+  if (pathname.startsWith('/api/observation-history/') && method === 'GET') {
+    return true;
+  }
+
   if (pathname === '/api/quote-provider-stats') {
     return true;
   }

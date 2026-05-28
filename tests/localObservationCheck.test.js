@@ -8,6 +8,7 @@ import {
   formatLocalObservationReport,
   getLocalObservationHelp,
   parseLocalObservationArgs,
+  readLocalObservationHistoryDetail,
   readLocalObservationHistoryReport,
   runAndSaveLocalObservationHistory,
   runLocalObservationCheck
@@ -171,6 +172,24 @@ test('runLocalObservationCheck saves history and compares the previous result', 
   assert.equal(report.latest.ready, false);
   assert.equal(report.recent[0].summary.failed, second.summary.failed);
   assert.equal(report.comparison.hasPrevious, false);
+
+  const detail = await readLocalObservationHistoryDetail({
+    rootDir,
+    historyDir,
+    fileName: second.history.fileName
+  });
+  assert.equal(detail.fileName, second.history.fileName);
+  assert.equal(detail.ready, false);
+  assert.equal(detail.resultCount, second.results.length);
+  assert.equal(detail.results.find((item) => item.id === 'server-start')?.status, 'failed');
+  assert.match(detail.results.find((item) => item.id === 'server-start')?.nextAction, /서버를 켠 뒤/);
+  assert.equal(detail.snapshot.results.length, second.results.length);
+  assert.equal(detail.download.fileName, second.history.fileName);
+
+  await assert.rejects(
+    () => readLocalObservationHistoryDetail({ rootDir, historyDir, fileName: '../store.json' }),
+    /파일명이 올바르지 않습니다/
+  );
 });
 
 test('runAndSaveLocalObservationHistory runs a live check and returns refreshed history', async () => {

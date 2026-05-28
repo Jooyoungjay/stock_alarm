@@ -326,6 +326,44 @@ export async function readLocalObservationHistoryReport(input = {}) {
   };
 }
 
+export async function readLocalObservationHistoryDetail(input = {}) {
+  const rootDir = input.rootDir || process.cwd();
+  const env = input.env || defaultEnv;
+  const dataDir = input.dataDir || firstValue(env.DATA_DIR) || path.join(rootDir, 'data');
+  const historyDir = normalizeHistoryDir(
+    rootDir,
+    input.historyDir || firstValue(env.LOCAL_OBSERVATION_HISTORY_DIR),
+    dataDir
+  );
+  const fileName = normalizeObservationHistoryFileName(input.fileName);
+  const entry = await readLocalObservationHistoryFile(historyDir, fileName);
+  const entries = await readLocalObservationHistory(historyDir, { limit: 10000 });
+  const entryIndex = entries.findIndex((item) => item.fileName === fileName);
+  const previous = entryIndex >= 0 ? entries[entryIndex + 1] || null : null;
+  const snapshot = createObservationHistoryDownloadSnapshot(entry);
+
+  return {
+    schemaVersion: 1,
+    historyDir,
+    fileName,
+    filePath: entry.filePath,
+    generatedAt: entry.generatedAt,
+    ready: Boolean(entry.ready),
+    summary: normalizeHistorySummary(entry.summary),
+    resultCount: Array.isArray(entry.results) ? entry.results.length : 0,
+    values: entry.values || {},
+    results: normalizeObservationHistoryResults(entry.results),
+    stateCheck: entry.stateCheck || null,
+    suggestedIssue: entry.suggestedIssue || null,
+    comparison: compareObservationHistory(entry, previous),
+    snapshot,
+    download: {
+      fileName,
+      contentType: 'application/json; charset=utf-8'
+    }
+  };
+}
+
 export async function runAndSaveLocalObservationHistory(input = {}) {
   const result = await runLocalObservationCheck({
     ...input,
@@ -1031,7 +1069,43 @@ async function pruneLocalObservationHistory(historyDir, historyLimit) {
     staleEntries.map((entry) =>
       fs.unlink(entry.filePath).catch(() => {})
     )
-  );
+    );
+}
+
+async function readLocalObservationHistoryFile(historyDir, fileName) {
+  const safeFileName = normalizeObservationHistoryFileName(fileName);
+  const filePath = path.join(historyDir, safeFileName);
+  const relativePath = path.relative(historyDir, filePath);
+
+  if (relativePath.startsWith('..') || path.isAbsolute(relativePath)) {
+    throw new Error('점검 히스토리 파일 경로가 올바르지 않습니다.');
+  }
+
+  try {
+    const [content, stat] = await Promise.all([
+      fs.readFile(filePath, 'utf8'),
+      fs.stat(filePath)
+    ]);
+    const data = JSON.parse(content);
+
+    return {
+      ...data,
+      fileName: safeFileName,
+      filePath,
+      mtimeMs: stat.mtimeMs,
+      generatedAt: normalizeIsoDateTime(data.generatedAt) || new Date(stat.mtimeMs).toISOString()
+    };
+  } catch (error) {
+    if (error.code === 'ENOENT') {
+      throw new Error('점검 히스토리 파일을 찾지 못했습니다.');
+    }
+
+    if (error instanceof SyntaxError) {
+      throw new Error('점검 히스토리 JSON을 읽지 못했습니다.');
+    }
+
+    throw error;
+  }
 }
 
 function createObservationHistorySnapshot(result) {
@@ -1073,6 +1147,44 @@ function createObservationHistorySnapshot(result) {
 
 function createObservationHistoryFileName(generatedAt) {
   return `observation-${String(generatedAt || new Date().toISOString()).replace(/[:.]/g, '-')}.json`;
+}
+
+function normalizeObservationHistoryFileName(fileName) {
+  const value = String(fileName || '').trim();
+  const basename = path.basename(value);
+
+  if (!value || value !== basename || !/^observation-[A-Za-z0-9-]+\.json$/.test(value)) {
+    throw new Error('점검 히스토리 파일명이 올바르지 않습니다.');
+  }
+
+  return value;
+}
+
+function createObservationHistoryDownloadSnapshot(entry) {
+  const { fileName, filePath, mtimeMs, ...snapshot } = entry;
+
+  return {
+    ...snapshot,
+    generatedAt: entry.generatedAt || snapshot.generatedAt || '',
+    ready: Boolean(entry.ready),
+    summary: normalizeHistorySummary(entry.summary),
+    results: normalizeObservationHistoryResults(entry.results)
+  };
+}
+
+function normalizeObservationHistoryResults(results = []) {
+  if (!Array.isArray(results)) {
+    return [];
+  }
+
+  return results.map((item) => ({
+    id: item.id || '',
+    item: item.item || item.id || '',
+    status: item.status || 'missing',
+    statusLabel: item.statusLabel || formatStatusLabel(item.status),
+    evidence: item.evidence || '',
+    nextAction: item.nextAction || ''
+  }));
 }
 
 function compareObservationHistory(current, previous) {
