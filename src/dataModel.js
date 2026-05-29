@@ -39,6 +39,7 @@ const entities = [
       { name: 'id', type: 'uuid', required: true },
       { name: 'deviceId', type: 'string | null', required: false },
       { name: 'accountType', type: 'general | isa | pension | other', required: true },
+      { name: 'accountName', type: 'string', required: false },
       { name: 'symbol', type: 'string', required: true },
       { name: 'displayName', type: 'string', required: false },
       { name: 'purchasePrice', type: 'number | null', required: false },

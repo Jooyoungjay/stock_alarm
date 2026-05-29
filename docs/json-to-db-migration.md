@@ -60,7 +60,7 @@
 |---|---|---|---|
 | `devices[]` | `devices` | `id` | 익명 기기, 플랫폼, secret hash |
 | `devices[].pushTokens[]` | `push_tokens` | `id` 또는 `(device_id, provider, token_hash)` | 토큰 원문 저장 여부는 푸시 provider 정책에 맞춰 결정 |
-| `stocks[]` | `stocks` | `id` | 종목, 계좌 구분, 매수가, 보유 수량, 알림 조건, 시세 상태 |
+| `stocks[]` | `stocks` | `id` | 종목, 계좌 구분, 증권사/계좌명, 매수가, 보유 수량, 알림 조건, 시세 상태 |
 | `stocks[].dividendHistory[]` | `dividend_events` | `id` | 배당금, 배당락일, 지급일 변경 이력 |
 | `alerts[]` | `alerts` | `id` | 알림 전송 이력 |
 | `meta.quoteProviderStats` | `quote_provider_attempts`, `quote_provider_stats` | `id`, `provider` | 원천 시도 로그와 집계 분리 |
@@ -89,6 +89,7 @@
 | `id` | uuid primary key |
 | `device_id` | text null references devices(id) |
 | `account_type` | text not null | general, isa, pension, other |
+| `account_name` | text not null | 증권사 또는 사용자가 붙인 계좌명. 미입력 시 빈 문자열 |
 | `symbol` | text not null |
 | `display_name` | text |
 | `purchase_price` | numeric null |
@@ -115,7 +116,7 @@
 
 권장 제약:
 
-- `(device_id, account_type, symbol)` unique
+- `(device_id, account_type, account_name, symbol)` unique
 - `threshold_percent > 0 and threshold_percent < 100`
 - `purchase_price is not null` when `alert_type` is `profit_retracement` or `purchase_loss`
 - `target_price is not null` when `alert_type` is `target_price`
@@ -282,7 +283,7 @@ dry-run은 다음 테이블 후보 행을 만듭니다.
 - 활성 종목 수
 - 전체 알림 수
 - 배당 변경 이력 수
-- 종목별 `symbol`, `accountType`, `purchasePrice`, `quantity`, `alertType`, `thresholdPercent`
+- 종목별 `symbol`, `accountType`, `accountName`, `purchasePrice`, `quantity`, `alertType`, `thresholdPercent`
 - 알림별 `symbol`, `alertType`, `createdAt`
 - 마지막 시세 확인과 배당 갱신 상태
 

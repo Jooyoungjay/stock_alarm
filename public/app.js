@@ -43,7 +43,8 @@ const CSV_IMPORT_MAX_FILE_SIZE_BYTES = 2 * 1024 * 1024;
 const CSV_STOCK_FIELDS = Object.freeze([
   { key: 'symbol', label: '종목코드', aliases: ['symbol', 'ticker', '티커', '코드'] },
   { key: 'displayName', label: '표시이름', aliases: ['displayName', 'display_name', 'name', '종목명', '이름'] },
-  { key: 'accountType', label: '계좌구분', aliases: ['accountType', 'account_type', 'account', '계좌', '계좌종류'] },
+  { key: 'accountType', label: '계좌구분', aliases: ['accountType', 'account_type', '계좌구분', '계좌종류'] },
+  { key: 'accountName', label: '계좌명', aliases: ['accountName', 'account_name', 'accountLabel', 'broker', 'brokerName', '증권사', '증권사명', '계좌', '계좌명'] },
   { key: 'positionStatus', label: '종목상태', aliases: ['positionStatus', 'position_status', 'status', '상태'] },
   { key: 'purchasePrice', label: '매수가', aliases: ['purchasePrice', 'purchase_price', 'averagePrice', '평단가', '평균단가'] },
   { key: 'quantity', label: '보유수량', aliases: ['quantity', 'qty', '수량'] },
@@ -531,6 +532,7 @@ elements.form.addEventListener('submit', async (event) => {
     elements.form.elements.thresholdPercent.value = 5;
     elements.form.elements.alertCooldownMinutes.value = 30;
     elements.form.elements.accountType.value = 'general';
+    elements.form.elements.accountName.value = '';
     elements.form.elements.positionStatus.value = 'holding';
     syncAlertTypeControls(elements.form);
     hideSymbolSuggestions();
@@ -1550,6 +1552,28 @@ function getAccountTypeLabel(value) {
   return ACCOUNT_TYPE_OPTIONS.find((option) => option.value === normalized)?.label || '일반';
 }
 
+function normalizeAccountName(value) {
+  return String(value || '').trim().replace(/\s+/g, ' ');
+}
+
+function normalizeAccountNameKey(value) {
+  const normalized = normalizeAccountName(value).toLowerCase().replace(/[\s._-]+/g, '');
+  return normalized || 'default';
+}
+
+function getAccountLabel(stockOrType, maybeName) {
+  const accountType = typeof stockOrType === 'object' && stockOrType !== null
+    ? stockOrType.accountType
+    : stockOrType;
+  const accountName = typeof stockOrType === 'object' && stockOrType !== null
+    ? stockOrType.accountName
+    : maybeName;
+  const typeLabel = getAccountTypeLabel(accountType);
+  const name = normalizeAccountName(accountName);
+
+  return name ? `${typeLabel} · ${name}` : typeLabel;
+}
+
 function renderAccountTypeOptions(selectedValue) {
   const selected = normalizeAccountType(selectedValue);
   return ACCOUNT_TYPE_OPTIONS.map(
@@ -1578,6 +1602,7 @@ function normalizeStockPayload(payload) {
   normalized.alertType = normalized.alertType || 'high_drawdown';
   normalized.kisMarketDivCode = normalizeKisMarketDivCode(normalized.kisMarketDivCode);
   normalized.accountType = normalizeAccountType(normalized.accountType);
+  normalized.accountName = normalizeAccountName(normalized.accountName);
   normalized.positionStatus = normalizePositionStatus(normalized.positionStatus);
   normalized.purchasePrice = normalized.purchasePrice ? Number(normalized.purchasePrice) : null;
   normalized.quantity = normalized.quantity ? Number(normalized.quantity) : null;
@@ -1772,7 +1797,7 @@ function validateCsvStockRows(rows) {
   }
 
   const existingStockKeys = new Set(
-    state.stocks.map((stock) => buildStockAccountKey(stock.symbol, stock.accountType))
+    state.stocks.map((stock) => buildStockAccountKey(stock.symbol, stock.accountType, stock.accountName))
   );
   const importedStockKeys = new Set();
 
@@ -1811,15 +1836,17 @@ function buildCsvStockPayload(raw, rowNumber, existingStockKeys, importedStockKe
   const errors = [];
   const symbol = cleanCsvText(raw.symbol).toUpperCase();
   const accountType = normalizeCsvAccountType(raw.accountType, errors);
+  const accountName = normalizeAccountName(raw.accountName);
   const comparableSymbol = normalizeSymbolForCompare(symbol);
-  const comparableStockKey = buildStockAccountKey(symbol, accountType);
+  const comparableStockKey = buildStockAccountKey(symbol, accountType, accountName);
+  const accountLabel = getAccountLabel(accountType, accountName);
 
   if (!symbol) {
     errors.push('종목코드를 입력하세요.');
   } else if (existingStockKeys.has(comparableStockKey)) {
-    errors.push(`${symbol}은 ${getAccountTypeLabel(accountType)} 계좌에 이미 등록된 종목입니다.`);
+    errors.push(`${symbol}은 ${accountLabel} 계좌에 이미 등록된 종목입니다.`);
   } else if (importedStockKeys.has(comparableStockKey)) {
-    errors.push(`${symbol} ${getAccountTypeLabel(accountType)} 계좌가 CSV 안에서 중복되었습니다.`);
+    errors.push(`${symbol} ${accountLabel} 계좌가 CSV 안에서 중복되었습니다.`);
   }
 
   const alertType = normalizeCsvAlertType(raw.alertType, errors);
@@ -1864,6 +1891,7 @@ function buildCsvStockPayload(raw, rowNumber, existingStockKeys, importedStockKe
       symbol,
       displayName: cleanCsvText(raw.displayName),
       accountType,
+      accountName,
       positionStatus,
       purchasePrice,
       quantity,
@@ -2717,8 +2745,12 @@ function isRegisteredSymbol(symbol) {
   return state.stocks.some((stock) => normalizeSymbolForCompare(stock.symbol) === normalized);
 }
 
-function buildStockAccountKey(symbol, accountType) {
-  return `${normalizeSymbolForCompare(symbol)}::${normalizeAccountType(accountType)}`;
+function buildStockAccountKey(symbol, accountType, accountName) {
+  return [
+    normalizeSymbolForCompare(symbol),
+    normalizeAccountType(accountType),
+    normalizeAccountNameKey(accountName)
+  ].join('::');
 }
 
 function normalizeSymbolForCompare(symbol) {
@@ -3040,6 +3072,7 @@ function renderRegistrationSummary() {
   const symbol = form.elements.symbol.value.trim().toUpperCase() || '-';
   const displayName = form.elements.displayName.value.trim();
   const accountType = normalizeAccountType(form.elements.accountType?.value);
+  const accountName = normalizeAccountName(form.elements.accountName?.value);
   const positionStatus = normalizePositionStatus(form.elements.positionStatus?.value);
   const purchasePrice = parseFiniteNumber(form.elements.purchasePrice.value);
   const quantity = parseFiniteNumber(form.elements.quantity.value);
@@ -3096,7 +3129,7 @@ function renderRegistrationSummary() {
   elements.registrationSummary.innerHTML = `
     <div class="registration-summary-grid">
       ${renderSummaryItem('종목', displayName ? `${displayName} · ${symbol}` : symbol)}
-      ${renderSummaryItem('계좌 구분', getAccountTypeLabel(accountType), '같은 종목도 계좌가 다르면 별도 보유분으로 계산')}
+      ${renderSummaryItem('계좌', getAccountLabel(accountType, accountName), '증권사/계좌명이 다르면 같은 종목도 별도 보유분으로 계산')}
       ${renderSummaryItem('종목 상태', getPositionStatusLabel(positionStatus), positionStatus === 'sold' ? '매도 기록으로 보관' : positionStatus === 'watch' ? '관심 종목으로 분리' : '계좌 요약에 포함')}
       ${renderSummaryItem('시세 기준', formatKisMarketDivCodeLabel(kisMarketDivCode), 'KIS provider 사용 시 적용')}
       ${renderSummaryItem('매수가', formatMoney(purchasePrice), purchaseDateDetail)}
@@ -5960,7 +5993,7 @@ function renderStocks() {
       const quoteQuality = getQuoteQuality(stock);
       const stockMeta = [
         stock.symbol,
-        getAccountTypeLabel(stock.accountType),
+        getAccountLabel(stock),
         getPositionStatusLabel(stock.positionStatus),
         stock.kisMarketDivCode ? `KIS ${formatKisMarketDivCodeLabel(stock.kisMarketDivCode)}` : '',
         stock.active ? '' : '알림 꺼짐',
@@ -6758,9 +6791,10 @@ function buildPortfolioSummaryGroups(stocks) {
 
     const currency = stock.currency || '';
     const accountType = normalizeAccountType(stock.accountType);
-    const accountLabel = getAccountTypeLabel(accountType);
+    const accountName = normalizeAccountName(stock.accountName);
+    const accountLabel = getAccountLabel(accountType, accountName);
     const currencyLabel = currency || '통화 미정';
-    const key = `${accountType}:${currency || 'unknown'}`;
+    const key = `${accountType}:${normalizeAccountNameKey(accountName)}:${currency || 'unknown'}`;
     const group =
       groups.get(key) ||
       {
@@ -7449,6 +7483,10 @@ function editStockForm(stock) {
       <select name="accountType">
         ${renderAccountTypeOptions(stock.accountType)}
       </select>
+    </label>
+    <label>
+      <span>증권사/계좌명</span>
+      <input name="accountName" value="${escapeHtml(stock.accountName || '')}" autocomplete="off" placeholder="예: 키움 일반" />
     </label>
     <label>
       <span>종목 상태</span>
@@ -8448,7 +8486,7 @@ function renderAveragingCalculator(stock) {
     <form class="averaging-calculator" data-average-form aria-label="추가매수 계산기">
       <div class="averaging-calculator-head">
         <div>
-          <span>${escapeHtml(getAccountTypeLabel(stock.accountType))} 계좌 보유분</span>
+          <span>${escapeHtml(getAccountLabel(stock))} 계좌 보유분</span>
           <strong>추가매수 계산기</strong>
         </div>
         <button type="submit" class="btn btn-outline btn-sm secondary-button" data-average-apply disabled>보유 정보 반영</button>
@@ -8518,7 +8556,7 @@ function attachAveragingCalculator(row, stock) {
 
     const confirmed = window.confirm(
       [
-        `${stock.displayName || stock.symbol} ${getAccountTypeLabel(stock.accountType)} 계좌 보유 정보를 추가매수 결과로 바꿉니다.`,
+        `${stock.displayName || stock.symbol} ${getAccountLabel(stock)} 계좌 보유 정보를 추가매수 결과로 바꿉니다.`,
         '',
         `새 평단가: ${formatMoney(plan.newAveragePrice, stock.currency)}`,
         `새 보유 수량: ${formatQuantity(plan.newQuantity)}`,

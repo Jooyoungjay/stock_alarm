@@ -61,6 +61,7 @@ test('parseAddArgs supports keyed quantity commands', () => {
     'symbol=336260',
     'name=두산퓨얼셀',
     'account=isa',
+    'broker=키움',
     'price=88779',
     'qty=10',
     'dividend=1200',
@@ -74,6 +75,7 @@ test('parseAddArgs supports keyed quantity commands', () => {
 
   assert.equal(input.symbol, '336260');
   assert.equal(input.accountType, 'isa');
+  assert.equal(input.accountName, '키움');
   assert.equal(input.quantity, '10');
   assert.equal(input.annualDividendPerShare, '1200');
   assert.equal(input.dividendFrequency, 'quarterly');
@@ -206,6 +208,14 @@ test('parseEditArgs supports alert rule and metadata edits', () => {
     label: '계좌 구분',
     patch: {
       accountType: 'isa'
+    }
+  });
+
+  assert.deepEqual(parseEditArgs(['336260', 'accountname', '키움', '일반']), {
+    query: '336260',
+    label: '증권사/계좌명',
+    patch: {
+      accountName: '키움 일반'
     }
   });
 });
@@ -360,31 +370,33 @@ test('handleTelegramMessage separates same symbol commands by account suffix', a
 
   await store.addStock({
     symbol: '336260',
-    displayName: '두산퓨얼셀',
+    displayName: '두산퓨얼셀 키움',
     purchasePrice: 90000,
     accountType: 'general',
+    accountName: '키움',
     thresholdPercent: 10
   });
   await store.addStock({
     symbol: '336260',
-    displayName: '두산퓨얼셀 ISA',
+    displayName: '두산퓨얼셀 미래',
     purchasePrice: 85000,
-    accountType: 'isa',
+    accountType: 'general',
+    accountName: '미래에셋',
     thresholdPercent: 10
   });
 
   await handleTelegramMessage(store, config, message('/status 336260'), options);
   assert.match(sent.at(-1), /여러 계좌/);
-  assert.match(sent.at(-1), /336260@isa/);
+  assert.match(sent.at(-1), /336260@키움/);
 
-  await handleTelegramMessage(store, config, message('/edit 336260@isa price 84000'), options);
+  await handleTelegramMessage(store, config, message('/edit 336260@키움 price 84000'), options);
 
   const stocks = await store.listStocks();
-  const general = stocks.find((stock) => stock.accountType === 'general');
-  const isa = stocks.find((stock) => stock.accountType === 'isa');
-  assert.equal(general.purchasePrice, 90000);
-  assert.equal(isa.purchasePrice, 84000);
-  assert.match(sent.at(-1), /ISA/);
+  const kiwoom = stocks.find((stock) => stock.accountName === '키움');
+  const mirae = stocks.find((stock) => stock.accountName === '미래에셋');
+  assert.equal(kiwoom.purchasePrice, 84000);
+  assert.equal(mirae.purchasePrice, 85000);
+  assert.match(sent.at(-1), /키움/);
 });
 
 test('handleTelegramMessage can send a risk briefing', async () => {

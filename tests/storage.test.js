@@ -111,35 +111,50 @@ test('JsonStore scopes stocks and alerts by anonymous device', async () => {
   assert.equal((await store.listStocks({ deviceId: second.device.id })).length, 1);
 });
 
-test('JsonStore separates duplicate symbols by account type', async () => {
+test('JsonStore separates duplicate symbols by account type and account name', async () => {
   const store = await createStore();
-  const general = await store.addStock(stockInput());
+  const general = await store.addStock(stockInput({ accountName: '키움 일반' }));
+  const secondGeneral = await store.addStock(
+    stockInput({
+      accountName: '미래에셋 일반',
+      displayName: 'Apple Mirae'
+    })
+  );
   const isa = await store.addStock(
     stockInput({
       accountType: 'isa',
+      accountName: '키움 ISA',
       displayName: 'Apple ISA'
     })
   );
 
   assert.equal(general.accountType, 'general');
+  assert.equal(general.accountName, '키움 일반');
+  assert.equal(secondGeneral.accountType, 'general');
+  assert.equal(secondGeneral.accountName, '미래에셋 일반');
   assert.equal(isa.accountType, 'isa');
-  assert.equal((await store.listStocks()).length, 2);
+  assert.equal((await store.listStocks()).length, 3);
 
   await assert.rejects(
     () =>
       store.addStock(
         stockInput({
           accountType: 'ISA',
+          accountName: '키움 ISA',
           displayName: 'Apple ISA duplicate'
         })
       ),
     /같은 계좌/
   );
 
-  const updated = await store.updateStock(general.id, { accountType: 'pension' });
+  const updated = await store.updateStock(general.id, { accountType: 'pension', accountName: '키움 연금' });
   assert.equal(updated.accountType, 'pension');
+  assert.equal(updated.accountName, '키움 연금');
 
-  await assert.rejects(() => store.updateStock(updated.id, { accountType: 'isa' }), /같은 계좌/);
+  await assert.rejects(
+    () => store.updateStock(updated.id, { accountType: 'isa', accountName: '키움 ISA' }),
+    /같은 계좌/
+  );
 });
 
 test('JsonStore stores and updates optional stock quantity', async () => {

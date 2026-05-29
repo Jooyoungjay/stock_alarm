@@ -45,6 +45,7 @@ export const ACCOUNT_TYPES = Object.freeze({
 });
 
 export const DEFAULT_ACCOUNT_TYPE = ACCOUNT_TYPES.GENERAL;
+export const DEFAULT_ACCOUNT_NAME = '';
 
 async function ensureDataDir(dataDir) {
   await fs.mkdir(dataDir, { recursive: true });
@@ -137,7 +138,10 @@ export function normalizeStock(input, defaults) {
   const stock = {
     id: randomUUID(),
     deviceId: normalizeDeviceId(input.deviceId),
-    accountType: normalizeAccountType(input.accountType || input.account || input.accountName),
+    accountType: normalizeAccountType(input.accountType || input.account),
+    accountName: normalizeAccountName(
+      input.accountName || input.brokerName || input.broker || input.accountLabel
+    ),
     symbol,
     displayName: String(input.displayName || '').trim(),
     purchasePrice: normalizeOptionalPositiveNumber(input.purchasePrice, '매수가는 0보다 큰 숫자여야 합니다.'),
@@ -257,6 +261,10 @@ export function applyStockPatch(stock, patch) {
 
   if (patch.accountType !== undefined) {
     next.accountType = normalizeAccountType(patch.accountType);
+  }
+
+  if (patch.accountName !== undefined || patch.brokerName !== undefined || patch.broker !== undefined) {
+    next.accountName = normalizeAccountName(patch.accountName ?? patch.brokerName ?? patch.broker);
   }
 
   if (patch.notes !== undefined) {
@@ -445,7 +453,8 @@ export function normalizeStoredStock(stock) {
   return {
     ...stock,
     deviceId: normalizeDeviceId(stock.deviceId),
-    accountType: normalizeAccountType(stock.accountType || stock.account || stock.accountName),
+    accountType: normalizeAccountType(stock.accountType || stock.account),
+    accountName: normalizeAccountName(stock.accountName || stock.brokerName || stock.broker || stock.accountLabel),
     positionStatus: normalizePositionStatus(stock.positionStatus),
     soldAt: normalizeStoredOptionalDate(stock.soldAt),
     alertSnoozedUntil: normalizeIsoDateTime(stock.alertSnoozedUntil) || null,
@@ -1433,6 +1442,23 @@ export function normalizeAccountType(value) {
   return aliases[normalized] || DEFAULT_ACCOUNT_TYPE;
 }
 
+export function normalizeAccountName(value) {
+  return String(value || DEFAULT_ACCOUNT_NAME).trim().replace(/\s+/g, ' ');
+}
+
+export function normalizeAccountNameKey(value) {
+  const normalized = normalizeAccountName(value).toLowerCase().replace(/[\s._-]+/g, '');
+  return normalized || 'default';
+}
+
+export function buildStockAccountIdentityKey(stock) {
+  return [
+    normalizeSymbolInput(stock.symbol),
+    normalizeAccountType(stock.accountType),
+    normalizeAccountNameKey(stock.accountName)
+  ].join('::');
+}
+
 function normalizeDevicePlatform(value) {
   const platform = String(value || 'unknown').trim().toLowerCase();
   const allowed = ['ios', 'android', 'web', 'unknown'];
@@ -1767,8 +1793,7 @@ export class JsonStore {
     if (
       data.stocks.some(
         (item) =>
-          item.symbol === stock.symbol &&
-          normalizeAccountType(item.accountType) === stock.accountType &&
+          buildStockAccountIdentityKey(item) === buildStockAccountIdentityKey(stock) &&
           normalizeDeviceId(item.deviceId) === normalizeDeviceId(stock.deviceId)
       )
     ) {
@@ -1796,8 +1821,7 @@ export class JsonStore {
       data.stocks.some(
         (item, itemIndex) =>
           itemIndex !== index &&
-          item.symbol === updated.symbol &&
-          normalizeAccountType(item.accountType) === updated.accountType &&
+          buildStockAccountIdentityKey(item) === buildStockAccountIdentityKey(updated) &&
           normalizeDeviceId(item.deviceId) === normalizeDeviceId(updated.deviceId)
       )
     ) {

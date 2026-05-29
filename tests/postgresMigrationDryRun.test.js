@@ -44,6 +44,7 @@ test('buildPostgresMigrationDryRun flattens JSON store data into Postgres table 
 
   assert.equal(result.tables.stocks.sampleRows[0].symbol, '336260');
   assert.equal(result.tables.stocks.sampleRows[0].account_type, 'isa');
+  assert.equal(result.tables.stocks.sampleRows[0].account_name, '키움 ISA');
   assert.equal(result.tables.stocks.sampleRows[0].purchase_price, 88779);
   assert.equal(result.tables.stocks.sampleRows[0].kis_market_div_code, 'NX');
   assert.equal(result.tables.stocks.sampleRows[0].dividend_snapshot.annualDividendPerShare, 1200);
@@ -147,6 +148,7 @@ function createSnapshot() {
         id: 'stock-1',
         deviceId: 'device-1',
         accountType: 'isa',
+        accountName: '키움 ISA',
         symbol: '336260',
         displayName: '두산퓨얼셀',
         purchasePrice: 88779,

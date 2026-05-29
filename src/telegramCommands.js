@@ -2,7 +2,13 @@ import { buildAlertRule, initializeHighFromPurchaseDate, runAlertCheck } from '.
 import { createBackup, deleteBackup, listBackups, restoreBackup } from './backups.js';
 import { formatKisMarketDivCode } from './kisMarket.js';
 import { buildDailyBriefing, formatDailyBriefingMessage } from './portfolioBriefing.js';
-import { ALERT_TYPES, POSITION_STATUSES, normalizeAccountType } from './storage.js';
+import {
+  ALERT_TYPES,
+  POSITION_STATUSES,
+  normalizeAccountName,
+  normalizeAccountNameKey,
+  normalizeAccountType
+} from './storage.js';
 import {
   fetchTelegramUpdates,
   isAuthorizedTelegramChat,
@@ -36,7 +42,7 @@ const helpMessage = [
   '/add 336260 두산퓨얼셀 88779 high 10',
   '/add 336260 두산퓨얼셀 88779 profit 10',
   '/add 336260 두산퓨얼셀 88779 2026-05-11 high 10',
-  '/add symbol=336260 name=두산퓨얼셀 account=isa price=88779 type=profit percent=10',
+  '/add symbol=336260 name=두산퓨얼셀 account=isa broker=키움 price=88779 type=profit percent=10',
   '/add 336260 두산퓨얼셀 88779 target 93000',
   '',
   '수정 예시',
@@ -58,7 +64,7 @@ const helpMessage = [
   '/edit 336260 review 2026-08-15',
   '',
   '기준값: high=최고가 대비 하락률, profit=이익금 반납률, loss=매수가 대비 손절률, target=직접 기준가',
-  '같은 종목이 여러 계좌에 있으면 336260@isa, 336260@general처럼 계좌를 붙여 입력하세요.'
+  '같은 종목이 여러 계좌에 있으면 336260@isa, 336260@키움처럼 계좌 구분이나 계좌명을 붙여 입력하세요.'
 ].join('\n');
 
 export async function pollTelegramCommands(store, config, options = {}) {
@@ -663,7 +669,8 @@ export function parseAddArgs(args) {
     return normalizeAddInput({
       symbol: keyed.symbol,
       displayName: keyed.name || keyed.displayName || '',
-      accountType: keyed.account || keyed.accountType || keyed.account_type || keyed.accountName,
+      accountType: keyed.account || keyed.accountType || keyed.account_type,
+      accountName: keyed.accountName || keyed.account_name || keyed.broker || keyed.brokerName || keyed.accountLabel,
       purchasePrice: keyed.price || keyed.purchasePrice,
       quantity: keyed.qty || keyed.quantity || keyed.shares,
       annualDividendPerShare:
@@ -716,6 +723,7 @@ export function parseAddArgs(args) {
     symbol,
     displayName,
     accountType: '',
+    accountName: '',
     purchasePrice,
     purchaseDate: dateIndex === -1 ? '' : rest[dateIndex],
     kisMarketDivCode: '',
@@ -916,8 +924,16 @@ export function parseEditArgs(args) {
           accountType: firstValue
         }
       };
+    case 'accountname':
+      return {
+        query,
+        label: '증권사/계좌명',
+        patch: {
+          accountName: value
+        }
+      };
     default:
-      throw new Error('수정 항목은 high, profit, loss, target, cooldown, name, account, price, qty, dividend, dividendfreq, dividendmonths, date, kis, notes, reason, goal, sell, review 중 하나로 입력하세요.');
+      throw new Error('수정 항목은 high, profit, loss, target, cooldown, name, account, accountname, price, qty, dividend, dividendfreq, dividendmonths, date, kis, notes, reason, goal, sell, review 중 하나로 입력하세요.');
   }
 }
 
@@ -928,6 +944,7 @@ function normalizeAddInput(input) {
     symbol: input.symbol,
     displayName: input.displayName || '',
     accountType: input.accountType || '',
+    accountName: input.accountName || '',
     purchasePrice: input.purchasePrice,
     quantity: input.quantity,
     annualDividendPerShare: input.annualDividendPerShare,
@@ -1130,12 +1147,8 @@ function normalizeEditField(value) {
       'account',
       'accounttype',
       'account_type',
-      'accountname',
-      '계좌',
       '계좌구분',
       '계좌종류',
-      '계좌명',
-      '증권계좌',
       'isa',
       '일반계좌',
       '연금계좌',
@@ -1143,6 +1156,23 @@ function normalizeEditField(value) {
     ].includes(token)
   ) {
     return 'account';
+  }
+
+  if (
+    [
+      'accountname',
+      'account_name',
+      'accountlabel',
+      'broker',
+      'brokername',
+      '계좌',
+      '계좌명',
+      '증권사',
+      '증권사명',
+      '증권계좌'
+    ].includes(token)
+  ) {
+    return 'accountname';
   }
 
   if (
@@ -1375,8 +1405,8 @@ async function findStock(store, query) {
       String(item.displayName || '').toLowerCase() === normalizedQuery
     );
   });
-  const filteredMatches = parsed.accountType
-    ? matches.filter((item) => normalizeAccountType(item.accountType) === parsed.accountType)
+  const filteredMatches = parsed.accountSelector
+    ? matches.filter((item) => stockMatchesAccountSelector(item, parsed.accountSelector))
     : matches;
 
   if (!filteredMatches.length) {
@@ -1397,23 +1427,37 @@ function parseStockQuery(query) {
   if (!accountMatch) {
     return {
       term: raw,
-      accountType: null
+      accountSelector: null
     };
   }
 
   const accountType = parseAccountTypeToken(accountMatch[2]);
+  const accountName = normalizeAccountName(accountMatch[2]);
 
-  if (!accountType) {
+  if (!accountType && !accountName) {
     return {
       term: raw,
-      accountType: null
+      accountSelector: null
     };
   }
 
   return {
     term: accountMatch[1],
-    accountType
+    accountSelector: {
+      raw: accountMatch[2],
+      accountType,
+      accountNameKey: normalizeAccountNameKey(accountName)
+    }
   };
+}
+
+function stockMatchesAccountSelector(stock, selector) {
+  if (selector.accountType && normalizeAccountType(stock.accountType) === selector.accountType) {
+    return true;
+  }
+
+  return selector.accountNameKey !== 'default' &&
+    normalizeAccountNameKey(stock.accountName) === selector.accountNameKey;
 }
 
 function parseAccountTypeToken(value) {
@@ -1445,12 +1489,12 @@ function parseAccountTypeToken(value) {
 function formatAmbiguousStockMessage(query, stocks) {
   const examples = stocks
     .slice(0, 4)
-    .map((stock) => `${stock.symbol}@${normalizeAccountType(stock.accountType)}(${formatAccountType(stock.accountType)})`);
+    .map((stock) => `${stock.symbol}@${formatAccountSelector(stock)}(${formatAccountLabel(stock)})`);
 
   return [
     `여러 계좌에 같은 종목이 있습니다: ${query}`,
     `계좌를 붙여 입력하세요. 예: ${examples.join(', ')}`,
-    '일반 계좌는 @general, ISA는 @isa, 연금은 @pension을 붙이면 됩니다.'
+    '계좌 구분은 @general, @isa, @pension을 붙이고, 같은 구분이 여러 개면 @키움처럼 계좌명을 붙이면 됩니다.'
   ].join('\n');
 }
 
@@ -1502,7 +1546,7 @@ function formatPositionStatusLine(stock) {
 }
 
 function formatStockTitle(stock) {
-  return `${stock.displayName || stock.symbol} (${stock.symbol}, ${formatAccountType(stock.accountType)})`;
+  return `${stock.displayName || stock.symbol} (${stock.symbol}, ${formatAccountLabel(stock)})`;
 }
 
 function formatAccountType(value) {
@@ -1514,6 +1558,17 @@ function formatAccountType(value) {
   };
 
   return labels[normalizeAccountType(value)] || labels.general;
+}
+
+function formatAccountLabel(stock) {
+  const accountName = normalizeAccountName(stock.accountName);
+  const accountTypeLabel = formatAccountType(stock.accountType);
+  return accountName ? `${accountTypeLabel} · ${accountName}` : accountTypeLabel;
+}
+
+function formatAccountSelector(stock) {
+  const accountName = normalizeAccountName(stock.accountName);
+  return accountName || normalizeAccountType(stock.accountType);
 }
 
 function formatAlertControlLine(stock) {
@@ -1869,7 +1924,7 @@ function getShortUsage(commandName) {
       '/add 336260 두산퓨얼셀 88779 high 10',
       '/add 336260 두산퓨얼셀 88779 profit 10',
       '/add 336260 두산퓨얼셀 88779 2026-05-11 high 10',
-      '/add symbol=336260 name=두산퓨얼셀 account=isa price=88779 type=profit percent=10',
+      '/add symbol=336260 name=두산퓨얼셀 account=isa broker=키움 price=88779 type=profit percent=10',
       '/add 336260 두산퓨얼셀 88779 target 93000'
     ].join('\n');
   }
@@ -1898,6 +1953,7 @@ function getShortUsage(commandName) {
       '예시:',
       '/status 336260',
       '/status 336260@isa',
+      '/status 336260@키움',
       '/pause 336260',
       '/resume 336260',
       '/sold 336260',
@@ -1914,6 +1970,7 @@ function getShortUsage(commandName) {
       '/edit 336260 loss 5',
       '/edit 336260 target 93000',
       '/edit 336260 account isa',
+      '/edit 336260 accountname 키움 일반',
       '/edit 336260 cooldown 60',
       '/edit 336260 name 두산퓨얼셀',
       '/edit 336260 reason 수소 밸류체인 성장',

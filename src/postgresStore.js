@@ -10,11 +10,11 @@ import { buildDataModelInfo, normalizeStoreEnvelope, touchStoreEnvelope } from '
 import {
   applyStockPatch,
   appendKisNaverCompareHistory,
+  buildStockAccountIdentityKey,
   buildKisNaverCompareHistorySnapshot,
   buildQuoteProviderStatsSnapshot,
   createDeviceSecret,
   hashDeviceSecret,
-  normalizeAccountType,
   normalizeDevice,
   normalizeDeviceId,
   normalizePushToken,
@@ -237,8 +237,7 @@ export class PostgresStore {
     if (
       data.stocks.some(
         (item) =>
-          item.symbol === stock.symbol &&
-          normalizeAccountType(item.accountType) === stock.accountType &&
+          buildStockAccountIdentityKey(item) === buildStockAccountIdentityKey(stock) &&
           normalizeDeviceId(item.deviceId) === normalizeDeviceId(stock.deviceId)
       )
     ) {
@@ -266,8 +265,7 @@ export class PostgresStore {
       data.stocks.some(
         (item, itemIndex) =>
           itemIndex !== index &&
-          item.symbol === updated.symbol &&
-          normalizeAccountType(item.accountType) === updated.accountType &&
+          buildStockAccountIdentityKey(item) === buildStockAccountIdentityKey(updated) &&
           normalizeDeviceId(item.deviceId) === normalizeDeviceId(updated.deviceId)
       )
     ) {
