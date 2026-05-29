@@ -57,6 +57,8 @@ import {
 import { readRoadmap } from './roadmap.js';
 import { readObservationIssues } from './observationIssues.js';
 import {
+  deleteLocalObservationHistoryFile,
+  pruneLocalObservationHistoryFiles,
   readLocalObservationHistoryDetail,
   readLocalObservationHistoryReport,
   runAndSaveLocalObservationHistory
@@ -918,6 +920,18 @@ async function handleApi(request, response, url) {
     return;
   }
 
+  if (request.method === 'POST' && url.pathname === '/api/observation-history/prune') {
+    const body = await readJsonBody(request);
+
+    sendJson(response, 200, await pruneLocalObservationHistoryFiles({
+      rootDir: config.rootDir,
+      dataDir: config.dataDir,
+      keepLatest: body.keepLatest,
+      reportLimit: body.reportLimit || 8
+    }));
+    return;
+  }
+
   if (
     request.method === 'GET' &&
     segments[0] === 'api' &&
@@ -932,6 +946,22 @@ async function handleApi(request, response, url) {
         fileName: decodeURIComponent(segments[2])
       })
     });
+    return;
+  }
+
+  if (
+    request.method === 'DELETE' &&
+    segments[0] === 'api' &&
+    segments[1] === 'observation-history' &&
+    segments[2] &&
+    segments.length === 3
+  ) {
+    sendJson(response, 200, await deleteLocalObservationHistoryFile({
+      rootDir: config.rootDir,
+      dataDir: config.dataDir,
+      fileName: decodeURIComponent(segments[2]),
+      reportLimit: Number(url.searchParams.get('reportLimit') || 8)
+    }));
     return;
   }
 

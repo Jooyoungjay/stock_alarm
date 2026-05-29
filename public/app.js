@@ -662,13 +662,25 @@ elements.runObservationCheckButton?.addEventListener('click', async () => {
 elements.observationHistoryPanel?.addEventListener('click', async (event) => {
   const detailButton = event.target.closest('[data-observation-history-detail]');
   const downloadButton = event.target.closest('[data-observation-history-download]');
-  const button = detailButton || downloadButton;
+  const deleteButton = event.target.closest('[data-observation-history-delete]');
+  const pruneButton = event.target.closest('[data-observation-history-prune]');
+  const button = detailButton || downloadButton || deleteButton || pruneButton;
 
   if (!button) {
     return;
   }
 
   await withBusy(button, async () => {
+    if (pruneButton) {
+      await pruneObservationHistoryFiles();
+      return;
+    }
+
+    if (deleteButton) {
+      await deleteObservationHistoryFile(deleteButton.dataset.observationHistoryDelete || '');
+      return;
+    }
+
     const fileName =
       button.dataset.observationHistoryDetail ||
       button.dataset.observationHistoryDownload ||
@@ -883,6 +895,76 @@ async function loadObservationHistoryDetail(fileName) {
   state.observationHistoryDetail = detail;
   renderObservationHistory(state.observationHistory);
   return detail;
+}
+
+async function deleteObservationHistoryFile(fileName) {
+  const safeFileName = String(fileName || '').trim();
+
+  if (!safeFileName) {
+    throw new Error('삭제할 점검 히스토리 파일을 찾지 못했습니다.');
+  }
+
+  const confirmed = window.confirm(
+    `${safeFileName} 점검 기록을 삭제합니다.\n삭제한 히스토리 파일은 되돌릴 수 없습니다.`
+  );
+
+  if (!confirmed) {
+    return;
+  }
+
+  const data = await api(`/api/observation-history/${encodeURIComponent(safeFileName)}?reportLimit=8`, {
+    method: 'DELETE'
+  });
+
+  state.observationHistory = data.observationHistory || state.observationHistory;
+  if (state.observationHistoryDetail?.fileName === safeFileName) {
+    state.observationHistoryDetail = null;
+  }
+  renderObservationHistory(state.observationHistory);
+  showMessage(`${safeFileName} 점검 기록을 삭제했습니다.`);
+}
+
+async function pruneObservationHistoryFiles() {
+  const keepInput = elements.observationHistoryPanel?.querySelector('[data-observation-history-keep-latest]');
+  const keepLatest = Number(keepInput?.value || 30);
+
+  if (!Number.isFinite(keepLatest) || keepLatest < 1 || keepLatest > 365) {
+    throw new Error('보관 개수는 1부터 365 사이로 입력하세요.');
+  }
+
+  const totalCount = Number(state.observationHistory?.totalCount || state.observationHistory?.count || 0);
+  const staleCount = Math.max(0, totalCount - Math.trunc(keepLatest));
+
+  if (staleCount <= 0) {
+    showMessage(`이미 최근 ${Math.trunc(keepLatest)}개 이하로 보관 중입니다.`);
+    return;
+  }
+
+  const confirmed = window.confirm(
+    `최근 ${Math.trunc(keepLatest)}개만 남기고 오래된 점검 기록 ${staleCount}개를 삭제합니다.\n삭제한 히스토리 파일은 되돌릴 수 없습니다.`
+  );
+
+  if (!confirmed) {
+    return;
+  }
+
+  const data = await api('/api/observation-history/prune', {
+    method: 'POST',
+    body: JSON.stringify({
+      keepLatest: Math.trunc(keepLatest),
+      reportLimit: 8
+    })
+  });
+
+  state.observationHistory = data.observationHistory || state.observationHistory;
+  if (
+    state.observationHistoryDetail &&
+    !hasObservationHistoryFile(state.observationHistory, state.observationHistoryDetail.fileName)
+  ) {
+    state.observationHistoryDetail = null;
+  }
+  renderObservationHistory(state.observationHistory);
+  showMessage(`오래된 점검 기록 ${data.deletedCount || 0}개를 정리했습니다.`);
 }
 
 async function runObservationCheckFromAdmin() {
@@ -4131,9 +4213,10 @@ function renderObservationHistory(observationHistory) {
   const latest = observationHistory.latest || null;
   const comparison = observationHistory.comparison || null;
   const selectedFileName = state.observationHistoryDetail?.fileName || '';
+  const totalCount = Number(observationHistory.totalCount || recent.length);
 
   elements.observationHistorySummary.textContent = latest
-    ? `${formatDate(latest.generatedAt)} · 최근 ${recent.length}개 · ${latest.ready ? 'READY' : 'NOT READY'}`
+    ? `${formatDate(latest.generatedAt)} · 전체 ${totalCount}개 · ${latest.ready ? 'READY' : 'NOT READY'}`
     : '저장된 점검 기록이 없습니다.';
 
   if (!recent.length) {
@@ -4162,12 +4245,53 @@ function renderObservationHistory(observationHistory) {
         ${renderRoadmapStat('항목', latest.resultCount || 0, '전체 점검', 'active')}
       </div>
     </div>
+    ${renderObservationHistoryRetention(observationHistory)}
     ${renderObservationHistoryComparison(comparison)}
     <div class="observation-history-list">
       ${recent.map((item) => renderObservationHistoryItem(item, selectedFileName)).join('')}
     </div>
     ${renderObservationHistoryDetail(state.observationHistoryDetail)}
     <div class="roadmap-note">저장 폴더: ${escapeHtml(observationHistory.historyDir || 'data/observation-history')}</div>
+  `;
+}
+
+function renderObservationHistoryRetention(observationHistory = {}) {
+  const retention = observationHistory.retention || {};
+  const totalCount = Number(observationHistory.totalCount || observationHistory.count || 0);
+  const defaultKeepLatest = Number(retention.defaultKeepLatest || 30);
+  const excessCount = Math.max(0, totalCount - defaultKeepLatest);
+
+  return `
+    <section class="observation-history-retention" aria-label="점검 히스토리 보관 관리">
+      <div>
+        <span class="roadmap-eyebrow">보관 관리</span>
+        <strong>전체 ${escapeHtml(totalCount)}개 · 기본 보관 ${escapeHtml(defaultKeepLatest)}개</strong>
+        <p>${escapeHtml(excessCount > 0 ? `오래된 기록 ${excessCount}개를 정리할 수 있습니다.` : '현재 기본 보관 개수 안에서 관리 중입니다.')}</p>
+      </div>
+      <div class="observation-history-retention-controls">
+        <label>
+          <span>최근</span>
+          <input
+            type="number"
+            min="1"
+            max="365"
+            step="1"
+            value="${escapeHtml(defaultKeepLatest)}"
+            data-observation-history-keep-latest
+            aria-label="점검 히스토리 보관 개수"
+          />
+          <span>개 보관</span>
+        </label>
+        <button
+          type="button"
+          class="btn btn-outline btn-sm secondary-button"
+          data-observation-history-prune
+          ${totalCount > defaultKeepLatest ? '' : 'disabled'}
+        >
+          오래된 기록 정리
+        </button>
+      </div>
+    </section>
   `;
 }
 
@@ -4285,6 +4409,13 @@ function renderObservationHistoryItem(item = {}, selectedFileName = '') {
           data-observation-history-download="${escapeHtml(item.fileName || '')}"
         >
           JSON
+        </button>
+        <button
+          type="button"
+          class="btn btn-danger btn-sm"
+          data-observation-history-delete="${escapeHtml(item.fileName || '')}"
+        >
+          삭제
         </button>
       </div>
     </div>

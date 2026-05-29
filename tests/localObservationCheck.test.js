@@ -5,9 +5,11 @@ import os from 'node:os';
 import path from 'node:path';
 
 import {
+  deleteLocalObservationHistoryFile,
   formatLocalObservationReport,
   getLocalObservationHelp,
   parseLocalObservationArgs,
+  pruneLocalObservationHistoryFiles,
   readLocalObservationHistoryDetail,
   readLocalObservationHistoryReport,
   runAndSaveLocalObservationHistory,
@@ -188,6 +190,79 @@ test('runLocalObservationCheck saves history and compares the previous result', 
 
   await assert.rejects(
     () => readLocalObservationHistoryDetail({ rootDir, historyDir, fileName: '../store.json' }),
+    /파일명이 올바르지 않습니다/
+  );
+});
+
+test('local observation history can delete one file and prune old files', async () => {
+  const rootDir = await createObservationFixture();
+  const historyDir = path.join(rootDir, 'observation-history-retention');
+  const first = await runLocalObservationCheck({
+    rootDir,
+    baseUrl: 'http://127.0.0.1:3001',
+    adminToken: 'admin-token',
+    now: '2026-05-22T09:00:00.000Z',
+    saveHistory: true,
+    historyDir,
+    historyLimit: 10,
+    fetchImpl: createObservationFetch()
+  });
+  const second = await runLocalObservationCheck({
+    rootDir,
+    baseUrl: 'http://127.0.0.1:3001',
+    adminToken: 'admin-token',
+    now: '2026-05-22T09:30:00.000Z',
+    saveHistory: true,
+    historyDir,
+    historyLimit: 10,
+    fetchImpl: createObservationFetch()
+  });
+  const third = await runLocalObservationCheck({
+    rootDir,
+    baseUrl: 'http://127.0.0.1:3001',
+    adminToken: 'admin-token',
+    now: '2026-05-22T10:00:00.000Z',
+    saveHistory: true,
+    historyDir,
+    historyLimit: 10,
+    fetchImpl: createObservationFetch()
+  });
+
+  const report = await readLocalObservationHistoryReport({ rootDir, historyDir, limit: 2 });
+  assert.equal(report.count, 2);
+  assert.equal(report.totalCount, 3);
+  assert.equal(report.latest.fileName, third.history.fileName);
+  assert.equal(report.retention.defaultKeepLatest, 30);
+
+  const deleteResult = await deleteLocalObservationHistoryFile({
+    rootDir,
+    historyDir,
+    fileName: second.history.fileName,
+    reportLimit: 5
+  });
+  assert.equal(deleteResult.deleted, true);
+  assert.equal(deleteResult.deletedFile.fileName, second.history.fileName);
+  assert.equal(deleteResult.observationHistory.totalCount, 2);
+  assert.equal(await fileExists(second.history.filePath), false);
+
+  const pruneResult = await pruneLocalObservationHistoryFiles({
+    rootDir,
+    historyDir,
+    keepLatest: 1,
+    reportLimit: 5
+  });
+  assert.equal(pruneResult.pruned, true);
+  assert.equal(pruneResult.keepLatest, 1);
+  assert.equal(pruneResult.deletedCount, 1);
+  assert.equal(pruneResult.totalBefore, 2);
+  assert.equal(pruneResult.totalAfter, 1);
+  assert.deepEqual(pruneResult.deletedFiles.map((item) => item.fileName), [first.history.fileName]);
+  assert.equal(pruneResult.observationHistory.latest.fileName, third.history.fileName);
+  assert.equal(await fileExists(first.history.filePath), false);
+  assert.equal(await fileExists(third.history.filePath), true);
+
+  await assert.rejects(
+    () => deleteLocalObservationHistoryFile({ rootDir, historyDir, fileName: '../store.json' }),
     /파일명이 올바르지 않습니다/
   );
 });

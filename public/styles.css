@@ -3404,6 +3404,71 @@ select:focus {
   background: var(--surface-2);
 }
 
+.observation-history-retention {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 12px;
+  align-items: center;
+  padding: 14px;
+  border: 1px solid var(--border-soft);
+  border-radius: var(--radius-sm);
+  background: var(--surface-2);
+}
+
+.observation-history-retention > div:first-child {
+  display: grid;
+  gap: 5px;
+  min-width: 0;
+}
+
+.observation-history-retention strong {
+  color: var(--text);
+  font-size: 14px;
+  font-weight: 900;
+}
+
+.observation-history-retention p {
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.observation-history-retention-controls {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.observation-history-retention-controls label {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 800;
+  white-space: nowrap;
+}
+
+.observation-history-retention-controls input {
+  width: 70px;
+  height: 34px;
+  padding: 6px 9px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--bg);
+  color: var(--text);
+  font-size: 13px;
+  font-weight: 800;
+  outline: none;
+}
+
+.observation-history-retention-controls input:focus {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px var(--accent-glow);
+}
+
 .observation-history-detail {
   display: grid;
   gap: 12px;
@@ -3529,7 +3594,7 @@ select:focus {
 
 .observation-history-row {
   display: grid;
-  grid-template-columns: 94px minmax(180px, 1fr) 72px 72px 72px 132px;
+  grid-template-columns: 94px minmax(180px, 1fr) 72px 72px 72px 194px;
   gap: 10px;
   align-items: center;
   min-width: 0;
@@ -3548,6 +3613,7 @@ select:focus {
   display: flex;
   justify-content: flex-end;
   gap: 6px;
+  flex-wrap: wrap;
 }
 
 .observation-checklist-row {
@@ -4018,6 +4084,7 @@ select:focus {
   .roadmap-hero,
   .observation-issue-hero,
   .observation-history-hero,
+  .observation-history-retention,
   .observation-history-detail-meta,
   .observation-checklist-head {
     grid-template-columns: 1fr;
@@ -4055,6 +4122,10 @@ select:focus {
   }
 
   .observation-history-actions {
+    justify-content: flex-start;
+  }
+
+  .observation-history-retention-controls {
     justify-content: flex-start;
   }
 

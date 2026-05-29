@@ -311,7 +311,8 @@ export async function readLocalObservationHistoryReport(input = {}) {
     defaultHistoryLimit,
     { min: 1, max: 365 }
   );
-  const entries = await readLocalObservationHistory(historyDir, { limit });
+  const allEntries = await readLocalObservationHistory(historyDir, { limit: 10000 });
+  const entries = allEntries.slice(0, limit);
   const latest = entries[0] || null;
   const previous = entries[1] || null;
 
@@ -320,6 +321,13 @@ export async function readLocalObservationHistoryReport(input = {}) {
     historyDir,
     limit,
     count: entries.length,
+    totalCount: allEntries.length,
+    retention: {
+      defaultKeepLatest: defaultHistoryLimit,
+      currentLimit: limit,
+      excessCount: Math.max(0, allEntries.length - defaultHistoryLimit),
+      canPrune: allEntries.length > defaultHistoryLimit
+    },
     latest: latest ? summarizeObservationHistoryEntry(latest) : null,
     comparison: latest ? compareObservationHistory(latest, previous) : null,
     recent: entries.map(summarizeObservationHistoryEntry)
@@ -361,6 +369,69 @@ export async function readLocalObservationHistoryDetail(input = {}) {
       fileName,
       contentType: 'application/json; charset=utf-8'
     }
+  };
+}
+
+export async function deleteLocalObservationHistoryFile(input = {}) {
+  const rootDir = input.rootDir || process.cwd();
+  const env = input.env || defaultEnv;
+  const dataDir = input.dataDir || firstValue(env.DATA_DIR) || path.join(rootDir, 'data');
+  const historyDir = normalizeHistoryDir(
+    rootDir,
+    input.historyDir || firstValue(env.LOCAL_OBSERVATION_HISTORY_DIR),
+    dataDir
+  );
+  const fileName = normalizeObservationHistoryFileName(input.fileName);
+  const entry = await readLocalObservationHistoryFile(historyDir, fileName);
+
+  await fs.unlink(entry.filePath);
+
+  return {
+    deleted: true,
+    deletedFile: summarizeObservationHistoryEntry(entry),
+    observationHistory: await readLocalObservationHistoryReport({
+      ...input,
+      rootDir,
+      dataDir,
+      historyDir,
+      limit: input.reportLimit || input.limit || 8
+    })
+  };
+}
+
+export async function pruneLocalObservationHistoryFiles(input = {}) {
+  const rootDir = input.rootDir || process.cwd();
+  const env = input.env || defaultEnv;
+  const dataDir = input.dataDir || firstValue(env.DATA_DIR) || path.join(rootDir, 'data');
+  const historyDir = normalizeHistoryDir(
+    rootDir,
+    input.historyDir || firstValue(env.LOCAL_OBSERVATION_HISTORY_DIR),
+    dataDir
+  );
+  const keepLatest = normalizeBoundedNumber(
+    input.keepLatest || input.historyLimit || firstValue(env.LOCAL_OBSERVATION_HISTORY_LIMIT),
+    defaultHistoryLimit,
+    { min: 1, max: 365 }
+  );
+  const beforeEntries = await readLocalObservationHistory(historyDir, { limit: 10000 });
+  const deletedFiles = await pruneLocalObservationHistory(historyDir, keepLatest);
+  const history = await readLocalObservationHistoryReport({
+    ...input,
+    rootDir,
+    dataDir,
+    historyDir,
+    limit: input.reportLimit || input.limit || 8
+  });
+
+  return {
+    pruned: true,
+    keepLatest,
+    historyDir,
+    totalBefore: beforeEntries.length,
+    totalAfter: history.totalCount,
+    deletedCount: deletedFiles.length,
+    deletedFiles,
+    observationHistory: history
   };
 }
 
@@ -1065,11 +1136,18 @@ async function pruneLocalObservationHistory(historyDir, historyLimit) {
   const entries = await readLocalObservationHistory(historyDir, { limit: 10000 });
   const staleEntries = entries.slice(historyLimit);
 
-  await Promise.all(
-    staleEntries.map((entry) =>
-      fs.unlink(entry.filePath).catch(() => {})
-    )
-    );
+  const results = await Promise.all(
+    staleEntries.map(async (entry) => {
+      try {
+        await fs.unlink(entry.filePath);
+        return summarizeObservationHistoryEntry(entry);
+      } catch {
+        return null;
+      }
+    })
+  );
+
+  return results.filter(Boolean);
 }
 
 async function readLocalObservationHistoryFile(historyDir, fileName) {

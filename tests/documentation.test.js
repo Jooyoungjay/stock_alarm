@@ -260,6 +260,7 @@ test('local webapp stabilization docs cover cache, status, backups, and quote qu
   assert.match(readme, /\/api\/observation-history/);
   assert.match(readme, /\/api\/observation-history\/\{fileName\}/);
   assert.match(readme, /\/api\/observation-history\/run/);
+  assert.match(readme, /\/api\/observation-history\/prune/);
   assert.match(readme, /감시 종목 필터와 정렬 선택을 브라우저에 저장/);
   assert.match(readme, /CSV 양식/);
   assert.match(readme, /행 검증 후 일괄 가져오기/);
@@ -286,6 +287,7 @@ test('local webapp stabilization docs cover cache, status, backups, and quote qu
   assert.match(roadmap, /관리자 점검 실행\/히스토리 저장/);
   assert.match(roadmap, /점검 히스토리 상세 보기\/다운로드/);
   assert.match(roadmap, /점검 히스토리 보관 기간\/삭제 관리/);
+  assert.match(roadmap, /점검 실패 항목 조치 메모/);
   assert.match(roadmap, /텔레그램 편의 명령 확장/);
 
   assert.match(uxReview, /로컬 웹앱 사용자 편의 개선 회고/);
@@ -300,6 +302,7 @@ test('local webapp stabilization docs cover cache, status, backups, and quote qu
   assert.match(uxReview, /관리자 점검 실행\/히스토리 저장/);
   assert.match(uxReview, /점검 히스토리 상세 보기\/다운로드/);
   assert.match(uxReview, /점검 히스토리 보관 기간\/삭제 관리/);
+  assert.match(uxReview, /점검 실패 항목 조치 메모/);
   assert.match(uxReview, /위험 종목/);
   assert.match(uxReview, /시세 또는 배당 조회 실패/);
   assert.match(uxReview, /주문, 자동 매매, 매수\/매도 추천 문구는 넣지 않습니다/);
@@ -417,6 +420,7 @@ test('local webapp observation report documents daily use checks and issue track
   assert.match(markdown, /OBS-012/);
   assert.match(markdown, /OBS-013/);
   assert.match(markdown, /OBS-014/);
+  assert.match(markdown, /OBS-015/);
   assert.match(markdown, /check:observation/);
   assert.match(markdown, /--run-state-check/);
   assert.match(markdown, /--live-session/);
@@ -438,6 +442,7 @@ test('local webapp observation report documents daily use checks and issue track
   assert.match(markdown, /관리자 점검 실행\/히스토리 저장/);
   assert.match(markdown, /점검 히스토리 상세 보기\/다운로드/);
   assert.match(markdown, /점검 히스토리 보관 기간\/삭제 관리/);
+  assert.match(markdown, /점검 실패 항목 조치 메모/);
 });
 
 test('full regression execution report records results and fixed defects', async () => {
@@ -555,20 +560,26 @@ test('admin page exposes local observation issue controls', async () => {
   assert.match(script, /\/api\/observation-issues/);
   assert.match(script, /\/api\/observation-history/);
   assert.match(script, /\/api\/observation-history\/run/);
+  assert.match(script, /\/api\/observation-history\/prune/);
   assert.match(script, /data-observation-history-detail/);
   assert.match(script, /data-observation-history-download/);
+  assert.match(script, /data-observation-history-delete/);
+  assert.match(script, /data-observation-history-prune/);
   assert.match(script, /renderObservationIssues/);
   assert.match(script, /renderObservationChecklist/);
   assert.match(script, /renderObservationHistory/);
   assert.match(script, /renderObservationRunResult/);
   assert.match(script, /renderObservationHistoryDetail/);
   assert.match(script, /downloadObservationHistoryDetail/);
+  assert.match(script, /deleteObservationHistoryFile/);
+  assert.match(script, /pruneObservationHistoryFiles/);
   assert.match(script, /formatHistoryDeltaText/);
   assert.match(script, /nextChecklistItem/);
   assert.match(script, /priorityQueue/);
   assert.match(styles, /observation-history-panel/);
   assert.match(styles, /observation-history-row/);
   assert.match(styles, /observation-history-detail/);
+  assert.match(styles, /observation-history-retention/);
   assert.match(styles, /observation-run-card/);
 });
 
