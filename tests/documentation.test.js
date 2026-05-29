@@ -259,8 +259,10 @@ test('local webapp stabilization docs cover cache, status, backups, and quote qu
   assert.match(readme, /점검 히스토리/);
   assert.match(readme, /\/api\/observation-history/);
   assert.match(readme, /\/api\/observation-history\/\{fileName\}/);
+  assert.match(readme, /\/api\/observation-history\/\{fileName\}\/results\/\{resultId\}\/action/);
   assert.match(readme, /\/api\/observation-history\/run/);
   assert.match(readme, /\/api\/observation-history\/prune/);
+  assert.match(readme, /data\/observation-actions\.json/);
   assert.match(readme, /감시 종목 필터와 정렬 선택을 브라우저에 저장/);
   assert.match(readme, /CSV 양식/);
   assert.match(readme, /행 검증 후 일괄 가져오기/);
@@ -421,6 +423,7 @@ test('local webapp observation report documents daily use checks and issue track
   assert.match(markdown, /OBS-013/);
   assert.match(markdown, /OBS-014/);
   assert.match(markdown, /OBS-015/);
+  assert.match(markdown, /data\/observation-actions\.json/);
   assert.match(markdown, /check:observation/);
   assert.match(markdown, /--run-state-check/);
   assert.match(markdown, /--live-session/);
@@ -561,10 +564,13 @@ test('admin page exposes local observation issue controls', async () => {
   assert.match(script, /\/api\/observation-history/);
   assert.match(script, /\/api\/observation-history\/run/);
   assert.match(script, /\/api\/observation-history\/prune/);
+  assert.match(script, /results\/\$\{encodeURIComponent\(resultId\)\}\/action/);
   assert.match(script, /data-observation-history-detail/);
   assert.match(script, /data-observation-history-download/);
   assert.match(script, /data-observation-history-delete/);
   assert.match(script, /data-observation-history-prune/);
+  assert.match(script, /data-observation-action-save/);
+  assert.match(script, /saveObservationHistoryAction/);
   assert.match(script, /renderObservationIssues/);
   assert.match(script, /renderObservationChecklist/);
   assert.match(script, /renderObservationHistory/);
@@ -580,6 +586,7 @@ test('admin page exposes local observation issue controls', async () => {
   assert.match(styles, /observation-history-row/);
   assert.match(styles, /observation-history-detail/);
   assert.match(styles, /observation-history-retention/);
+  assert.match(styles, /observation-action-editor/);
   assert.match(styles, /observation-run-card/);
 });
 

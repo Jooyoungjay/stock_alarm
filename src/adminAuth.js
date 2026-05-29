@@ -67,7 +67,7 @@ export function isAdminApiPath(method, pathname) {
     return true;
   }
 
-  if (pathname.startsWith('/api/observation-history/') && (method === 'GET' || method === 'DELETE')) {
+  if (pathname.startsWith('/api/observation-history/') && (method === 'GET' || method === 'DELETE' || method === 'PATCH')) {
     return true;
   }
 

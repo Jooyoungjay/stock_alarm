@@ -96,10 +96,10 @@ test('parseRoadmapMarkdown extracts roadmap metadata and next task', async () =>
   assert.ok(roadmap.completedScope.some((item) => item.category === 'Postgres 쿼리 어댑터'));
   assert.ok(roadmap.completedScope.some((item) => item.category === 'Postgres 연결 리허설'));
   assert.ok(roadmap.sections.length >= 12);
-  assert.equal(roadmap.recommendedOrder[0], '점검 실패 항목 조치 메모');
-  assert.equal(roadmap.nextTask.title, '점검 실패 항목 조치 메모');
+  assert.equal(roadmap.recommendedOrder[0], '앱 개발 재개 시 모바일 실기기 E2E 테스트');
+  assert.equal(roadmap.nextTask.title, '앱 개발 재개 시 모바일 실기기 E2E 테스트');
   assert.ok(roadmap.statusLegend.some((item) => item.status === 'pending' && item.label === '예정'));
-  assert.ok(roadmap.summary.pending > 0);
+  assert.ok(roadmap.summary.paused > 0);
   assert.ok(roadmap.summary.total > roadmap.summary.completed);
 });
 
@@ -239,7 +239,7 @@ test('parseRoadmapMarkdown normalizes explicit WBS task statuses', async () => {
   const completedObservationHistoryRetentionTask = roadmap.sections
     .find((section) => section.id === '12')
     .tasks.find((task) => task.id === '12.27');
-  const pendingObservationActionMemoTask = roadmap.sections
+  const completedObservationActionMemoTask = roadmap.sections
     .find((section) => section.id === '12')
     .tasks.find((task) => task.id === '12.28');
   const completedProviderTask = roadmap.sections
@@ -335,7 +335,7 @@ test('parseRoadmapMarkdown normalizes explicit WBS task statuses', async () => {
   assert.equal(completedObservationRunTask.status, 'completed');
   assert.equal(completedObservationHistoryDetailTask.status, 'completed');
   assert.equal(completedObservationHistoryRetentionTask.status, 'completed');
-  assert.equal(pendingObservationActionMemoTask.status, 'pending');
+  assert.equal(completedObservationActionMemoTask.status, 'completed');
   assert.equal(completedDividendAlertTask.status, 'completed');
   assert.equal(completedDividendCalendarTask.status, 'completed');
   assert.equal(completedBackupStrategyTask.status, 'completed');

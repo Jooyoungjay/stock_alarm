@@ -48,8 +48,9 @@ test('readObservationIssues loads the default observation report', async () => {
   assert.equal(report.source, 'docs/local-webapp-observation-2026-05-21.md');
   assert.ok(report.issues.some((issue) => issue.id === 'OBS-001'));
   assert.ok(report.issues.some((issue) => issue.id === 'OBS-002' && issue.status === 'resolved'));
-  assert.deepEqual(report.priorityQueue.map((issue) => issue.id), ['OBS-015']);
-  assert.match(report.nextAction, /점검 실패 항목 조치 메모/);
+  assert.ok(report.issues.some((issue) => issue.id === 'OBS-015' && issue.status === 'resolved'));
+  assert.deepEqual(report.priorityQueue.map((issue) => issue.id), []);
+  assert.match(report.nextAction, /열린 이슈가 없으면/);
   assert.ok(report.checklist.length >= 1);
   assert.equal(report.checklistSummary.failed, 0);
   assert.equal(report.checklistSummary.paused, 0);

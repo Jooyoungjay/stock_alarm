@@ -13,7 +13,8 @@ import {
   readLocalObservationHistoryDetail,
   readLocalObservationHistoryReport,
   runAndSaveLocalObservationHistory,
-  runLocalObservationCheck
+  runLocalObservationCheck,
+  updateLocalObservationHistoryResultAction
 } from '../src/localObservationCheck.js';
 import { main as runLocalObservationCli } from '../scripts/check-local-observation.js';
 
@@ -265,6 +266,91 @@ test('local observation history can delete one file and prune old files', async 
     () => deleteLocalObservationHistoryFile({ rootDir, historyDir, fileName: '../store.json' }),
     /파일명이 올바르지 않습니다/
   );
+});
+
+test('local observation history can store action notes for failed or manual items', async () => {
+  const rootDir = await createObservationFixture();
+  const dataDir = path.join(rootDir, 'data');
+  const historyDir = path.join(rootDir, 'observation-history-actions');
+  const result = await runLocalObservationCheck({
+    rootDir,
+    dataDir,
+    baseUrl: 'http://127.0.0.1:3001',
+    adminToken: 'admin-token',
+    now: '2026-05-22T09:00:00.000Z',
+    saveHistory: true,
+    historyDir,
+    fetchImpl: async () => {
+      throw new Error('connect ECONNREFUSED');
+    }
+  });
+
+  const updated = await updateLocalObservationHistoryResultAction({
+    rootDir,
+    dataDir,
+    historyDir,
+    fileName: result.history.fileName,
+    resultId: 'server-start',
+    status: 'in_progress',
+    note: 'Node 서버 실행 상태를 확인하고 start-local.bat 재실행 예정',
+    nextReviewDate: '2026-05-23',
+    now: '2026-05-22T09:05:00.000Z'
+  });
+
+  assert.equal(updated.updated, true);
+  assert.equal(updated.action.status, 'in_progress');
+  assert.equal(updated.action.statusLabel, '조치중');
+  assert.match(updated.action.note, /start-local/);
+  assert.equal(updated.action.nextReviewDate, '2026-05-23');
+
+  const detail = await readLocalObservationHistoryDetail({
+    rootDir,
+    dataDir,
+    historyDir,
+    fileName: result.history.fileName
+  });
+  const serverStart = detail.results.find((item) => item.id === 'server-start');
+
+  assert.equal(serverStart.action.status, 'in_progress');
+  assert.match(serverStart.action.note, /Node 서버/);
+  assert.equal(detail.actionSummary.recorded, 1);
+  assert.equal(detail.actionSummary.inProgress, 1);
+  assert.equal(detail.snapshot.actionSummary.recorded, 1);
+  assert.equal(
+    detail.snapshot.results.find((item) => item.id === 'server-start')?.action.status,
+    'in_progress'
+  );
+
+  await assert.rejects(
+    () => updateLocalObservationHistoryResultAction({
+      rootDir,
+      dataDir,
+      historyDir,
+      fileName: result.history.fileName,
+      resultId: 'server-start',
+      status: 'unknown'
+    }),
+    /조치 상태가 올바르지 않습니다/
+  );
+  await assert.rejects(
+    () => updateLocalObservationHistoryResultAction({
+      rootDir,
+      dataDir,
+      historyDir,
+      fileName: result.history.fileName,
+      resultId: '../server-start',
+      status: 'resolved'
+    }),
+    /항목 ID가 올바르지 않습니다/
+  );
+
+  const deleted = await deleteLocalObservationHistoryFile({
+    rootDir,
+    dataDir,
+    historyDir,
+    fileName: result.history.fileName
+  });
+  assert.equal(deleted.deletedActionCount, 1);
 });
 
 test('runAndSaveLocalObservationHistory runs a live check and returns refreshed history', async () => {

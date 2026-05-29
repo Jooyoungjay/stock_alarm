@@ -3687,6 +3687,74 @@ select:focus {
   overflow-wrap: anywhere;
 }
 
+.observation-action-editor {
+  display: grid;
+  gap: 8px;
+  margin-top: 8px;
+  padding-top: 8px;
+  border-top: 1px solid var(--border-soft);
+}
+
+.observation-action-fields {
+  display: grid;
+  grid-template-columns: minmax(140px, 0.5fr) minmax(140px, 0.5fr);
+  gap: 8px;
+}
+
+.observation-action-fields label,
+.observation-action-note {
+  display: grid;
+  gap: 4px;
+}
+
+.observation-action-fields span,
+.observation-action-note span,
+.observation-action-footer span {
+  color: var(--muted);
+  font-size: 10px;
+  font-weight: 800;
+}
+
+.observation-action-fields select,
+.observation-action-fields input,
+.observation-action-note textarea {
+  width: 100%;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+  color: var(--text);
+  font: inherit;
+  font-size: 12px;
+  outline: none;
+}
+
+.observation-action-fields select,
+.observation-action-fields input {
+  min-height: 34px;
+  padding: 7px 9px;
+}
+
+.observation-action-note textarea {
+  min-height: 76px;
+  resize: vertical;
+  padding: 8px 9px;
+}
+
+.observation-action-fields select:focus,
+.observation-action-fields input:focus,
+.observation-action-note textarea:focus {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px var(--accent-glow);
+}
+
+.observation-action-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
 .observation-checklist-record {
   overflow-wrap: anywhere;
   color: var(--muted);
@@ -4070,6 +4138,10 @@ select:focus {
 
   .server-status-grid,
   .server-access {
+    grid-template-columns: 1fr;
+  }
+
+  .observation-action-fields {
     grid-template-columns: 1fr;
   }
 

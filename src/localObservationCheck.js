@@ -7,12 +7,20 @@ const defaultLiveMaxAgeMinutes = 30;
 const defaultLiveDividendMaxAgeHours = 72;
 const defaultHistoryLimit = 30;
 const defaultHistoryDirName = 'observation-history';
+const defaultActionFileName = 'observation-actions.json';
 const defaultEnv = process.env;
 
 const statusLabels = {
   passed: '통과',
   failed: '실패',
   manual: '수동 필요'
+};
+
+const observationActionStatusLabels = {
+  pending: '미처리',
+  in_progress: '조치중',
+  resolved: '해결',
+  deferred: '보류'
 };
 
 export function parseLocalObservationArgs(args = [], options = {}) {
@@ -348,7 +356,13 @@ export async function readLocalObservationHistoryDetail(input = {}) {
   const entries = await readLocalObservationHistory(historyDir, { limit: 10000 });
   const entryIndex = entries.findIndex((item) => item.fileName === fileName);
   const previous = entryIndex >= 0 ? entries[entryIndex + 1] || null : null;
+  const actionStore = await readObservationActionStore(dataDir);
+  const results = normalizeObservationHistoryResults(entry.results).map((item) =>
+    attachObservationAction(fileName, item, actionStore)
+  );
   const snapshot = createObservationHistoryDownloadSnapshot(entry);
+  snapshot.results = results;
+  snapshot.actionSummary = summarizeObservationActions(results);
 
   return {
     schemaVersion: 1,
@@ -360,7 +374,8 @@ export async function readLocalObservationHistoryDetail(input = {}) {
     summary: normalizeHistorySummary(entry.summary),
     resultCount: Array.isArray(entry.results) ? entry.results.length : 0,
     values: entry.values || {},
-    results: normalizeObservationHistoryResults(entry.results),
+    results,
+    actionSummary: summarizeObservationActions(results),
     stateCheck: entry.stateCheck || null,
     suggestedIssue: entry.suggestedIssue || null,
     comparison: compareObservationHistory(entry, previous),
@@ -369,6 +384,63 @@ export async function readLocalObservationHistoryDetail(input = {}) {
       fileName,
       contentType: 'application/json; charset=utf-8'
     }
+  };
+}
+
+export async function updateLocalObservationHistoryResultAction(input = {}) {
+  const rootDir = input.rootDir || process.cwd();
+  const env = input.env || defaultEnv;
+  const dataDir = input.dataDir || firstValue(env.DATA_DIR) || path.join(rootDir, 'data');
+  const historyDir = normalizeHistoryDir(
+    rootDir,
+    input.historyDir || firstValue(env.LOCAL_OBSERVATION_HISTORY_DIR),
+    dataDir
+  );
+  const fileName = normalizeObservationHistoryFileName(input.fileName);
+  const resultId = normalizeObservationResultId(input.resultId);
+  const entry = await readLocalObservationHistoryFile(historyDir, fileName);
+  const result = (Array.isArray(entry.results) ? entry.results : [])
+    .find((item) => item.id === resultId);
+
+  if (!result) {
+    throw new Error('점검 결과 항목을 찾지 못했습니다.');
+  }
+
+  const store = await readObservationActionStore(dataDir);
+  const existing = findObservationActionRecord(store, fileName, resultId);
+  const now = normalizeIsoDateTime(input.now) || new Date().toISOString();
+  const action = normalizeObservationActionRecord(
+    {
+      ...existing,
+      fileName,
+      resultId,
+      resultItem: result.item || result.id || '',
+      status: input.status ?? existing?.status,
+      note: input.note ?? existing?.note,
+      nextReviewDate: input.nextReviewDate ?? existing?.nextReviewDate,
+      createdAt: existing?.createdAt || now,
+      updatedAt: now
+    },
+    { strict: true }
+  );
+  const records = upsertObservationActionRecord(store.records, action);
+
+  await writeObservationActionStore(dataDir, {
+    schemaVersion: 1,
+    updatedAt: now,
+    records
+  });
+
+  return {
+    updated: true,
+    action,
+    observationHistoryDetail: await readLocalObservationHistoryDetail({
+      ...input,
+      rootDir,
+      dataDir,
+      historyDir,
+      fileName
+    })
   };
 }
 
@@ -385,10 +457,12 @@ export async function deleteLocalObservationHistoryFile(input = {}) {
   const entry = await readLocalObservationHistoryFile(historyDir, fileName);
 
   await fs.unlink(entry.filePath);
+  const deletedActionCount = await deleteObservationActionsForFiles(dataDir, [fileName]);
 
   return {
     deleted: true,
     deletedFile: summarizeObservationHistoryEntry(entry),
+    deletedActionCount,
     observationHistory: await readLocalObservationHistoryReport({
       ...input,
       rootDir,
@@ -415,6 +489,10 @@ export async function pruneLocalObservationHistoryFiles(input = {}) {
   );
   const beforeEntries = await readLocalObservationHistory(historyDir, { limit: 10000 });
   const deletedFiles = await pruneLocalObservationHistory(historyDir, keepLatest);
+  const deletedActionCount = await deleteObservationActionsForFiles(
+    dataDir,
+    deletedFiles.map((item) => item.fileName)
+  );
   const history = await readLocalObservationHistoryReport({
     ...input,
     rootDir,
@@ -431,6 +509,7 @@ export async function pruneLocalObservationHistoryFiles(input = {}) {
     totalAfter: history.totalCount,
     deletedCount: deletedFiles.length,
     deletedFiles,
+    deletedActionCount,
     observationHistory: history
   };
 }
@@ -1263,6 +1342,243 @@ function normalizeObservationHistoryResults(results = []) {
     evidence: item.evidence || '',
     nextAction: item.nextAction || ''
   }));
+}
+
+async function readObservationActionStore(dataDir) {
+  const filePath = path.join(dataDir, defaultActionFileName);
+
+  try {
+    const content = await fs.readFile(filePath, 'utf8');
+    const data = JSON.parse(content);
+
+    return {
+      schemaVersion: 1,
+      filePath,
+      updatedAt: normalizeIsoDateTime(data.updatedAt) || '',
+      records: normalizeObservationActionRecords(data.records)
+    };
+  } catch (error) {
+    if (error.code === 'ENOENT') {
+      return {
+        schemaVersion: 1,
+        filePath,
+        updatedAt: '',
+        records: []
+      };
+    }
+
+    if (error instanceof SyntaxError) {
+      throw new Error('점검 조치 메모 JSON을 읽지 못했습니다.');
+    }
+
+    throw error;
+  }
+}
+
+async function writeObservationActionStore(dataDir, store) {
+  await fs.mkdir(dataDir, { recursive: true });
+
+  const filePath = path.join(dataDir, defaultActionFileName);
+  const tempPath = `${filePath}.tmp`;
+  const payload = {
+    schemaVersion: 1,
+    updatedAt: store.updatedAt || new Date().toISOString(),
+    records: normalizeObservationActionRecords(store.records)
+  };
+
+  await fs.writeFile(tempPath, `${JSON.stringify(payload, null, 2)}\n`, 'utf8');
+  await fs.rename(tempPath, filePath);
+}
+
+function attachObservationAction(fileName, item, store) {
+  const action = findObservationActionRecord(store, fileName, item.id);
+
+  return {
+    ...item,
+    action: normalizeObservationActionRecord({
+      fileName,
+      resultId: item.id,
+      resultItem: item.item || item.id || '',
+      ...(action || {})
+    })
+  };
+}
+
+function summarizeObservationActions(results = []) {
+  const issueResults = (Array.isArray(results) ? results : [])
+    .filter((item) => item.status === 'failed' || item.status === 'manual');
+  const summary = {
+    total: issueResults.length,
+    recorded: 0,
+    pending: 0,
+    inProgress: 0,
+    resolved: 0,
+    deferred: 0
+  };
+
+  for (const item of issueResults) {
+    const action = item.action || {};
+    const status = normalizeObservationActionStatus(action.status);
+
+    if (hasObservationActionContent(action)) {
+      summary.recorded += 1;
+    }
+
+    if (status === 'in_progress') {
+      summary.inProgress += 1;
+    } else if (status === 'resolved') {
+      summary.resolved += 1;
+    } else if (status === 'deferred') {
+      summary.deferred += 1;
+    } else {
+      summary.pending += 1;
+    }
+  }
+
+  return summary;
+}
+
+function findObservationActionRecord(store, fileName, resultId) {
+  const key = createObservationActionKey(fileName, resultId);
+
+  return (Array.isArray(store?.records) ? store.records : [])
+    .find((item) => createObservationActionKey(item.fileName, item.resultId) === key) || null;
+}
+
+function upsertObservationActionRecord(records = [], action) {
+  const key = createObservationActionKey(action.fileName, action.resultId);
+  const filtered = normalizeObservationActionRecords(records)
+    .filter((item) => createObservationActionKey(item.fileName, item.resultId) !== key);
+
+  return [action, ...filtered];
+}
+
+async function deleteObservationActionsForFiles(dataDir, fileNames = []) {
+  const targets = new Set(
+    fileNames
+      .map((fileName) => {
+        try {
+          return normalizeObservationHistoryFileName(fileName);
+        } catch {
+          return '';
+        }
+      })
+      .filter(Boolean)
+  );
+
+  if (!targets.size) {
+    return 0;
+  }
+
+  const store = await readObservationActionStore(dataDir);
+  const records = normalizeObservationActionRecords(store.records);
+  const remaining = records.filter((item) => !targets.has(item.fileName));
+  const deletedCount = records.length - remaining.length;
+
+  if (deletedCount > 0) {
+    await writeObservationActionStore(dataDir, {
+      schemaVersion: 1,
+      updatedAt: new Date().toISOString(),
+      records: remaining
+    });
+  }
+
+  return deletedCount;
+}
+
+function normalizeObservationActionRecords(records = []) {
+  if (!Array.isArray(records)) {
+    return [];
+  }
+
+  return records
+    .map((record) => {
+      try {
+        return normalizeObservationActionRecord(record);
+      } catch {
+        return null;
+      }
+    })
+    .filter(Boolean);
+}
+
+function normalizeObservationActionRecord(record = {}, options = {}) {
+  const status = normalizeObservationActionStatus(record.status, options);
+  const fileName = normalizeObservationHistoryFileName(record.fileName);
+  const resultId = normalizeObservationResultId(record.resultId);
+  const note = normalizeObservationActionNote(record.note);
+  const nextReviewDate = normalizeObservationActionReviewDate(record.nextReviewDate, options);
+
+  return {
+    fileName,
+    resultId,
+    resultItem: String(record.resultItem || '').trim().slice(0, 120),
+    status,
+    statusLabel: observationActionStatusLabels[status],
+    note,
+    nextReviewDate,
+    createdAt: normalizeIsoDateTime(record.createdAt) || '',
+    updatedAt: normalizeIsoDateTime(record.updatedAt) || ''
+  };
+}
+
+function normalizeObservationActionStatus(value, options = {}) {
+  const status = String(value || 'pending').trim().toLowerCase().replace(/[-\s]+/g, '_');
+
+  if (Object.prototype.hasOwnProperty.call(observationActionStatusLabels, status)) {
+    return status;
+  }
+
+  if (options.strict) {
+    throw new Error('점검 조치 상태가 올바르지 않습니다.');
+  }
+
+  return 'pending';
+}
+
+function normalizeObservationActionNote(value) {
+  return String(value ?? '').replace(/\r\n/g, '\n').trim().slice(0, 2000);
+}
+
+function normalizeObservationActionReviewDate(value, options = {}) {
+  const text = String(value || '').trim();
+
+  if (!text) {
+    return '';
+  }
+
+  if (/^\d{4}-\d{2}-\d{2}$/.test(text)) {
+    return text;
+  }
+
+  if (options.strict) {
+    throw new Error('다음 확인일은 YYYY-MM-DD 형식이어야 합니다.');
+  }
+
+  return '';
+}
+
+function normalizeObservationResultId(resultId) {
+  const value = String(resultId || '').trim();
+
+  if (!value || value.length > 120 || !/^[A-Za-z0-9._:-]+$/.test(value)) {
+    throw new Error('점검 결과 항목 ID가 올바르지 않습니다.');
+  }
+
+  return value;
+}
+
+function createObservationActionKey(fileName, resultId) {
+  return `${fileName}#${resultId}`;
+}
+
+function hasObservationActionContent(action = {}) {
+  return Boolean(
+    normalizeObservationActionStatus(action.status) !== 'pending' ||
+      normalizeObservationActionNote(action.note) ||
+      normalizeObservationActionReviewDate(action.nextReviewDate) ||
+      normalizeIsoDateTime(action.updatedAt)
+  );
 }
 
 function compareObservationHistory(current, previous) {

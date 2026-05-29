@@ -660,17 +660,23 @@ elements.runObservationCheckButton?.addEventListener('click', async () => {
 });
 
 elements.observationHistoryPanel?.addEventListener('click', async (event) => {
+  const actionSaveButton = event.target.closest('[data-observation-action-save]');
   const detailButton = event.target.closest('[data-observation-history-detail]');
   const downloadButton = event.target.closest('[data-observation-history-download]');
   const deleteButton = event.target.closest('[data-observation-history-delete]');
   const pruneButton = event.target.closest('[data-observation-history-prune]');
-  const button = detailButton || downloadButton || deleteButton || pruneButton;
+  const button = actionSaveButton || detailButton || downloadButton || deleteButton || pruneButton;
 
   if (!button) {
     return;
   }
 
   await withBusy(button, async () => {
+    if (actionSaveButton) {
+      await saveObservationHistoryAction(actionSaveButton);
+      return;
+    }
+
     if (pruneButton) {
       await pruneObservationHistoryFiles();
       return;
@@ -895,6 +901,33 @@ async function loadObservationHistoryDetail(fileName) {
   state.observationHistoryDetail = detail;
   renderObservationHistory(state.observationHistory);
   return detail;
+}
+
+async function saveObservationHistoryAction(button) {
+  const card = button.closest('[data-observation-action-card]');
+  const fileName = button.dataset.observationActionFile || state.observationHistoryDetail?.fileName || '';
+  const resultId = button.dataset.observationActionResult || '';
+
+  if (!card || !fileName || !resultId) {
+    throw new Error('저장할 점검 조치 항목을 찾지 못했습니다.');
+  }
+
+  const payload = {
+    status: card.querySelector('[data-observation-action-status]')?.value || 'pending',
+    note: card.querySelector('[data-observation-action-note]')?.value || '',
+    nextReviewDate: card.querySelector('[data-observation-action-next-review-date]')?.value || ''
+  };
+  const data = await api(
+    `/api/observation-history/${encodeURIComponent(fileName)}/results/${encodeURIComponent(resultId)}/action`,
+    {
+      method: 'PATCH',
+      body: JSON.stringify(payload)
+    }
+  );
+
+  state.observationHistoryDetail = data.observationHistoryDetail || state.observationHistoryDetail;
+  renderObservationHistory(state.observationHistory);
+  showMessage('점검 조치 메모를 저장했습니다.');
 }
 
 async function deleteObservationHistoryFile(fileName) {
@@ -4452,6 +4485,12 @@ function renderObservationHistoryDetail(detail) {
         ${renderRoadmapStat('수동', detail.summary?.manual || 0, '확인 필요', 'pending')}
         ${renderRoadmapStat('통과', detail.summary?.passed || 0, '자동 통과', 'done')}
         ${renderRoadmapStat('항목', detail.resultCount || results.length, '전체 점검', 'active')}
+        ${renderRoadmapStat(
+          '조치',
+          `${detail.actionSummary?.recorded || 0}/${detail.actionSummary?.total || 0}`,
+          '메모 기록',
+          'active'
+        )}
       </div>
       ${renderObservationHistoryDetailMeta(detail)}
       <div class="observation-history-detail-list">
@@ -4491,17 +4530,89 @@ function renderObservationHistoryDetailMeta(detail = {}) {
 
 function renderObservationHistoryDetailResult(item = {}) {
   const statusClass = getObservationResultStatusClass(item.status);
+  const action = item.action || {};
+  const isActionable = item.status === 'failed' || item.status === 'manual';
 
   return `
-    <div class="observation-history-detail-result ${statusClass}">
+    <div class="observation-history-detail-result ${statusClass}" data-observation-action-card>
       <span class="roadmap-status-badge ${statusClass}">${escapeHtml(getObservationResultStatusLabel(item.status))}</span>
       <div>
         <strong>${escapeHtml(item.item || item.id || '-')}</strong>
         <p>${escapeHtml(item.evidence || '-')}</p>
         ${item.nextAction ? `<span>다음 조치: ${escapeHtml(item.nextAction)}</span>` : ''}
+        ${isActionable ? renderObservationActionEditor(item, action) : ''}
       </div>
     </div>
   `;
+}
+
+function renderObservationActionEditor(item = {}, action = {}) {
+  const fileName = action.fileName || state.observationHistoryDetail?.fileName || '';
+  const resultId = action.resultId || item.id || '';
+
+  return `
+    <div class="observation-action-editor" aria-label="점검 조치 메모">
+      <div class="observation-action-fields">
+        <label>
+          <span>조치 상태</span>
+          <select data-observation-action-status>
+            ${renderObservationActionStatusOptions(action.status)}
+          </select>
+        </label>
+        <label>
+          <span>다음 확인일</span>
+          <input
+            type="date"
+            data-observation-action-next-review-date
+            value="${escapeHtml(action.nextReviewDate || '')}"
+          />
+        </label>
+      </div>
+      <label class="observation-action-note">
+        <span>조치 메모</span>
+        <textarea
+          data-observation-action-note
+          rows="3"
+          maxlength="2000"
+          placeholder="확인한 원인, 처리 내용, 다음 확인 포인트를 남깁니다."
+        >${escapeHtml(action.note || '')}</textarea>
+      </label>
+      <div class="observation-action-footer">
+        <span>${escapeHtml(action.updatedAt ? `마지막 저장 ${formatDate(action.updatedAt)}` : '아직 저장된 조치 메모가 없습니다.')}</span>
+        <button
+          type="button"
+          class="btn btn-primary btn-sm"
+          data-observation-action-save
+          data-observation-action-file="${escapeHtml(fileName)}"
+          data-observation-action-result="${escapeHtml(resultId)}"
+        >
+          메모 저장
+        </button>
+      </div>
+    </div>
+  `;
+}
+
+function renderObservationActionStatusOptions(selectedStatus) {
+  const selected = normalizeObservationActionStatus(selectedStatus);
+  const options = [
+    ['pending', '미처리'],
+    ['in_progress', '조치중'],
+    ['resolved', '해결'],
+    ['deferred', '보류']
+  ];
+
+  return options
+    .map(([value, label]) => `
+      <option value="${value}" ${value === selected ? 'selected' : ''}>${label}</option>
+    `)
+    .join('');
+}
+
+function normalizeObservationActionStatus(value) {
+  const status = String(value || 'pending').trim();
+
+  return ['pending', 'in_progress', 'resolved', 'deferred'].includes(status) ? status : 'pending';
 }
 
 function getObservationResultStatusClass(status) {

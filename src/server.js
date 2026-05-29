@@ -61,7 +61,8 @@ import {
   pruneLocalObservationHistoryFiles,
   readLocalObservationHistoryDetail,
   readLocalObservationHistoryReport,
-  runAndSaveLocalObservationHistory
+  runAndSaveLocalObservationHistory,
+  updateLocalObservationHistoryResultAction
 } from './localObservationCheck.js';
 import { isTelegramConfigured, sendTelegramMessage } from './telegram.js';
 import { pollTelegramCommands } from './telegramCommands.js';
@@ -928,6 +929,30 @@ async function handleApi(request, response, url) {
       dataDir: config.dataDir,
       keepLatest: body.keepLatest,
       reportLimit: body.reportLimit || 8
+    }));
+    return;
+  }
+
+  if (
+    request.method === 'PATCH' &&
+    segments[0] === 'api' &&
+    segments[1] === 'observation-history' &&
+    segments[2] &&
+    segments[3] === 'results' &&
+    segments[4] &&
+    segments[5] === 'action' &&
+    segments.length === 6
+  ) {
+    const body = await readJsonBody(request);
+
+    sendJson(response, 200, await updateLocalObservationHistoryResultAction({
+      rootDir: config.rootDir,
+      dataDir: config.dataDir,
+      fileName: decodeURIComponent(segments[2]),
+      resultId: decodeURIComponent(segments[4]),
+      status: body.status,
+      note: body.note,
+      nextReviewDate: body.nextReviewDate
     }));
     return;
   }
