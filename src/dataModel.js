@@ -38,6 +38,7 @@ const entities = [
     fields: [
       { name: 'id', type: 'uuid', required: true },
       { name: 'deviceId', type: 'string | null', required: false },
+      { name: 'accountType', type: 'general | isa | pension | other', required: true },
       { name: 'symbol', type: 'string', required: true },
       { name: 'displayName', type: 'string', required: false },
       { name: 'purchasePrice', type: 'number | null', required: false },

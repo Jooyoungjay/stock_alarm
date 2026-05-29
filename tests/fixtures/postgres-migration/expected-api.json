@@ -37,6 +37,7 @@
     {
       "id": "stock-kr-profit",
       "device_id": "device-1",
+      "account_type": "general",
       "symbol": "336260",
       "purchase_price": 88779,
       "quantity": 10,
@@ -47,6 +48,7 @@
     {
       "id": "stock-us-target",
       "device_id": "device-2",
+      "account_type": "general",
       "symbol": "AAPL",
       "purchase_price": 180,
       "quantity": 3,

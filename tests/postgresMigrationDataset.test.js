@@ -62,6 +62,7 @@ test('Postgres migration fixture defines the dry-run table comparison baseline',
     result.tables.stocks.sampleRows.map((row) => ({
       id: row.id,
       device_id: row.device_id,
+      account_type: row.account_type,
       symbol: row.symbol,
       purchase_price: row.purchase_price,
       quantity: row.quantity,

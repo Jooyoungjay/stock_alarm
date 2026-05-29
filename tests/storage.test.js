@@ -111,6 +111,37 @@ test('JsonStore scopes stocks and alerts by anonymous device', async () => {
   assert.equal((await store.listStocks({ deviceId: second.device.id })).length, 1);
 });
 
+test('JsonStore separates duplicate symbols by account type', async () => {
+  const store = await createStore();
+  const general = await store.addStock(stockInput());
+  const isa = await store.addStock(
+    stockInput({
+      accountType: 'isa',
+      displayName: 'Apple ISA'
+    })
+  );
+
+  assert.equal(general.accountType, 'general');
+  assert.equal(isa.accountType, 'isa');
+  assert.equal((await store.listStocks()).length, 2);
+
+  await assert.rejects(
+    () =>
+      store.addStock(
+        stockInput({
+          accountType: 'ISA',
+          displayName: 'Apple ISA duplicate'
+        })
+      ),
+    /같은 계좌/
+  );
+
+  const updated = await store.updateStock(general.id, { accountType: 'pension' });
+  assert.equal(updated.accountType, 'pension');
+
+  await assert.rejects(() => store.updateStock(updated.id, { accountType: 'isa' }), /같은 계좌/);
+});
+
 test('JsonStore stores and updates optional stock quantity', async () => {
   const store = await createStore();
   const stock = await store.addStock(

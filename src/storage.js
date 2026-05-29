@@ -37,6 +37,15 @@ export const POSITION_STATUSES = Object.freeze({
 
 export const DEFAULT_POSITION_STATUS = POSITION_STATUSES.HOLDING;
 
+export const ACCOUNT_TYPES = Object.freeze({
+  GENERAL: 'general',
+  ISA: 'isa',
+  PENSION: 'pension',
+  OTHER: 'other'
+});
+
+export const DEFAULT_ACCOUNT_TYPE = ACCOUNT_TYPES.GENERAL;
+
 async function ensureDataDir(dataDir) {
   await fs.mkdir(dataDir, { recursive: true });
 }
@@ -128,6 +137,7 @@ export function normalizeStock(input, defaults) {
   const stock = {
     id: randomUUID(),
     deviceId: normalizeDeviceId(input.deviceId),
+    accountType: normalizeAccountType(input.accountType || input.account || input.accountName),
     symbol,
     displayName: String(input.displayName || '').trim(),
     purchasePrice: normalizeOptionalPositiveNumber(input.purchasePrice, '매수가는 0보다 큰 숫자여야 합니다.'),
@@ -243,6 +253,10 @@ export function applyStockPatch(stock, patch) {
 
   if (patch.displayName !== undefined) {
     next.displayName = String(patch.displayName || '').trim();
+  }
+
+  if (patch.accountType !== undefined) {
+    next.accountType = normalizeAccountType(patch.accountType);
   }
 
   if (patch.notes !== undefined) {
@@ -431,6 +445,7 @@ export function normalizeStoredStock(stock) {
   return {
     ...stock,
     deviceId: normalizeDeviceId(stock.deviceId),
+    accountType: normalizeAccountType(stock.accountType || stock.account || stock.accountName),
     positionStatus: normalizePositionStatus(stock.positionStatus),
     soldAt: normalizeStoredOptionalDate(stock.soldAt),
     alertSnoozedUntil: normalizeIsoDateTime(stock.alertSnoozedUntil) || null,
@@ -1392,6 +1407,32 @@ export function normalizePositionStatus(value) {
   return DEFAULT_POSITION_STATUS;
 }
 
+export function normalizeAccountType(value) {
+  const normalized = String(value || DEFAULT_ACCOUNT_TYPE).trim().toLowerCase().replace(/[\s._-]+/g, '');
+  const aliases = {
+    general: ACCOUNT_TYPES.GENERAL,
+    normal: ACCOUNT_TYPES.GENERAL,
+    cash: ACCOUNT_TYPES.GENERAL,
+    regular: ACCOUNT_TYPES.GENERAL,
+    일반: ACCOUNT_TYPES.GENERAL,
+    일반계좌: ACCOUNT_TYPES.GENERAL,
+    종합: ACCOUNT_TYPES.GENERAL,
+    종합계좌: ACCOUNT_TYPES.GENERAL,
+    isa: ACCOUNT_TYPES.ISA,
+    중개형isa: ACCOUNT_TYPES.ISA,
+    개인종합자산관리계좌: ACCOUNT_TYPES.ISA,
+    pension: ACCOUNT_TYPES.PENSION,
+    retirement: ACCOUNT_TYPES.PENSION,
+    irp: ACCOUNT_TYPES.PENSION,
+    연금: ACCOUNT_TYPES.PENSION,
+    연금계좌: ACCOUNT_TYPES.PENSION,
+    기타: ACCOUNT_TYPES.OTHER,
+    other: ACCOUNT_TYPES.OTHER
+  };
+
+  return aliases[normalized] || DEFAULT_ACCOUNT_TYPE;
+}
+
 function normalizeDevicePlatform(value) {
   const platform = String(value || 'unknown').trim().toLowerCase();
   const allowed = ['ios', 'android', 'web', 'unknown'];
@@ -1727,10 +1768,11 @@ export class JsonStore {
       data.stocks.some(
         (item) =>
           item.symbol === stock.symbol &&
+          normalizeAccountType(item.accountType) === stock.accountType &&
           normalizeDeviceId(item.deviceId) === normalizeDeviceId(stock.deviceId)
       )
     ) {
-      throw new Error('이미 등록된 종목입니다.');
+      throw new Error('같은 계좌에 이미 등록된 종목입니다.');
     }
 
     await this.createBackup('before-add-stock');
@@ -1748,8 +1790,21 @@ export class JsonStore {
       throw new Error('종목을 찾을 수 없습니다.');
     }
 
-    await this.createBackup('before-update-stock');
     const updated = applyStockPatch(data.stocks[index], patch);
+
+    if (
+      data.stocks.some(
+        (item, itemIndex) =>
+          itemIndex !== index &&
+          item.symbol === updated.symbol &&
+          normalizeAccountType(item.accountType) === updated.accountType &&
+          normalizeDeviceId(item.deviceId) === normalizeDeviceId(updated.deviceId)
+      )
+    ) {
+      throw new Error('같은 계좌에 이미 등록된 종목입니다.');
+    }
+
+    await this.createBackup('before-update-stock');
     data.stocks[index] = updated;
     await this.write(data);
     await this.createBackup('after-update-stock');

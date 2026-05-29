@@ -270,6 +270,7 @@ function mapStockRow(stock, index) {
   return {
     id: stringify(stock.id || stableId('stock', [stock.symbol, stock.deviceId, index])),
     device_id: nullableString(stock.deviceId),
+    account_type: stringify(stock.accountType || 'general'),
     symbol: stringify(stock.symbol),
     display_name: stringify(stock.displayName),
     purchase_price: nullableNumber(stock.purchasePrice),

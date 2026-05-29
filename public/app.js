@@ -33,10 +33,17 @@ const WATCH_FILTER_OPTIONS = Object.freeze([
 const WATCH_SORT_OPTIONS = Object.freeze(['risk', 'distance', 'profit', 'checked', 'name']);
 const DEFAULT_WATCH_FILTER = 'all';
 const DEFAULT_WATCH_SORT = 'risk';
+const ACCOUNT_TYPE_OPTIONS = Object.freeze([
+  { value: 'general', label: '일반' },
+  { value: 'isa', label: 'ISA' },
+  { value: 'pension', label: '연금' },
+  { value: 'other', label: '기타' }
+]);
 const CSV_IMPORT_MAX_FILE_SIZE_BYTES = 2 * 1024 * 1024;
 const CSV_STOCK_FIELDS = Object.freeze([
   { key: 'symbol', label: '종목코드', aliases: ['symbol', 'ticker', '티커', '코드'] },
   { key: 'displayName', label: '표시이름', aliases: ['displayName', 'display_name', 'name', '종목명', '이름'] },
+  { key: 'accountType', label: '계좌구분', aliases: ['accountType', 'account_type', 'account', '계좌', '계좌종류'] },
   { key: 'positionStatus', label: '종목상태', aliases: ['positionStatus', 'position_status', 'status', '상태'] },
   { key: 'purchasePrice', label: '매수가', aliases: ['purchasePrice', 'purchase_price', 'averagePrice', '평단가', '평균단가'] },
   { key: 'quantity', label: '보유수량', aliases: ['quantity', 'qty', '수량'] },
@@ -77,6 +84,26 @@ const CSV_POSITION_STATUS_ALIASES = Object.freeze({
   sell: 'sold',
   매도: 'sold',
   매도완료: 'sold'
+});
+const CSV_ACCOUNT_TYPE_ALIASES = Object.freeze({
+  general: 'general',
+  normal: 'general',
+  cash: 'general',
+  regular: 'general',
+  일반: 'general',
+  일반계좌: 'general',
+  종합: 'general',
+  종합계좌: 'general',
+  isa: 'isa',
+  중개형isa: 'isa',
+  개인종합자산관리계좌: 'isa',
+  pension: 'pension',
+  retirement: 'pension',
+  irp: 'pension',
+  연금: 'pension',
+  연금계좌: 'pension',
+  other: 'other',
+  기타: 'other'
 });
 const CSV_ALERT_TYPE_ALIASES = Object.freeze({
   highdrawdown: 'high_drawdown',
@@ -503,6 +530,7 @@ elements.form.addEventListener('submit', async (event) => {
     elements.form.reset();
     elements.form.elements.thresholdPercent.value = 5;
     elements.form.elements.alertCooldownMinutes.value = 30;
+    elements.form.elements.accountType.value = 'general';
     elements.form.elements.positionStatus.value = 'holding';
     syncAlertTypeControls(elements.form);
     hideSymbolSuggestions();
@@ -1491,6 +1519,45 @@ function getPositionStatusLabel(value) {
   return labels[normalizePositionStatus(value)] || labels.holding;
 }
 
+function normalizeAccountType(value) {
+  const normalized = String(value || 'general').trim().toLowerCase().replace(/[\s._-]+/g, '');
+  const aliases = {
+    general: 'general',
+    normal: 'general',
+    cash: 'general',
+    regular: 'general',
+    일반: 'general',
+    일반계좌: 'general',
+    종합: 'general',
+    종합계좌: 'general',
+    isa: 'isa',
+    중개형isa: 'isa',
+    개인종합자산관리계좌: 'isa',
+    pension: 'pension',
+    retirement: 'pension',
+    irp: 'pension',
+    연금: 'pension',
+    연금계좌: 'pension',
+    other: 'other',
+    기타: 'other'
+  };
+
+  return aliases[normalized] || 'general';
+}
+
+function getAccountTypeLabel(value) {
+  const normalized = normalizeAccountType(value);
+  return ACCOUNT_TYPE_OPTIONS.find((option) => option.value === normalized)?.label || '일반';
+}
+
+function renderAccountTypeOptions(selectedValue) {
+  const selected = normalizeAccountType(selectedValue);
+  return ACCOUNT_TYPE_OPTIONS.map(
+    ({ value, label }) =>
+      `<option value="${value}" ${selected === value ? 'selected' : ''}>${escapeHtml(label)}</option>`
+  ).join('');
+}
+
 function renderPositionStatusOptions(selectedValue) {
   const selected = normalizePositionStatus(selectedValue);
   return [
@@ -1510,6 +1577,7 @@ function normalizeStockPayload(payload) {
 
   normalized.alertType = normalized.alertType || 'high_drawdown';
   normalized.kisMarketDivCode = normalizeKisMarketDivCode(normalized.kisMarketDivCode);
+  normalized.accountType = normalizeAccountType(normalized.accountType);
   normalized.positionStatus = normalizePositionStatus(normalized.positionStatus);
   normalized.purchasePrice = normalized.purchasePrice ? Number(normalized.purchasePrice) : null;
   normalized.quantity = normalized.quantity ? Number(normalized.quantity) : null;
@@ -1703,8 +1771,10 @@ function validateCsvStockRows(rows) {
     errors.push('필수 헤더가 없습니다: 종목코드');
   }
 
-  const existingSymbols = new Set(state.stocks.map((stock) => normalizeSymbolForCompare(stock.symbol)));
-  const importedSymbols = new Set();
+  const existingStockKeys = new Set(
+    state.stocks.map((stock) => buildStockAccountKey(stock.symbol, stock.accountType))
+  );
+  const importedStockKeys = new Set();
 
   bodyRows.forEach((row, index) => {
     const rowNumber = index + 2;
@@ -1720,7 +1790,7 @@ function validateCsvStockRows(rows) {
       }
     });
 
-    const result = buildCsvStockPayload(raw, rowNumber, existingSymbols, importedSymbols);
+    const result = buildCsvStockPayload(raw, rowNumber, existingStockKeys, importedStockKeys);
 
     if (result.errors.length) {
       errors.push(...result.errors);
@@ -1737,17 +1807,19 @@ function validateCsvStockRows(rows) {
   return { errors, payloads: errors.length ? [] : payloads };
 }
 
-function buildCsvStockPayload(raw, rowNumber, existingSymbols, importedSymbols) {
+function buildCsvStockPayload(raw, rowNumber, existingStockKeys, importedStockKeys) {
   const errors = [];
   const symbol = cleanCsvText(raw.symbol).toUpperCase();
+  const accountType = normalizeCsvAccountType(raw.accountType, errors);
   const comparableSymbol = normalizeSymbolForCompare(symbol);
+  const comparableStockKey = buildStockAccountKey(symbol, accountType);
 
   if (!symbol) {
     errors.push('종목코드를 입력하세요.');
-  } else if (existingSymbols.has(comparableSymbol)) {
-    errors.push(`${symbol}은 이미 등록된 종목입니다.`);
-  } else if (importedSymbols.has(comparableSymbol)) {
-    errors.push(`${symbol}이 CSV 안에서 중복되었습니다.`);
+  } else if (existingStockKeys.has(comparableStockKey)) {
+    errors.push(`${symbol}은 ${getAccountTypeLabel(accountType)} 계좌에 이미 등록된 종목입니다.`);
+  } else if (importedStockKeys.has(comparableStockKey)) {
+    errors.push(`${symbol} ${getAccountTypeLabel(accountType)} 계좌가 CSV 안에서 중복되었습니다.`);
   }
 
   const alertType = normalizeCsvAlertType(raw.alertType, errors);
@@ -1783,7 +1855,7 @@ function buildCsvStockPayload(raw, rowNumber, existingSymbols, importedSymbols) 
   }
 
   if (!errors.length && comparableSymbol) {
-    importedSymbols.add(comparableSymbol);
+    importedStockKeys.add(comparableStockKey);
   }
 
   return {
@@ -1791,6 +1863,7 @@ function buildCsvStockPayload(raw, rowNumber, existingSymbols, importedSymbols) 
     payload: {
       symbol,
       displayName: cleanCsvText(raw.displayName),
+      accountType,
       positionStatus,
       purchasePrice,
       quantity,
@@ -1903,6 +1976,10 @@ function getCsvStockValue(stock, key) {
     return getPositionStatusLabel(stock.positionStatus);
   }
 
+  if (key === 'accountType') {
+    return getAccountTypeLabel(stock.accountType);
+  }
+
   if (key === 'alertType') {
     return getAlertTypeLabel(stock);
   }
@@ -1954,6 +2031,23 @@ function normalizeCsvPositionStatus(value, errors) {
   if (!normalized) {
     errors.push('종목상태는 보유중, 관심종목, 매도 완료 중 하나로 입력하세요.');
     return 'holding';
+  }
+
+  return normalized;
+}
+
+function normalizeCsvAccountType(value, errors) {
+  const text = cleanCsvText(value);
+
+  if (!text) {
+    return 'general';
+  }
+
+  const normalized = CSV_ACCOUNT_TYPE_ALIASES[normalizeCsvToken(text)];
+
+  if (!normalized) {
+    errors.push('계좌구분은 일반, ISA, 연금, 기타 중 하나로 입력하세요.');
+    return 'general';
   }
 
   return normalized;
@@ -2276,7 +2370,7 @@ function renderAlertRuleSummary(
     profit_retracement: {
       value: '이익금 반납률',
       detail: '평단가 대비 최고 이익금 중 설정한 비율을 반납하면 알림을 보냅니다. 매수일을 비우면 등록 이후 감시 최고가를 씁니다.',
-      fit: '최대 수익금과 실제 반납 금액을 함께 보는 방식입니다.',
+      fit: '최대 평가이익과 실제 반납 금액을 함께 보는 방식입니다.',
       caution: '고점이 평단가보다 높아야 기준가가 계산됩니다.'
     },
     purchase_loss: {
@@ -2352,7 +2446,7 @@ function buildAlertRuleGuides(form) {
       required: '매수가, 최고가, 기준비율이 필요합니다.',
       formula: '최고가 - ((최고가 - 매수가) x 기준비율 / 100)',
       example: `매수가 80,000원, 최고가 100,000원, ${formattedPercent} 반납이면 ${formatGuideWon(profitExamplePrice)} 이하에서 알림`,
-      note: '최고가가 매수가보다 높아야 최대 수익금이 계산됩니다.'
+      note: '최고가가 매수가보다 높아야 최대 평가이익이 계산됩니다.'
     },
     {
       key: 'purchase_loss',
@@ -2623,6 +2717,10 @@ function isRegisteredSymbol(symbol) {
   return state.stocks.some((stock) => normalizeSymbolForCompare(stock.symbol) === normalized);
 }
 
+function buildStockAccountKey(symbol, accountType) {
+  return `${normalizeSymbolForCompare(symbol)}::${normalizeAccountType(accountType)}`;
+}
+
 function normalizeSymbolForCompare(symbol) {
   return String(symbol || '').trim().toUpperCase().replace(/\.(KS|KQ)$/i, '');
 }
@@ -2712,9 +2810,9 @@ function renderQuotePreview(preview) {
       ${
         position?.maximumProfitAmount !== null && position?.maximumProfitAmount !== undefined
           ? renderPreviewItem(
-              '최대 수익금',
+              '최대 평가이익',
               formatSignedMoney(position.maximumProfitAmount, position.currency),
-              `${formatSignedPercent(position.maximumProfitPercent)} · 최고가 기준`,
+              `${formatSignedPercent(position.maximumProfitPercent)} · 최고가 기준, 미실현`,
               'up'
             )
           : ''
@@ -2724,9 +2822,9 @@ function renderQuotePreview(preview) {
         position?.maximumTotalReturnAmount !== null &&
         position?.maximumTotalReturnAmount !== undefined
           ? renderPreviewItem(
-              '배당 포함 최대 수익',
+              '배당 포함 최대 평가이익',
               formatSignedMoney(position.maximumTotalReturnAmount, position.currency),
-              `${formatSignedPercent(position.maximumTotalReturnPercent)} · 예상 연 배당 포함`,
+              `${formatSignedPercent(position.maximumTotalReturnPercent)} · 예상 연 배당 포함, 미실현`,
               'up'
             )
           : ''
@@ -2941,6 +3039,7 @@ function renderRegistrationSummary() {
   const form = elements.form;
   const symbol = form.elements.symbol.value.trim().toUpperCase() || '-';
   const displayName = form.elements.displayName.value.trim();
+  const accountType = normalizeAccountType(form.elements.accountType?.value);
   const positionStatus = normalizePositionStatus(form.elements.positionStatus?.value);
   const purchasePrice = parseFiniteNumber(form.elements.purchasePrice.value);
   const quantity = parseFiniteNumber(form.elements.quantity.value);
@@ -2997,6 +3096,7 @@ function renderRegistrationSummary() {
   elements.registrationSummary.innerHTML = `
     <div class="registration-summary-grid">
       ${renderSummaryItem('종목', displayName ? `${displayName} · ${symbol}` : symbol)}
+      ${renderSummaryItem('계좌 구분', getAccountTypeLabel(accountType), '같은 종목도 계좌가 다르면 별도 보유분으로 계산')}
       ${renderSummaryItem('종목 상태', getPositionStatusLabel(positionStatus), positionStatus === 'sold' ? '매도 기록으로 보관' : positionStatus === 'watch' ? '관심 종목으로 분리' : '계좌 요약에 포함')}
       ${renderSummaryItem('시세 기준', formatKisMarketDivCodeLabel(kisMarketDivCode), 'KIS provider 사용 시 적용')}
       ${renderSummaryItem('매수가', formatMoney(purchasePrice), purchaseDateDetail)}
@@ -5717,7 +5817,11 @@ function renderDividendDiagnosticRow({ stock, diagnostic }) {
         <span>출처 ${escapeHtml(provider)}</span>
         <span>${escapeHtml(formatDate(diagnostic.checkedAt))}</span>
       </div>
-      ${diagnostic.error ? `<div class="dividend-diagnostic-error">${escapeHtml(diagnostic.error)}</div>` : ''}
+      ${
+        diagnostic.error
+          ? `<div class="dividend-diagnostic-error">${escapeHtml([formatDividendFailureReason(diagnostic.error), diagnostic.error].filter(Boolean).join(' '))}</div>`
+          : ''
+      }
       ${
         attempts.length
           ? `<div class="dividend-attempt-list">${attempts.map((attempt) => renderDividendAttempt(attempt, stock)).join('')}</div>`
@@ -5732,7 +5836,7 @@ function renderDividendAttempt(attempt, stock) {
   const value =
     status === 'success'
       ? formatDividendAttemptValue(attempt, stock)
-      : attempt.error || '실패';
+      : formatDividendAttemptError(attempt.error);
 
   return `
     <span class="dividend-attempt ${status}">
@@ -5740,6 +5844,10 @@ function renderDividendAttempt(attempt, stock) {
       <span>${escapeHtml(value)}</span>
     </span>
   `;
+}
+
+function formatDividendAttemptError(error) {
+  return [formatDividendFailureReason(error), error || '실패'].filter(Boolean).join(' ');
 }
 
 function formatDividendAttemptValue(attempt, stock) {
@@ -5852,6 +5960,7 @@ function renderStocks() {
       const quoteQuality = getQuoteQuality(stock);
       const stockMeta = [
         stock.symbol,
+        getAccountTypeLabel(stock.accountType),
         getPositionStatusLabel(stock.positionStatus),
         stock.kisMarketDivCode ? `KIS ${formatKisMarketDivCodeLabel(stock.kisMarketDivCode)}` : '',
         stock.active ? '' : '알림 꺼짐',
@@ -6051,12 +6160,12 @@ function renderPortfolioSummary(items) {
               `
               : ''
           }
-          <span>총 최대 수익금</span>
+          <span>총 최대 평가이익</span>
           <strong class="${maximumProfitClass}">${escapeHtml(formatSignedMoney(group.maximumProfitAmount, group.currency))}</strong>
           ${
             group.expectedAnnualDividend !== null
               ? `
-                <span>배당 포함 최대 수익</span>
+                <span>배당 포함 최대 평가이익</span>
                 <strong class="${maximumTotalReturnClass}">${escapeHtml(group.maximumTotalReturnAmount === null ? '-' : formatSignedMoney(group.maximumTotalReturnAmount, group.currency))}</strong>
               `
               : ''
@@ -6626,7 +6735,7 @@ function renderSellDecisionSummaryItem(item) {
         <span>${escapeHtml(watchStatus.label)} · ${escapeHtml(distanceText)}</span>
       </div>
       <div>
-        <span>최대 ${escapeHtml(metrics.maximumProfitAmount === null ? '-' : formatMoney(metrics.maximumProfitAmount, stock.currency))}</span>
+        <span>최대 평가 ${escapeHtml(metrics.maximumProfitAmount === null ? '-' : formatMoney(metrics.maximumProfitAmount, stock.currency))}</span>
         <span>반납 ${escapeHtml(metrics.retracedProfitPercent === null ? '-' : formatPercent(metrics.retracedProfitPercent))}</span>
       </div>
     </article>
@@ -6648,12 +6757,17 @@ function buildPortfolioSummaryGroups(stocks) {
     }
 
     const currency = stock.currency || '';
-    const key = currency || 'unknown';
+    const accountType = normalizeAccountType(stock.accountType);
+    const accountLabel = getAccountTypeLabel(accountType);
+    const currencyLabel = currency || '통화 미정';
+    const key = `${accountType}:${currency || 'unknown'}`;
     const group =
       groups.get(key) ||
       {
+        accountType,
+        accountLabel,
         currency,
-        currencyLabel: currency || '통화 미정',
+        currencyLabel: `${accountLabel} · ${currencyLabel}`,
         count: 0,
         pendingCount: 0,
         investmentAmount: 0,
@@ -7331,6 +7445,12 @@ function editStockForm(stock) {
       <input name="displayName" value="${escapeHtml(stock.displayName || '')}" autocomplete="off" />
     </label>
     <label>
+      <span>계좌 구분</span>
+      <select name="accountType">
+        ${renderAccountTypeOptions(stock.accountType)}
+      </select>
+    </label>
+    <label>
       <span>종목 상태</span>
       <select name="positionStatus">
         ${renderPositionStatusOptions(stock.positionStatus)}
@@ -7823,7 +7943,8 @@ function renderDividendRetryMessage(stock, result) {
   };
 
   if (result.status === 'error') {
-    return `${name} 배당 재시도 실패: ${result.error || '배당 정보를 다시 가져오지 못했습니다.'}`;
+    const reason = formatDividendFailureReason(result.error);
+    return `${name} 배당 재시도 실패: ${[reason, result.error || '배당 정보를 다시 가져오지 못했습니다.'].filter(Boolean).join(' ')}`;
   }
 
   return labels[result.status] || `${name} 배당 정보를 다시 확인했습니다.`;
@@ -8223,7 +8344,7 @@ function renderHoldingSummary(stock) {
       ${
         metrics.maximumProfitAmount !== null
           ? renderHoldingMetric(
-              '최대 수익금',
+              '최대 평가이익',
               formatSignedMoney(metrics.maximumProfitAmount, stock.currency),
               metrics.maximumProfitAmount > 0 ? 'up' : 'flat'
             )
@@ -8232,7 +8353,7 @@ function renderHoldingSummary(stock) {
       ${
         hasDividendReturn && metrics.maximumTotalReturnAmount !== null
           ? renderHoldingMetric(
-              '배당 포함 최대 수익',
+              '배당 포함 최대 평가이익',
               formatSignedMoney(metrics.maximumTotalReturnAmount, stock.currency),
               maximumTotalReturnClass
             )
@@ -8295,7 +8416,7 @@ function renderSellDecisionCard(stock, watchStatus) {
         : `기준가까지 ${formatMoney(distance, stock.currency)}`;
   const retracementText =
     metrics.retracedProfitPercent === null
-      ? '최대 수익금 계산 전'
+      ? '최대 평가이익 계산 전'
       : `${formatPercent(metrics.retracedProfitPercent)} 반납`;
 
   return `
@@ -8306,7 +8427,7 @@ function renderSellDecisionCard(stock, watchStatus) {
       </div>
       <div>
         <span>${escapeHtml(distanceText)}</span>
-        <span>최대 수익금 ${escapeHtml(metrics.maximumProfitAmount === null ? '-' : formatMoney(metrics.maximumProfitAmount, stock.currency))}</span>
+        <span>최대 평가이익 ${escapeHtml(metrics.maximumProfitAmount === null ? '-' : formatMoney(metrics.maximumProfitAmount, stock.currency))}</span>
         <span>${escapeHtml(retracementText)}</span>
       </div>
     </section>
@@ -8327,7 +8448,7 @@ function renderAveragingCalculator(stock) {
     <form class="averaging-calculator" data-average-form aria-label="추가매수 계산기">
       <div class="averaging-calculator-head">
         <div>
-          <span>Average Down</span>
+          <span>${escapeHtml(getAccountTypeLabel(stock.accountType))} 계좌 보유분</span>
           <strong>추가매수 계산기</strong>
         </div>
         <button type="submit" class="btn btn-outline btn-sm secondary-button" data-average-apply disabled>보유 정보 반영</button>
@@ -8397,7 +8518,7 @@ function attachAveragingCalculator(row, stock) {
 
     const confirmed = window.confirm(
       [
-        `${stock.displayName || stock.symbol} 보유 정보를 추가매수 결과로 바꿉니다.`,
+        `${stock.displayName || stock.symbol} ${getAccountTypeLabel(stock.accountType)} 계좌 보유 정보를 추가매수 결과로 바꿉니다.`,
         '',
         `새 평단가: ${formatMoney(plan.newAveragePrice, stock.currency)}`,
         `새 보유 수량: ${formatQuantity(plan.newQuantity)}`,
@@ -8563,6 +8684,7 @@ function renderRetryFailurePanel(stock) {
               stock.dividendLastDiagnostic.currency || stock.dividendCurrency || stock.currency
             )} 유지`
           : '',
+        guidance: getDividendFailureGuidance(stock.dividendLastError),
         attempts: Array.isArray(stock.dividendLastDiagnostic?.attempts)
           ? stock.dividendLastDiagnostic.attempts
           : [],
@@ -8578,7 +8700,7 @@ function renderRetryFailurePanel(stock) {
   return `<div class="retry-failure-panel">${items.join('')}</div>`;
 }
 
-function renderRetryFailureItem({ title, detail, time, meta = '', attempts = [], stock = {} }) {
+function renderRetryFailureItem({ title, detail, time, meta = '', guidance = '', attempts = [], stock = {} }) {
   return `
     <div class="retry-failure-item">
       <div class="retry-failure-head">
@@ -8587,6 +8709,7 @@ function renderRetryFailureItem({ title, detail, time, meta = '', attempts = [],
       </div>
       <div class="retry-failure-detail">${escapeHtml(detail)}</div>
       ${meta ? `<div class="retry-failure-meta">${escapeHtml(meta)}</div>` : ''}
+      ${guidance ? `<div class="retry-failure-meta">${escapeHtml(guidance)}</div>` : ''}
       ${
         attempts.length
           ? `<div class="retry-attempt-list">${attempts.slice(0, 3).map((attempt) => renderDividendAttempt(attempt, stock)).join('')}</div>`
@@ -8594,6 +8717,49 @@ function renderRetryFailureItem({ title, detail, time, meta = '', attempts = [],
       }
     </div>
   `;
+}
+
+function getDividendFailureGuidance(error) {
+  const reason = formatDividendFailureReason(error);
+
+  return [
+    reason,
+    '자동 조회가 막히면 편집에서 주당 연 배당금을 직접 입력하면 배당 계산에 바로 반영됩니다.'
+  ].filter(Boolean).join(' ');
+}
+
+function formatDividendFailureReason(error) {
+  const message = String(error || '');
+
+  if (!message) {
+    return '';
+  }
+
+  if (/OPENDART_API_KEY|OpenDART.*키|missing_opendart/i.test(message)) {
+    return 'OpenDART 키가 없어 해당 provider를 사용할 수 없습니다.';
+  }
+
+  if (/ALPHA_VANTAGE_API_KEY|Alpha Vantage.*키|missing_alpha/i.test(message)) {
+    return 'Alpha Vantage 키가 없어 해외 배당 provider를 사용할 수 없습니다.';
+  }
+
+  if (/DATA_GO_KR_SERVICE_KEY|공공데이터.*키|missing_data_go_kr/i.test(message)) {
+    return '공공데이터포털 키가 없거나 인증키가 아직 승인되지 않았을 수 있습니다.';
+  }
+
+  if (/HTTP 401|Unauthorized|unauthorized/i.test(message)) {
+    return '비공식 Yahoo 조회가 인증 제한으로 실패했습니다.';
+  }
+
+  if (/한국 종목이 아니|not korean|korean.*only/i.test(message)) {
+    return '공공데이터와 OpenDART는 국내 종목용이라 해외 종목은 다른 provider 키가 필요합니다.';
+  }
+
+  if (/찾을 수 없습니다|not found|no dividend|empty|배당 정보/i.test(message)) {
+    return 'provider 데이터에 해당 종목 또는 우선주 배당 행이 아직 없거나 회사명 매칭이 실패했을 수 있습니다.';
+  }
+
+  return '';
 }
 
 function renderInvestmentPlanCard(stock) {

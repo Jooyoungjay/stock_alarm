@@ -25,9 +25,9 @@ export function formatAlertMessage(stock, quote, drawdownPercent, thresholdPrice
   const profitLines =
     alertRule.alertType === 'profit_retracement' && profitContext.maximumProfitAmount !== null
       ? [
-          `최대 수익금: ${formatNumber(profitContext.maximumProfitAmount)}${currency}`,
+          `최대 평가이익: ${formatNumber(profitContext.maximumProfitAmount)}${currency} (최고가 기준, 미실현)`,
           profitContext.currentProfitAmount !== null
-            ? `현재 수익금: ${formatNumber(profitContext.currentProfitAmount)}${currency}`
+            ? `현재 평가손익: ${formatNumber(profitContext.currentProfitAmount)}${currency}`
             : '',
           profitContext.retracedProfitAmount !== null
             ? `반납 금액: ${formatNumber(profitContext.retracedProfitAmount)}${currency}`

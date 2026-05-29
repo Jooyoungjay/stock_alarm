@@ -14,6 +14,7 @@ import {
   buildQuoteProviderStatsSnapshot,
   createDeviceSecret,
   hashDeviceSecret,
+  normalizeAccountType,
   normalizeDevice,
   normalizeDeviceId,
   normalizePushToken,
@@ -237,10 +238,11 @@ export class PostgresStore {
       data.stocks.some(
         (item) =>
           item.symbol === stock.symbol &&
+          normalizeAccountType(item.accountType) === stock.accountType &&
           normalizeDeviceId(item.deviceId) === normalizeDeviceId(stock.deviceId)
       )
     ) {
-      throw new Error('이미 등록된 종목입니다.');
+      throw new Error('같은 계좌에 이미 등록된 종목입니다.');
     }
 
     await this.createBackup('before-add-stock');
@@ -258,8 +260,21 @@ export class PostgresStore {
       throw new Error('종목을 찾을 수 없습니다.');
     }
 
-    await this.createBackup('before-update-stock');
     const updated = applyStockPatch(data.stocks[index], patch);
+
+    if (
+      data.stocks.some(
+        (item, itemIndex) =>
+          itemIndex !== index &&
+          item.symbol === updated.symbol &&
+          normalizeAccountType(item.accountType) === updated.accountType &&
+          normalizeDeviceId(item.deviceId) === normalizeDeviceId(updated.deviceId)
+      )
+    ) {
+      throw new Error('같은 계좌에 이미 등록된 종목입니다.');
+    }
+
+    await this.createBackup('before-update-stock');
     data.stocks[index] = updated;
     await this.write(data);
     await this.createBackup('after-update-stock');

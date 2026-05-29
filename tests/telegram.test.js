@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { fetchTelegramUpdates, formatAlertMessage, sendTelegramMessage } from '../src/telegram.js';
 
-test('formatAlertMessage explains profit retracement with maximum profit amount', () => {
+test('formatAlertMessage explains profit retracement with maximum unrealized profit amount', () => {
   const message = formatAlertMessage(
     {
       symbol: 'AAPL',
@@ -28,8 +28,9 @@ test('formatAlertMessage explains profit retracement with maximum profit amount'
     }
   );
 
-  assert.match(message, /최대 수익금: 500 USD/);
-  assert.match(message, /현재 수익금: 440 USD/);
+  assert.match(message, /최대 평가이익: 500 USD/);
+  assert.match(message, /미실현/);
+  assert.match(message, /현재 평가손익: 440 USD/);
   assert.match(message, /반납 금액: 60 USD/);
 });
 
