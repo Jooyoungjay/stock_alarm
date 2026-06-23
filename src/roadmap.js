@@ -12,7 +12,7 @@ export async function readRoadmap(rootDir = process.cwd()) {
 }
 
 export function parseRoadmapMarkdown(markdown) {
-  const lines = markdown.split(/\r?\n/);
+  const lines = String(markdown).replace(/^\uFEFF/, '').split(/\r?\n/);
   const title = stripHeading(lines.find((line) => line.startsWith('# ')) || '');
   const dateLine = lines.find((line) => line.startsWith('날짜 기준:')) || '';
   const principles = parseBullets(getSectionLines(lines, '원칙'));

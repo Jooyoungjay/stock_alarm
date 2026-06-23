@@ -578,46 +578,40 @@ test('manual quote check sends an alert through the same alert path', async () =
   assert.equal(sentMessages.length, 1);
 });
 
-test('manual quote check sends mobile push for device stocks', async () => {
+test('manual quote check records telegram-only delivery for device stocks', async () => {
   const store = createMemoryStore({
     ...baseStock,
     deviceId: 'device-1',
     highPrice: 100,
     highPriceAt: '2026-05-11T00:01:00.000Z'
   });
-  const pushDeliveries = [];
+  const sentMessages = [];
 
   const result = await runManualQuoteCheck(
     store,
     {
-      quoteTimeoutMs: 10000,
-      mobilePushEnabled: true
+      telegramBotToken: 'token',
+      telegramChatId: 'chat',
+      quoteTimeoutMs: 10000
     },
     'stock-1',
     { price: 94 },
     {
       now: date('2026-05-11T00:40:00Z'),
-      sendPushNotification: async (_store, _config, stock, message, context) => {
-        pushDeliveries.push({ stock, message, context });
-        return {
-          deliveryStatus: 'sent',
-          sent: 1,
-          failed: 0
-        };
+      sendTelegramMessage: async (_config, message) => {
+        sentMessages.push(message);
+        return { ok: true };
       }
     }
   );
 
   assert.equal(result.results[0].deliveryStatus, 'sent');
-  assert.equal(result.results[0].telegramDeliveryStatus, 'not_configured');
-  assert.equal(result.results[0].pushDeliveryStatus, 'sent');
-  assert.equal(pushDeliveries.length, 1);
-  assert.equal(pushDeliveries[0].stock.deviceId, 'device-1');
-  assert.match(pushDeliveries[0].message, /Apple/);
-  assert.equal(pushDeliveries[0].context.evaluation.alertType, 'high_drawdown');
-  assert.equal(store.alerts[0].telegramDeliveryStatus, 'not_configured');
-  assert.equal(store.alerts[0].pushDeliveryStatus, 'sent');
-  assert.equal(store.alerts[0].pushDeliverySent, 1);
+  assert.equal(result.results[0].telegramDeliveryStatus, 'sent');
+  assert.equal(result.results[0].pushDeliveryStatus, 'none');
+  assert.equal(sentMessages.length, 1);
+  assert.equal(store.alerts[0].telegramDeliveryStatus, 'sent');
+  assert.equal(store.alerts[0].pushDeliveryStatus, 'none');
+  assert.equal(store.alerts[0].pushDeliverySent, 0);
 });
 
 test('manual quote check marks recovery without sending an alert', async () => {

@@ -2,26 +2,16 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs/promises';
 
-test('JSON to DB migration guide documents the migration contract', async () => {
+test('JSON to DB migration guide is archived with historical Postgres design notes', async () => {
   const markdown = await fs.readFile(
-    new URL('../docs/json-to-db-migration.md', import.meta.url),
+    new URL('../docs/archive/json-to-db-migration.md', import.meta.url),
     'utf8'
   );
 
+  assert.match(markdown, /보관 문서/);
   assert.match(markdown, /Postgres/);
   assert.match(markdown, /`devices`/);
-  assert.match(markdown, /`stocks`/);
-  assert.match(markdown, /`alerts`/);
-  assert.match(markdown, /migrate:postgres:dry-run/);
-  assert.match(markdown, /migrate:postgres:rehearsal/);
-  assert.match(markdown, /quote_provider_attempts/);
-  assert.match(markdown, /kis_naver_compare_history/);
-  assert.match(markdown, /tests\/fixtures\/postgres-migration/);
   assert.match(markdown, /storageSnapshotContract/);
-  assert.match(markdown, /JSONB/);
-  assert.match(markdown, /Postgres 연결 리허설 CLI/);
-  assert.match(markdown, /검증 기준/);
-  assert.match(markdown, /롤백 전략/);
 });
 
 test('user and admin page split guide keeps product and admin scopes separate', async () => {
@@ -42,17 +32,18 @@ test('user and admin page split guide keeps product and admin scopes separate', 
 
 test('app review documents cover privacy, store metadata, and review blockers', async () => {
   const reviewMarkdown = await fs.readFile(
-    new URL('../docs/app-store-review-prep.md', import.meta.url),
+    new URL('../docs/archive/app-store-review-prep.md', import.meta.url),
     'utf8'
   );
   const privacyMarkdown = await fs.readFile(
-    new URL('../docs/privacy-policy-ko.md', import.meta.url),
+    new URL('../docs/archive/privacy-policy-ko.md', import.meta.url),
     'utf8'
   );
   const listing = JSON.parse(
-    await fs.readFile(new URL('../mobile/store-listing.ko.json', import.meta.url), 'utf8')
+    await fs.readFile(new URL('../docs/archive/store-listing.ko.json', import.meta.url), 'utf8')
   );
 
+  assert.match(reviewMarkdown, /보관 문서/);
   assert.match(reviewMarkdown, /App Store Review Guidelines/);
   assert.match(reviewMarkdown, /Apple Screenshot specifications/);
   assert.match(reviewMarkdown, /Google Play Data safety/);
@@ -75,7 +66,7 @@ test('app review documents cover privacy, store metadata, and review blockers', 
   assert.equal(listing.appName, 'Stock Alarm');
   assert.equal(listing.category, 'FINANCE');
   assert.equal(listing.dataSafety.accountCreation, 'notRequired');
-  assert.equal(listing.storeScreenshots.sourceDocument, '../docs/store-screenshots.md');
+  assert.equal(listing.storeScreenshots.sourceDocument, '../docs/archive/store-screenshots.md');
   assert.ok(listing.storeScreenshots.screens.some((item) => item.id === 'dividend-calendar'));
   assert.ok(listing.storeScreenshots.screens.some((item) => item.id === 'alert-toggle-push'));
   assert.ok(listing.storeScreenshots.knownGapsBeforeSubmission.some((item) => item.includes('실제 캡처')));
@@ -85,9 +76,11 @@ test('app review documents cover privacy, store metadata, and review blockers', 
 
 test('store screenshot guide documents capture sets, copy, and demo data rules', async () => {
   const markdown = await fs.readFile(
-    new URL('../docs/store-screenshots.md', import.meta.url),
+    new URL('../docs/archive/store-screenshots.md', import.meta.url),
     'utf8'
   );
+
+  assert.match(markdown, /보관 문서/);
 
   assert.match(markdown, /스토어 스크린샷 제작 가이드/);
   assert.match(markdown, /App Store/);
@@ -108,9 +101,11 @@ test('store screenshot guide documents capture sets, copy, and demo data rules',
 
 test('store submission assets guide documents final app store readiness checks', async () => {
   const markdown = await fs.readFile(
-    new URL('../docs/store-submission-assets.md', import.meta.url),
+    new URL('../docs/archive/store-submission-assets.md', import.meta.url),
     'utf8'
   );
+
+  assert.match(markdown, /보관 문서/);
 
   assert.match(markdown, /스토어 제출 자산 최종 점검/);
   assert.match(markdown, /npm run check:store-assets/);
@@ -118,6 +113,25 @@ test('store submission assets guide documents final app store readiness checks',
   assert.match(markdown, /PRIVACY_POLICY_URL/);
   assert.match(markdown, /SUPPORT_URL/);
   assert.match(markdown, /실제 PNG\/JPEG/);
+});
+
+test('scripts and env classification guide documents keep vs cleanup candidates', async () => {
+  const markdown = await fs.readFile(
+    new URL('../docs/scripts-and-env-classification.md', import.meta.url),
+    'utf8'
+  );
+  const readme = await fs.readFile(new URL('../README.md', import.meta.url), 'utf8');
+
+  assert.match(markdown, /WBS 13\.2/);
+  assert.match(markdown, /일상 운영/);
+  assert.match(markdown, /TELEGRAM_BOT_TOKEN/);
+  assert.match(markdown, /제거 완료.*Postgres/s);
+  assert.match(markdown, /제거 완료.*모바일/s);
+  assert.match(markdown, /제거 완료.*스토어/s);
+  assert.match(markdown, /MOBILE_PUSH_ENABLED.*13\.6/);
+
+  assert.match(readme, /scripts-and-env-classification\.md/);
+  assert.match(readme, /정리 후보/);
 });
 
 test('visual regression guide documents browser capture checks', async () => {
@@ -140,12 +154,13 @@ test('visual regression guide documents browser capture checks', async () => {
   assert.match(readme, /VISUAL_REGRESSION_BASE_URL/);
 });
 
-test('HTTPS demo server guide documents review readiness checks', async () => {
+test('HTTPS demo server guide is archived with review readiness notes', async () => {
   const markdown = await fs.readFile(
-    new URL('../docs/https-demo-server.md', import.meta.url),
+    new URL('../docs/archive/https-demo-server.md', import.meta.url),
     'utf8'
   );
 
+  assert.match(markdown, /보관 문서/);
   assert.match(markdown, /HTTPS 데모 서버 준비/);
   assert.match(markdown, /npm run check:demo/);
   assert.match(markdown, /REVIEW_DEMO_URL/);
@@ -203,13 +218,110 @@ test('broker API adapter guide documents quote-only checks and trading guard', a
   assert.match(markdown, /주문/);
 });
 
-test('full regression scenario guide documents end-to-end test coverage', async () => {
+test('development roadmap defines WBS 14 incremental improvement backlog', async () => {
+  const roadmap = await fs.readFile(
+    new URL('../docs/development-roadmap.md', import.meta.url),
+    'utf8'
+  );
+
+  assert.match(roadmap, /### 14\. 개인 운영 품질과 점진적 개선/);
+  assert.match(roadmap, /14\.1.*WBS·README·AGENTS 정합성/);
+  assert.match(roadmap, /14\.2.*AI 팀 점진 개선 스킬/);
+  assert.match(roadmap, /WBS·README·AGENTS 정합성.*14\.1/);
+  assert.match(roadmap, /세션당 WBS ID 하나/);
+});
+
+test('wbs 14 evolution skill documents session workflow and constraints', async () => {
+  const skill = await fs.readFile(
+    new URL('../.cursor/skills/wbs-14-evolution/SKILL.md', import.meta.url),
+    'utf8'
+  );
+  const agents = await fs.readFile(new URL('../AGENTS.md', import.meta.url), 'utf8');
+
+  assert.match(skill, /name: wbs-14-evolution/);
+  assert.match(skill, /세션당 WBS ID 하나/);
+  assert.match(skill, /14\.5/);
+  assert.match(skill, /npm test/);
+  assert.match(skill, /check:observation/);
+  assert.match(skill, /local-smoke-check/);
+  assert.match(skill, /JsonStore only/);
+  assert.match(agents, /wbs-14-evolution/);
+});
+
+test('personal backlog triages OBS items and maps WBS 14 candidates', async () => {
+  const backlog = await fs.readFile(
+    new URL('../docs/personal-backlog.md', import.meta.url),
+    'utf8'
+  );
+  const roadmap = await fs.readFile(
+    new URL('../docs/development-roadmap.md', import.meta.url),
+    'utf8'
+  );
+
+  assert.match(backlog, /WBS 14\.3/);
+  assert.match(backlog, /BL-01.*완료/);
+  assert.match(backlog, /14\.6/);
+  assert.match(backlog, /BL-M01/);
+  assert.match(backlog, /다음 WBS.*14\.6/);
+  assert.match(backlog, /OBS-001~015/);
+  assert.match(roadmap, /14\.3.*완료/);
+  assert.match(roadmap, /personal-backlog\.md/);
+});
+
+test('personal weekly routine documents npm test observation backup and telegram checks', async () => {
+  const routine = await fs.readFile(
+    new URL('../docs/personal-weekly-routine.md', import.meta.url),
+    'utf8'
+  );
+  const roadmap = await fs.readFile(
+    new URL('../docs/development-roadmap.md', import.meta.url),
+    'utf8'
+  );
+
+  assert.match(routine, /WBS 14\.4/);
+  assert.match(routine, /npm test/);
+  assert.match(routine, /check:observation/);
+  assert.match(routine, /\/backup/);
+  assert.match(routine, /\/status/);
+  assert.match(routine, /\/check/);
+  assert.match(routine, /--live-session/);
+  assert.match(routine, /personal-backlog\.md/);
+  assert.match(roadmap, /14\.4.*완료/);
+  assert.match(roadmap, /personal-weekly-routine\.md/);
+});
+
+test('WBS 14 docs align README AGENTS roadmap and evolution skill', async () => {
+  const readme = await fs.readFile(new URL('../README.md', import.meta.url), 'utf8');
+  const agents = await fs.readFile(new URL('../AGENTS.md', import.meta.url), 'utf8');
+  const roadmap = await fs.readFile(
+    new URL('../docs/development-roadmap.md', import.meta.url),
+    'utf8'
+  );
+  const regression = await fs.readFile(
+    new URL('../docs/full-regression-test-scenarios.md', import.meta.url),
+    'utf8'
+  );
+
+  assert.match(readme, /14\.6.*다음/);
+  assert.match(readme, /14\.5 완료/);
+  assert.match(readme, /personal-weekly-routine\.md/);
+  assert.match(agents, /14\.5.*완료/);
+  assert.match(agents, /14\.6.*다음/);
+  assert.match(agents, /wbs-14-evolution/);
+  assert.match(roadmap, /14\.5.*완료/);
+  assert.match(roadmap, /배당 실패 다음 조치 통일.*14\.6/);
+  assert.match(regression, /251개 전부 통과/);
+});
+
+test('personal regression scenario guide documents local telegram-focused coverage', async () => {
   const markdown = await fs.readFile(
     new URL('../docs/full-regression-test-scenarios.md', import.meta.url),
     'utf8'
   );
 
-  assert.match(markdown, /Stock Alarm 전수 테스트 시나리오/);
+  assert.match(markdown, /개인용 회귀 테스트 시나리오/);
+  assert.match(markdown, /WBS 13\.10/);
+  assert.match(markdown, /251개 전부 통과/);
   assert.match(markdown, /npm test/);
   assert.match(markdown, /서버 실행\/종료 테스트/);
   assert.match(markdown, /사용자 웹앱 테스트/);
@@ -217,14 +329,77 @@ test('full regression scenario guide documents end-to-end test coverage', async 
   assert.match(markdown, /배당 기능 테스트/);
   assert.match(markdown, /KIS\/Naver 가격 비교 테스트/);
   assert.match(markdown, /해결 후 재발/);
-  assert.match(markdown, /모바일 앱\/API 테스트/);
-  assert.match(markdown, /서버 연결 실패 배너/);
-  assert.match(markdown, /백업 미리보기/);
-  assert.match(markdown, /시세 품질 표시/);
-  assert.match(markdown, /로컬 웹앱 관찰 리포트/);
+  assert.match(markdown, /제외 범위/);
+  assert.match(markdown, /Postgres migration/);
+  assert.match(markdown, /dividendEventAlerts/);
+  assert.match(markdown, /localObservationCheck/);
+  assert.match(markdown, /check:observation/);
   assert.match(markdown, /check:visual/);
-  assert.match(markdown, /visual-regression-check\.md/);
   assert.match(markdown, /최종 합격 기준/);
+  assert.doesNotMatch(markdown, /## 모바일 앱\/API 테스트/);
+});
+
+test('personal local execution guide documents bat files health and connection UX', async () => {
+  const markdown = await fs.readFile(
+    new URL('../docs/personal-local-execution-guide.md', import.meta.url),
+    'utf8'
+  );
+  const localServer = await fs.readFile(
+    new URL('../scripts/local-server.js', import.meta.url),
+    'utf8'
+  );
+
+  assert.match(markdown, /WBS 13\.8/);
+  assert.match(markdown, /start-local\.bat/);
+  assert.match(markdown, /status-local\.bat/);
+  assert.match(markdown, /stop-local\.bat/);
+  assert.match(markdown, /\/api\/health/);
+  assert.match(markdown, /safeStop/);
+  assert.match(markdown, /Failed to fetch/);
+  assert.match(markdown, /다시 연결/);
+  assert.match(markdown, /캐시 초기화/);
+  assert.match(localServer, /stop-local\.bat/);
+  assert.match(localServer, /npm run local:status/);
+});
+
+test('personal backup policy documents json auto backup csv and observation retention', async () => {
+  const markdown = await fs.readFile(
+    new URL('../docs/personal-backup-policy.md', import.meta.url),
+    'utf8'
+  );
+  const envExample = await fs.readFile(new URL('../.env.example', import.meta.url), 'utf8');
+
+  assert.match(markdown, /WBS 13\.7/);
+  assert.match(markdown, /BACKUP_RETENTION/);
+  assert.match(markdown, /AUTO_BACKUP_INTERVAL_HOURS/);
+  assert.match(markdown, /before-restore/);
+  assert.match(markdown, /백업 미리보기/);
+  assert.match(markdown, /CSV/);
+  assert.match(markdown, /observation-history/);
+  assert.match(markdown, /LOCAL_OBSERVATION_HISTORY_LIMIT/);
+  assert.match(envExample, /LOCAL_OBSERVATION_HISTORY_LIMIT=30/);
+});
+
+test('personal telegram operations guide documents remote check commands', async () => {
+  const markdown = await fs.readFile(
+    new URL('../docs/personal-telegram-operations.md', import.meta.url),
+    'utf8'
+  );
+  const helpSource = await fs.readFile(
+    new URL('../src/telegramCommands.js', import.meta.url),
+    'utf8'
+  );
+
+  assert.match(markdown, /WBS 13\.9/);
+  assert.match(markdown, /\/status/);
+  assert.match(markdown, /\/brief/);
+  assert.match(markdown, /\/dividend-status/);
+  assert.match(markdown, /\/check/);
+  assert.match(markdown, /\/snooze/);
+  assert.match(markdown, /\/pause/);
+  assert.match(markdown, /\/resume/);
+  assert.match(helpSource, /\/brief - 위험 종목·이익금 반납·배당·평가 요약/);
+  assert.match(helpSource, /case 'briefing':/);
 });
 
 test('local webapp stabilization docs cover cache, status, backups, and quote quality', async () => {
@@ -244,7 +419,8 @@ test('local webapp stabilization docs cover cache, status, backups, and quote qu
   assert.match(readme, /매도 판단 대시보드/);
   assert.match(readme, /시세 품질 배지/);
   assert.match(readme, /1시간 쉬기/);
-  assert.match(readme, /check:visual/);
+  assert.match(readme, /scripts-and-env-classification\.md/);
+  assert.match(readme, /정리 후보/);
   assert.match(readme, /check:observation/);
   assert.match(readme, /--live-session/);
   assert.match(readme, /--save-history/);
@@ -481,24 +657,18 @@ test('external API recheck report documents current real-account blockers', asyn
   assert.match(readme, /external-api-recheck-2026-05-21\.md/);
 });
 
-test('mobile real-device E2E guide documents phone testing readiness checks', async () => {
+test('mobile real-device E2E guide is archived with historical mobile testing notes', async () => {
   const markdown = await fs.readFile(
-    new URL('../docs/mobile-real-device-e2e.md', import.meta.url),
+    new URL('../docs/archive/mobile-real-device-e2e.md', import.meta.url),
     'utf8'
   );
   const readme = await fs.readFile(new URL('../README.md', import.meta.url), 'utf8');
 
+  assert.match(markdown, /보관 문서/);
   assert.match(markdown, /모바일 실기기 E2E 테스트/);
-  assert.match(markdown, /npm run check:mobile-e2e/);
-  assert.match(markdown, /npm run local:phone/);
   assert.match(markdown, /\/api\/mobile\/ping/);
   assert.match(markdown, /Expo Push Token/);
-  assert.match(markdown, /LAN URL/);
-  assert.match(markdown, /Node\.js/);
-  assert.match(markdown, /NOT READY/);
-
-  assert.match(readme, /npm run check:mobile-e2e/);
-  assert.match(readme, /mobile-real-device-e2e\.md/);
+  assert.match(readme, /archive\/mobile-real-device-e2e\.md/);
 });
 
 test('admin page exposes the KIS quote smoke test controls', async () => {

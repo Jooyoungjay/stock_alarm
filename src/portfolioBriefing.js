@@ -1,4 +1,4 @@
-import { buildAlertRule } from './alertEngine.js';
+import { buildAlertRule, buildProfitRetracementContext } from './alertEngine.js';
 import { calculateDividendGrowth } from './dividendGrowth.js';
 import { isTelegramConfigured, sendTelegramMessage } from './telegram.js';
 
@@ -6,6 +6,7 @@ export const dailyBriefingMetaKey = 'lastDailyBriefingDate';
 
 const defaultWarningDistancePercent = 5;
 const defaultTopLimit = 5;
+const defaultRetracementHighlightLimit = 3;
 const defaultBriefingTime = '16:10';
 
 const riskRanks = {
@@ -73,6 +74,9 @@ export function buildDailyBriefing(stocks, options = {}) {
     counts,
     ranking,
     topRisks: activeRanking.slice(0, topLimit),
+    profitRetracementHighlights: buildProfitRetracementHighlights(stocks, {
+      topLimit: options.retracementHighlightLimit
+    }),
     portfolio: buildPortfolioSummary(stocks)
   };
 }
@@ -81,35 +85,48 @@ export function formatDailyBriefingMessage(briefing, options = {}) {
   const generatedAt = briefing?.generatedAt ? new Date(briefing.generatedAt) : options.now || new Date();
   const counts = briefing?.counts || {};
   const topRisks = Array.isArray(briefing?.topRisks) ? briefing.topRisks : [];
+  const profitRetracementHighlights = Array.isArray(briefing?.profitRetracementHighlights)
+    ? briefing.profitRetracementHighlights
+    : [];
   const portfolio = Array.isArray(briefing?.portfolio) ? briefing.portfolio : [];
   const lines = [
     '[Stock Alarm] 일일 브리핑',
-    `기준 시각: ${formatDateTime(generatedAt)}`,
-    `감시중 ${counts.active || 0}개 · 알림 ${counts.alert || 0}개 · 주의 ${counts.warning || 0}개 · 오류 ${counts.error || 0}개`,
+    `${formatDateTime(generatedAt)} · 감시 ${counts.active || 0} · 알림 ${counts.alert || 0} · 주의 ${counts.warning || 0}${counts.error ? ` · 오류 ${counts.error}` : ''}`,
     ''
   ];
 
+  lines.push('위험 종목');
   if (topRisks.length) {
-    lines.push('위험도 순위');
     lines.push(...topRisks.map(formatRiskLine));
   } else {
-    lines.push('위험도 순위');
     lines.push('감시중인 종목이 없습니다.');
+  }
+
+  if (profitRetracementHighlights.length) {
+    lines.push('');
+    lines.push('이익금 반납');
+    lines.push(...profitRetracementHighlights.map(formatProfitRetracementLine));
   }
 
   if (portfolio.length) {
     lines.push('');
-    lines.push('포트폴리오 요약');
-    lines.push(...portfolio.map(formatPortfolioLine));
+    lines.push('배당·평가');
+    for (const group of portfolio) {
+      lines.push(formatPortfolioBlock(group));
+    }
   }
 
+  const footnotes = [];
   if (counts.unknown) {
-    lines.push('');
-    lines.push(`확인 전 종목 ${counts.unknown}개는 시세 확인 후 순위가 정확해집니다.`);
+    footnotes.push(`확인 전 ${counts.unknown}개`);
+  }
+  if (counts.inactive) {
+    footnotes.push(`알림 꺼짐 ${counts.inactive}개`);
   }
 
-  if (counts.inactive) {
-    lines.push(`알림이 꺼진 종목 ${counts.inactive}개는 브리핑 순위에서 뒤로 보냅니다.`);
+  if (footnotes.length) {
+    lines.push('');
+    lines.push(footnotes.join(' · '));
   }
 
   return lines.filter((line) => line !== null && line !== undefined).join('\n');
@@ -262,6 +279,25 @@ function buildRiskItem(stock, options) {
       distanceToThresholdPercent !== null &&
       distanceToThresholdPercent <= options.warningDistancePercent;
     const level = isAlert ? 'alert' : isWarning ? 'warning' : 'ok';
+    const profitContext = buildProfitRetracementContext(stock, base.currentPrice);
+    const quantity = normalizeFiniteNumber(stock?.quantity);
+    const annualDividendPerShare = normalizeFiniteNumber(stock?.annualDividendPerShare);
+    const purchasePrice = normalizeFiniteNumber(stock?.purchasePrice);
+    const expectedAnnualDividend =
+      quantity !== null &&
+      quantity > 0 &&
+      annualDividendPerShare !== null &&
+      annualDividendPerShare > 0
+        ? quantity * annualDividendPerShare
+        : null;
+    const dividendYieldPercent =
+      expectedAnnualDividend !== null &&
+      purchasePrice !== null &&
+      purchasePrice > 0 &&
+      quantity !== null &&
+      quantity > 0
+        ? (expectedAnnualDividend / (purchasePrice * quantity)) * 100
+        : null;
 
     return {
       ...base,
@@ -276,7 +312,12 @@ function buildRiskItem(stock, options) {
       alertType: rule.alertType,
       alertTypeLabel: rule.alertTypeLabel,
       thresholdLabel: rule.thresholdLabel,
-      metricLabel: rule.metricLabel
+      metricLabel: rule.metricLabel,
+      retracedProfitAmount: profitContext.retracedProfitAmount,
+      retracedProfitPercent: profitContext.retracedProfitPercent,
+      maximumProfitAmount: profitContext.maximumProfitAmount,
+      expectedAnnualDividend,
+      dividendYieldPercent
     };
   } catch (error) {
     return {
@@ -408,45 +449,127 @@ function buildPortfolioSummary(stocks) {
   }));
 }
 
-function formatRiskLine(item, index) {
-  const prefix = `${index + 1}. ${item.displayName || item.symbol} (${item.symbol})`;
-  const price = formatMoney(item.currentPrice, item.currency);
-  const threshold = formatMoney(item.thresholdPrice, item.currency);
-  const metric =
-    item.metricPercent !== null && item.metricPercent !== undefined
-      ? ` · ${item.metricLabel || '하락률'} -${Math.max(0, item.metricPercent).toFixed(2)}%`
-      : '';
-  const checked = item.lastCheckedAt ? ` · ${formatDateTime(item.lastCheckedAt)}` : '';
+function buildProfitRetracementHighlights(stocks, options = {}) {
+  const topLimit = normalizePositiveInteger(options.topLimit, defaultRetracementHighlightLimit);
 
-  return `${prefix}\n   ${item.label} · 현재가 ${price} · 기준가 ${threshold}${metric}${checked}\n   ${item.detail}`;
+  return (Array.isArray(stocks) ? stocks : [])
+    .filter((stock) => stock?.active !== false)
+    .map((stock) => {
+      const currentPrice = normalizeFiniteNumber(stock?.lastPrice);
+      const profitContext = buildProfitRetracementContext(stock, currentPrice);
+
+      return {
+        stockId: stock?.id || '',
+        symbol: stock?.symbol || '',
+        displayName: stock?.displayName || stock?.symbol || '',
+        currency: stock?.currency || '',
+        ...profitContext
+      };
+    })
+    .filter(
+      (item) =>
+        item.retracedProfitPercent !== null &&
+        item.retracedProfitPercent > 0 &&
+        item.retracedProfitAmount !== null &&
+        item.retracedProfitAmount > 0
+    )
+    .sort(
+      (left, right) =>
+        right.retracedProfitPercent - left.retracedProfitPercent ||
+        right.retracedProfitAmount - left.retracedProfitAmount ||
+        String(left.displayName || left.symbol).localeCompare(
+          String(right.displayName || right.symbol),
+          'ko-KR'
+        )
+    )
+    .slice(0, topLimit)
+    .map((item, index) => ({
+      ...item,
+      rank: index + 1
+    }));
 }
 
-function formatPortfolioLine(group) {
-  const currency = group.currency || '';
-  const parts = [
-    `${currency || '통화 미지정'} ${group.stockCount}개`,
-    `평가손익 ${formatSignedMoney(group.profit, currency)} (${formatSignedPercent(group.profitPercent)})`
-  ];
+function formatRiskLine(item, index) {
+  const rank = index + 1;
+  const name = item.displayName || item.symbol;
+  const metrics = [];
 
-  if (group.expectedAnnualDividend !== null && group.totalReturnAmount !== null) {
-    parts.push(
-      `배당 포함 ${formatSignedMoney(group.totalReturnAmount, currency)} (${formatSignedPercent(group.totalReturnPercent)})`
+  if (item.level === 'error') {
+    return `${rank}. [${item.label}] ${name}\n   ${item.lastError || item.detail || '최근 시세 조회 실패'}`;
+  }
+
+  if (item.level === 'inactive') {
+    return `${rank}. [${item.label}] ${name}`;
+  }
+
+  const price = formatMoney(item.currentPrice, item.currency);
+  if (price !== '-') {
+    metrics.push(price);
+  }
+
+  if (Number.isFinite(item.distanceToThresholdPercent)) {
+    const label = item.distanceToThreshold <= 0 ? '기준 초과' : '기준 여유';
+    metrics.push(`${label} ${Math.abs(item.distanceToThresholdPercent).toFixed(1)}%`);
+  }
+
+  if (item.metricPercent !== null && item.metricPercent !== undefined) {
+    metrics.push(`${item.metricLabel || item.alertTypeLabel || '하락률'} -${Math.max(0, item.metricPercent).toFixed(1)}%`);
+  }
+
+  if (item.retracedProfitPercent !== null && item.retracedProfitPercent > 0) {
+    metrics.push(`반납 ${item.retracedProfitPercent.toFixed(1)}%`);
+  }
+
+  if (item.expectedAnnualDividend !== null && item.dividendYieldPercent !== null) {
+    metrics.push(`배당 ${formatPercent(item.dividendYieldPercent)}`);
+  }
+
+  if (!metrics.length && item.detail) {
+    metrics.push(item.detail);
+  }
+
+  return metrics.length
+    ? `${rank}. [${item.label}] ${name}\n   ${metrics.join(' · ')}`
+    : `${rank}. [${item.label}] ${name}`;
+}
+
+function formatProfitRetracementLine(item, index) {
+  const rank = index + 1;
+  const name = item.displayName || item.symbol;
+  const retraced = formatSignedMoney(item.retracedProfitAmount, item.currency);
+  const retracedPercent = formatSignedPercent(item.retracedProfitPercent);
+  const maximum = formatMoney(item.maximumProfitAmount, item.currency);
+
+  return `${rank}. ${name} · 반납 ${retraced} (${retracedPercent}) / 최대 ${maximum}`;
+}
+
+function formatPortfolioBlock(group) {
+  const currency = group.currency || '통화 미지정';
+  const lines = [`${currency} · ${group.stockCount}종목`];
+
+  if (group.profit !== null) {
+    lines.push(
+      `  평가 ${formatSignedMoney(group.profit, group.currency)} (${formatSignedPercent(group.profitPercent)})`
     );
   }
 
   if (group.expectedAnnualDividend !== null) {
-    parts.push(
-      `예상 연 배당 ${formatMoney(group.expectedAnnualDividend, currency)} (${formatPercent(group.dividendYieldPercent)})`
+    let dividendLine = `  배당 ${formatMoney(group.expectedAnnualDividend, group.currency)} (${formatPercent(group.dividendYieldPercent)})`;
+
+    if (group.dividendGrowthPercent !== null) {
+      dividendLine += ` · 성장 ${formatSignedPercent(group.dividendGrowthPercent)}`;
+    }
+
+    lines.push(dividendLine);
+  }
+
+  if (group.totalReturnAmount !== null) {
+    lines.push(
+      `  합산 ${formatSignedMoney(group.totalReturnAmount, group.currency)} (${formatSignedPercent(group.totalReturnPercent)})`
     );
   }
 
-  if (group.dividendGrowthAmount !== null && group.dividendGrowthPercent !== null) {
-    parts.push(
-      `배당 성장 ${formatSignedMoney(group.dividendGrowthAmount, currency)} (${formatSignedPercent(group.dividendGrowthPercent)})`
-    );
-  }
-
-  return parts.join(' · ');
+  return lines.join('\n');
 }
 
 function formatDistanceDetail(distance, distancePercent, currency) {

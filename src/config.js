@@ -124,8 +124,6 @@ export const config = {
   rootDir,
   publicDir: path.join(rootDir, 'public'),
   dataDir: configuredDataDir,
-  storageEngine: process.env.STORAGE_ENGINE || 'json',
-  databaseUrl: process.env.DATABASE_URL || '',
   adminToken: process.env.ADMIN_TOKEN || '',
   host: process.env.HOST || defaultHost,
   port: toNumber(process.env.PORT, 3000, { min: 1, max: 65535 }),
@@ -223,7 +221,5 @@ export const config = {
     { min: 1 }
   ),
   telegramBotToken: process.env.TELEGRAM_BOT_TOKEN || '',
-  telegramChatId: process.env.TELEGRAM_CHAT_ID || '',
-  mobilePushEnabled: toBoolean(process.env.MOBILE_PUSH_ENABLED, true),
-  expoPushEndpoint: process.env.EXPO_PUSH_ENDPOINT || 'https://exp.host/--/api/v2/push/send'
+  telegramChatId: process.env.TELEGRAM_CHAT_ID || ''
 };

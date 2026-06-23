@@ -115,13 +115,46 @@ test('buildDailyBriefing summarizes counts and portfolio metrics', () => {
   assert.equal(briefing.portfolio[0].previousAnnualDividend, 10000);
   assert.equal(briefing.portfolio[0].dividendGrowthAmount, 2000);
   assert.equal(briefing.portfolio[0].dividendGrowthPercent, 20);
+  assert.equal(briefing.profitRetracementHighlights.length, 1);
+  assert.ok(briefing.profitRetracementHighlights[0].retracedProfitPercent > 0);
 
   const message = formatDailyBriefingMessage(briefing);
   assert.match(message, /일일 브리핑/);
-  assert.match(message, /위험도 순위/);
-  assert.match(message, /두산퓨얼셀/);
-  assert.match(message, /배당 포함 \+82,000 KRW \(\+6.07%\)/);
-  assert.match(message, /배당 성장 \+2,000 KRW \(\+20.00%\)/);
+  assert.match(message, /위험 종목/);
+  assert.match(message, /\[알림\] 두산퓨얼셀/);
+  assert.match(message, /이익금 반납/);
+  assert.match(message, /반납 \+60,000 KRW/);
+  assert.match(message, /배당·평가/);
+  assert.match(message, /배당 12,000 KRW/);
+  assert.match(message, /성장 \+20\.00%/);
+  assert.match(message, /합산 \+82,000 KRW \(\+6\.07%\)/);
+});
+
+test('formatDailyBriefingMessage keeps compact risk lines for warning stocks', () => {
+  const briefing = buildDailyBriefing(
+    [
+      {
+        ...baseStock,
+        id: 'warning',
+        symbol: '000660',
+        displayName: 'SK하이닉스',
+        highPrice: 100000,
+        lastPrice: 97000,
+        quantity: 5,
+        purchasePrice: 90000
+      }
+    ],
+    {
+      now: new Date(2026, 4, 13, 16, 20),
+      warningDistancePercent: 5
+    }
+  );
+  const message = formatDailyBriefingMessage(briefing);
+
+  assert.match(message, /\[주의\] SK하이닉스/);
+  assert.match(message, /기준 여유/);
+  assert.doesNotMatch(message, /위험도 순위/);
+  assert.doesNotMatch(message, /포트폴리오 요약/);
 });
 
 test('runDailyBriefing sends once per local day after scheduled time', async () => {

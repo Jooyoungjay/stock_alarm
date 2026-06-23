@@ -1,13 +1,16 @@
-# Stock Alarm 전수 테스트 시나리오
+# Stock Alarm 개인용 회귀 테스트 시나리오
 
-날짜 기준: 2026-05-21
+날짜 기준: 2026-06-22 (WBS 13.10, 테스트 개수 WBS 14.5에서 251개로 갱신)
 
-이 문서는 큰 기능 변경 후 로컬 PC MVP 전체가 깨지지 않았는지 확인하기 위한 수동/자동 전수 테스트 절차입니다. 자동 테스트는 빠른 회귀 확인용이고, 수동 테스트는 실제 사용자 흐름과 외부 API/텔레그램 연동 확인용입니다.
+이 문서는 **개인 PC 로컬 웹앱 + 텔레그램 알림** MVP가 깨지지 않았는지 확인하기 위한 수동/자동 회귀 절차입니다. 모바일 앱/API, Postgres, 앱 심사/스토어/Railway 관련 시나리오는 WBS 13.4~13.5에서 제거·보관했으며, 여기에는 포함하지 않습니다.
+
+자동 테스트는 빠른 회귀 확인용이고, 수동 테스트는 실제 사용자 흐름과 외부 API/텔레그램 연동 확인용입니다.
 
 ## 테스트 원칙
 
 - 실제 매수/매도 주문 기능은 제품 범위에 없습니다. 증권사 API 테스트는 현재가 조회와 토큰 확인까지만 수행합니다.
-- 텔레그램 봇 토큰, KIS 앱 키, 공공데이터포털 키, 모바일 푸시 토큰은 화면 공유나 커밋에 남기지 않습니다.
+- 텔레그램 봇 토큰, KIS 앱 키, 공공데이터포털 키는 화면 공유나 커밋에 남기지 않습니다.
+- 가격·배당 알림은 **텔레그램 단일 채널**입니다. Expo Push는 사용하지 않습니다.
 - 운영 데이터로 테스트하기 전 `백업 생성` 또는 `/backup`을 먼저 실행합니다.
 - 서버 포트 종료 전에는 `node scripts/local-server.js status`로 이 프로젝트가 띄운 서버인지 확인합니다.
 - 외부 API가 실패한 경우 실패 자체를 버그로 보지 않고, 실패 사유가 화면/로그/진단에 납득 가능하게 표시되는지 확인합니다.
@@ -35,13 +38,15 @@
 | A-06 | `node --test .\tests\dividendCalendar.test.js` | 전체 통과 | 배당 캘린더 |
 | A-07 | `node --test .\tests\kisNaverAutoCompare.test.js` | 전체 통과 | KIS/Naver 자동 비교와 알림 |
 | A-08 | `node --test .\tests\kisNaverCompareIssues.test.js` | 전체 통과 | 가격 비교 이슈 처리 상태 |
-| A-09 | `node --test .\tests\storageContract.test.js` | 전체 통과 | JsonStore/PostgresStore 계약 |
+| A-09 | `node --test .\tests\storageContract.test.js` | 전체 통과 | JsonStore 계약 |
 | A-10 | `node --test .\tests\documentation.test.js` | 전체 통과 | 문서와 화면 노출 계약 |
 | A-11 | `node --test .\tests\roadmap.test.js` | 전체 통과 | WBS 파싱과 다음 작업 |
 | A-12 | `node --test .\tests\storage.test.js` | 전체 통과 | 보유/관심/매도 상태와 일시정지 저장 |
 | A-13 | `node --test .\tests\backups.test.js` | 전체 통과 | 백업 미리보기/복구/삭제 |
-| A-14 | `node --test .\tests\visualRegressionCheck.test.js` | 전체 통과 | 브라우저 시각 회귀 점검 CLI |
-| A-15 | `npm test` | 전체 통과 | 최종 자동 회귀 |
+| A-14 | `node --test .\tests\dividendEventAlerts.test.js` | 전체 통과 | 배당 이벤트 텔레그램 알림 |
+| A-15 | `node --test .\tests\localObservationCheck.test.js` | 전체 통과 | 로컬 실사용 smoke check |
+| A-16 | `node --test .\tests\visualRegressionCheck.test.js` | 전체 통과 | 브라우저 시각 회귀 점검 CLI |
+| A-17 | `npm test` | **251개 전부 통과** | 최종 자동 회귀 |
 
 ## 서버 실행/종료 테스트
 
@@ -99,7 +104,7 @@
 | T-05 | `/edit` | `/edit 336260 profit 10` 전송 | 이익금 반납률 기준으로 변경 |
 | T-06 | `/pause`, `/resume` | 종목 알림 일시중지/재개 | 웹 토글과 상태 일치 |
 | T-07 | `/dividend-status` | 배당 진단 명령 실행 | provider별 성공/실패 사유 표시 |
-| T-08 | `/briefing` | 위험도 브리핑 요청 | 위험 종목, 반납률, 배당 요약 표시 |
+| T-08 | `/brief` | 위험도 브리핑 요청 | 위험 종목·이익금 반납·배당·평가 구역 표시 (`/briefing` 별칭 동일) |
 | T-09 | `/backup` | 백업 명령 실행 | 백업 생성 메시지와 파일 확인 |
 | T-10 | `/delete` | 테스트 종목 삭제 | 웹 목록에서도 제거 |
 
@@ -114,7 +119,7 @@
 | D-05 | 배당 캘린더 | 지급월/지급일 있는 종목 등록 | 6개월 캘린더와 월별 합계 표시 |
 | D-06 | 캘린더 필터 | 확정/예상/배당락 필터 변경 | 필터별 항목만 표시 |
 | D-07 | 배당 성장률 | 배당 변경 이력 있는 종목 확인 | 최근 증감률과 포트폴리오 성장률 표시 |
-| D-08 | 배당 이벤트 알림 | 배당락일/지급일 offset을 테스트 날짜에 맞춤 | 텔레그램/모바일 푸시 후보와 중복 방지 확인 |
+| D-08 | 배당 이벤트 알림 | 배당락일/지급일 offset을 테스트 날짜에 맞춤 | 텔레그램 전송과 중복 방지 확인 |
 
 ## 시세 provider 테스트
 
@@ -166,23 +171,17 @@
 | M-10 | 백업 삭제 | 테스트 백업 삭제 | 파일과 목록에서 제거 |
 | M-11 | 서버 상태 안전장치 | 서버 상태 카드 확인 | 종료 안전장치와 자동 백업 설정 표시 |
 | M-12 | WBS 카드 | 개발 로드맵 새로고침 | 다음 작업과 완료/예정 수 표시 |
-| M-13 | 모바일 반응형 | 390px 폭에서 `/admin` 확인 | 카드와 버튼 텍스트가 겹치지 않음 |
+| M-13 | 반응형 레이아웃 | 390px 폭에서 `/admin` 확인 | 카드와 버튼 텍스트가 겹치지 않음 |
 
-## 모바일 앱/API 테스트
+## 제외 범위 (보관)
 
-| ID | 목적 | 절차 | 합격 기준 |
-|---|---|---|---|
-| X-01 | 기기 등록 API | `POST /api/devices` | deviceId와 secret 발급 |
-| X-02 | 모바일 ping | `GET /api/mobile/ping` | 모바일 API 상태 표시 |
-| X-03 | 모바일 종목 목록 | 기기 인증 후 `GET /api/mobile/stocks` | 해당 기기 종목만 표시 |
-| X-04 | 모바일 종목 등록 | 모바일 앱에서 종목 추가 | 웹 관리자 전체 목록에도 저장 |
-| X-05 | 모바일 편집/삭제 | 모바일 앱에서 수정/삭제 | 기기 scope가 유지됨 |
-| X-06 | Expo Push 등록 | 앱에서 push token 등록 | 서버에 토큰 저장 |
-| X-07 | 테스트 푸시 | 모바일 `push-test` 실행 | 기기에서 푸시 수신 또는 실패 사유 표시 |
-| X-08 | 가격 알림 푸시 | 모바일 종목 가격 조건 만족 | 텔레그램과 Expo Push 경로 모두 기록 |
-| X-09 | 모바일 배당 캘린더 | 앱 배당 패널 확인 | 캘린더/알림 기록 상세 표시 |
+WBS 13.4~13.5에서 제거한 항목은 회귀 범위에서 제외합니다. 과거 시나리오는 `docs/archive/`와 [2026-05-21 전수 테스트 실행 기록](full-regression-test-report-2026-05-21.md)을 참고하세요.
 
-## 저장소/마이그레이션 테스트
+- 모바일 앱/API (`/api/mobile/*`, Expo Push)
+- Postgres migration (`migrate:postgres:*`, PostgresStore)
+- 앱 심사/스토어 (`check:demo`, `check:store-assets`, `check:railway`)
+
+## 저장소/백업 테스트
 
 | ID | 목적 | 절차 | 합격 기준 |
 |---|---|---|---|
@@ -190,21 +189,19 @@
 | R-02 | 백업 스냅샷 계약 | `node --test .\tests\backupSnapshotContract.test.js` | export/import round-trip 통과 |
 | R-03 | 종목 상태 저장 | `node --test .\tests\storage.test.js` | 보유/관심/매도, soldAt, alertSnoozedUntil 보존 |
 | R-04 | 백업 미리보기 | `node --test .\tests\backups.test.js` | 복구 없이 counts/samples 확인 |
-| R-05 | Postgres dry-run | `npm run migrate:postgres:dry-run` | JSON 원본 변경 없이 테이블 후보 출력 |
-| R-06 | Postgres rehearsal | 테스트 DATABASE_URL로 `npm run migrate:postgres:rehearsal` | 전용 테이블 import/export 건수 일치 |
-| R-07 | DB 연결 미설정 | DATABASE_URL 없이 PostgresStore 테스트 | 명확히 runtime unavailable 표시 |
+| R-05 | 스냅샷 계약 | `node --test .\tests\storageSnapshotContract.test.js` | JsonStore export/import round-trip |
 
-## 앱 심사/운영 문서 테스트
+## 개인 운영 점검
 
 | ID | 목적 | 절차 | 합격 기준 |
 |---|---|---|---|
-| O-01 | 데모 서버 점검 | `npm run check:demo` | 공개 URL 없는 로컬은 NOT READY 사유 표시 |
-| O-02 | 스토어 자산 점검 | `npm run check:store-assets` | 아이콘/스크린샷/URL 누락 여부 표시 |
-| O-03 | 증권사 API 설정 점검 | `npm run check:broker-api` | 주문 차단, quote-only 상태 표시 |
-| O-04 | README 실행 가이드 | 초보자 기준으로 처음부터 실행 | 서버 실행/종료까지 막힘 없음 |
+| O-01 | 로컬 실사용 점검 | `npm run check:observation` | 서버/사용자·관리자 화면/백업/연결 안내 점검 |
+| O-02 | 증권사 API 설정 점검 | `npm run check:broker-api` | 주문 차단, quote-only 상태 표시 |
+| O-03 | 외부 API 재점검 | `npm run check:external-apis` | KIS·공공데이터·텔레그램 설정 통합 점검 |
+| O-04 | README 실행 가이드 | 초보자 기준으로 처음부터 실행 | `start-local.bat`로 서버 실행/종료까지 막힘 없음 |
 | O-05 | WBS 문서 | `docs/development-roadmap.md` 확인 | 완료 범위와 다음 작업이 화면과 일치 |
 | O-06 | 로컬 웹앱 관찰 리포트 | `docs/local-webapp-observation-2026-05-21.md` 확인 | 하루 관찰 체크리스트와 이슈 기록 양식이 있음 |
-| O-07 | 브라우저 시각 회귀 점검 | `npm run check:visual -- --base-url http://127.0.0.1:<port>` | 사용자/관리자 데스크톱/모바일 캡처와 핵심 영역 점검 결과 표시 |
+| O-07 | 브라우저 시각 회귀 점검 | `npm run check:visual -- --base-url http://127.0.0.1:<port>` | 사용자/관리자 데스크톱/모바일 뷰포트 캡처와 핵심 영역 점검 |
 
 ## 브라우저 확인 체크리스트
 
@@ -227,10 +224,10 @@
 
 ## 최종 합격 기준
 
-- `npm test`가 통과합니다.
-- 주요 사용자 흐름인 종목 등록, 가격 알림, 텔레그램 알림, 백업/복구가 정상입니다.
+- `npm test`가 **251개 전부** 통과합니다.
+- 주요 사용자 흐름인 종목 등록, 가격 알림, **텔레그램 알림**, 백업/복구가 정상입니다.
 - KIS/Naver 가격 비교에서 이슈 처리 상태와 재전송 정책이 의도대로 동작합니다.
 - 배당 API 실패/성공 모두 사용자가 원인을 확인할 수 있습니다.
-- 모바일 API와 푸시 경로가 기존 기능을 깨지 않습니다.
+- `npm run check:observation`으로 로컬 웹앱 실사용 smoke check가 통과하거나, 실패 사유가 명확합니다.
 - 브라우저 시각 회귀 점검에서 빈 화면, 핵심 영역 누락, 심한 가로 넘침이 없습니다.
 - 서버 종료 후 실행 중인 Stock Alarm 서버가 남아 있지 않습니다.

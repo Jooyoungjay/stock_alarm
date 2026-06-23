@@ -1,0 +1,15 @@
+---
+description: Stock Alarm 핵심 제약 — 로컬 운영, 테스트, 범위
+alwaysApply: true
+---
+
+# Stock Alarm Core
+
+- 최종 목표: **개인 PC 로컬 실행 + 텔레그램**. Postgres/모바일 출시/Railway 배포는 하지 않음.
+- WBS 진실 공급원: `docs/development-roadmap.md`. 작업 전 다음 WBS 14.x ID 확인.
+- 완료 조건: `npm test` 전부 통과.
+- 범위 최소화: 요청과 무관한 리팩터·문서·테스트 추가 금지.
+- 루트 npm 의존성 추가 금지. 바닐라 Node ESM 유지.
+- `.env`, `data/` 커밋 금지. commit/push는 사용자 명시 요청 시만.
+- 저장소는 JsonStore(JSON 파일)만 사용
+- 역할 정의: `AGENTS.md` 참고.

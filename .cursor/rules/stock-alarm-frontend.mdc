@@ -1,0 +1,14 @@
+---
+description: Stock Alarm 프론트 — public/ 웹앱 규칙
+globs: "public/**"
+alwaysApply: false
+---
+
+# Frontend
+
+- 단일 페이지: `public/index.html` + `public/app.js` + `public/styles.css`.
+- 사용자 `/` vs 관리자 `/admin` 분리 유지. 관리자 링크 사용자 화면에 노출 금지.
+- API 호출 실패 시 연결 배너·안내형 메시지 패턴 유지 (`Failed to fetch` 원문 노출 금지).
+- 관리자 API는 `x-admin-token` 헤더 (`ADMIN_TOKEN`).
+- 프레임워크 도입 금지. 바닐라 JS 유지.
+- PWA: `manifest.webmanifest`, `sw.js` 변경 시 캐시 동작 고려.

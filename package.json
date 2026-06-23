@@ -5,31 +5,20 @@
   "type": "module",
   "description": "Telegram-based stock drawdown alert MVP.",
   "scripts": {
-    "dev": "node src/server.js",
+    "test": "node --test",
     "start": "node src/server.js",
+    "dev": "node src/server.js",
     "stop": "node scripts/stop-server.js",
     "local:start": "node scripts/local-server.js start",
     "local:phone": "node scripts/local-server.js start-lan",
     "local:status": "node scripts/local-server.js status",
-    "check:railway": "node scripts/check-railway-config.js",
-    "check:demo": "node scripts/check-demo-server.js",
-    "check:store-assets": "node scripts/check-store-assets.js",
-    "check:broker-api": "node scripts/check-broker-api.js",
-    "check:external-apis": "node scripts/check-external-apis.js",
-    "check:mobile-e2e": "node scripts/check-mobile-e2e.js",
-    "check:visual": "node scripts/check-visual-regression.js",
     "check:observation": "node scripts/check-local-observation.js",
+    "check:visual": "node scripts/check-visual-regression.js",
+    "check:external-apis": "node scripts/check-external-apis.js",
+    "check:broker-api": "node scripts/check-broker-api.js",
     "check:kis-quote": "node scripts/check-kis-quote.js",
     "check:publicdata-price": "node scripts/check-publicdata-price.js",
-    "kis:token": "node scripts/kis-token.js",
-    "migrate:postgres:dry-run": "node scripts/json-to-postgres-dry-run.js",
-    "migrate:postgres:rehearsal": "node scripts/postgres-connection-rehearsal.js",
-    "mobile:install": "npm --prefix mobile install",
-    "mobile:start": "npm --prefix mobile start",
-    "test": "node --test"
-  },
-  "optionalDependencies": {
-    "pg": "^8.13.1"
+    "kis:token": "node scripts/kis-token.js"
   },
   "engines": {
     "node": ">=20"

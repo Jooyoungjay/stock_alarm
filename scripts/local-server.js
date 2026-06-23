@@ -180,14 +180,13 @@ function printRunningStatus(status, title = 'Stock Alarm 서버가 실행 중입
   console.log(`PID: ${info.pid}`);
   console.log(`포트: ${info.port}`);
   console.log(`PC 접속 주소: ${getLocalUrl(info)}`);
+  console.log('종료: stop-local.bat 또는 npm run stop');
 
   if (lanUrls.length) {
     console.log('같은 Wi-Fi 휴대폰 접속 주소:');
     for (const url of lanUrls) {
       console.log(`- ${url}`);
     }
-  } else {
-    console.log('휴대폰 접속: start-phone.bat으로 실행하면 같은 Wi-Fi에서 접속할 수 있습니다.');
   }
 
   console.log(`텔레그램 설정: ${health.telegramConfigured ? '완료' : '미설정'}`);
@@ -205,8 +204,8 @@ function printStoppedStatus(status) {
   if (status.state === 'stopped') {
     console.log('Stock Alarm 서버가 실행 중이 아닙니다.');
     console.log(`실행 정보 파일: ${runtimePath}`);
-    console.log('시작: start-local.bat 또는 node scripts/local-server.js start');
-    console.log('휴대폰 테스트 시작: start-phone.bat 또는 node scripts/local-server.js start-lan');
+    console.log('시작: start-local.bat 또는 npm run local:start');
+    console.log('상태: status-local.bat 또는 npm run local:status');
     return;
   }
 
@@ -309,8 +308,9 @@ async function startServer() {
 function printHelp() {
   console.log('사용법:');
   console.log('  node scripts/local-server.js start      # PC 전용 로컬 실행');
-  console.log('  node scripts/local-server.js start-lan  # 같은 Wi-Fi 휴대폰 접속 허용');
+  console.log('  node scripts/local-server.js start-lan  # 같은 Wi-Fi에서 브라우저 접속 허용');
   console.log('  node scripts/local-server.js status     # 실행 상태 확인');
+  console.log('종료: stop-local.bat 또는 npm run stop');
 }
 
 if (command === 'start' || command === 'start-lan') {

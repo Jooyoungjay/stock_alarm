@@ -22,7 +22,7 @@ const helpMessage = [
   '[Stock Alarm] 명령어',
   '/list - 감시 종목 목록',
   '/status [종목코드] - 종목 상태 상세',
-  '/brief - 위험도 순위와 일일 브리핑',
+  '/brief - 위험 종목·이익금 반납·배당·평가 요약',
   '/check - 지금 바로 전체 확인',
   '/dividend-status [종목코드] - 배당 API 진단 상태',
   '/pause <종목코드> - 알림 끄기',

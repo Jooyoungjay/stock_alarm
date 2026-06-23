@@ -1,0 +1,15 @@
+---
+description: Stock Alarm 백엔드 — src/, scripts/, tests/ 규칙
+globs: "{src/**,scripts/**,tests/**}"
+alwaysApply: false
+---
+
+# Backend
+
+- HTTP/API 진입점: `src/server.js`. 새 API는 기존 `handleApi` 패턴 따름.
+- 저장소: `createStore()` → `JsonStore`. `storageContract.js` 계약 유지.
+- 알림: `alertEngine.js` + `telegram.js`. 푸시 제거 작업(WBS 13.6) 전까지 기존 분기 유지.
+- 시세: `priceProvider.js` provider 체인. KIS는 국내 종목만.
+- 설정: `src/config.js` + `.env.example` 동기화.
+- 테스트: `node --test`, 같은 디렉터리에 `*.test.js`.
+- 외부 API 키·토큰 원문 로그/출력 금지.

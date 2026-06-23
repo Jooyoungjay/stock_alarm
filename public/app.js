@@ -4049,10 +4049,6 @@ function formatStorageEngine(engine) {
     return 'JSON 저장소';
   }
 
-  if (value === 'postgres') {
-    return 'Postgres 저장소';
-  }
-
   return `${value || '-'} 저장소`;
 }
 

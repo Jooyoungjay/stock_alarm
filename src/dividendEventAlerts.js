@@ -1,4 +1,3 @@
-import { sendPushNotificationToDevice } from './pushNotifications.js';
 import { isTelegramConfigured, sendTelegramMessage } from './telegram.js';
 
 export const dividendEventAlertSentMetaKey = 'dividendEventAlerts.sent';
@@ -107,8 +106,7 @@ export async function runDividendEventAlertCheck(store, config, options = {}) {
 
     const delivery = await deliverDividendEventAlert(store, config, candidate, {
       now,
-      sendTelegramMessage: options.sendTelegramMessage,
-      sendPushNotification: options.sendPushNotification
+      sendTelegramMessage: options.sendTelegramMessage
     });
     const result = {
       ...toResultBase(candidate),
@@ -190,13 +188,8 @@ function addDividendEventCandidate(candidates, stock, input) {
 async function deliverDividendEventAlert(store, config, candidate, options) {
   const message = formatDividendEventAlertMessage(candidate);
   const telegramSender = options.sendTelegramMessage || sendTelegramMessage;
-  const pushSender = options.sendPushNotification || sendPushNotificationToDevice;
   let telegramDeliveryStatus = 'none';
   let telegramDeliveryError = '';
-  let pushDeliveryStatus = 'none';
-  let pushDeliveryError = '';
-  let pushDeliverySent = 0;
-  let pushDeliveryFailed = 0;
 
   try {
     if (isTelegramConfigured(config)) {
@@ -211,67 +204,21 @@ async function deliverDividendEventAlert(store, config, candidate, options) {
     telegramDeliveryError = error.message;
   }
 
-  try {
-    const pushDelivery = await pushSender(
-      store,
-      config,
-      candidate.stock.deviceId || null,
-      {
-        title: `[Stock Alarm] ${candidate.eventLabel}`,
-        body: buildCompactDividendEventBody(candidate),
-        data: {
-          type: 'dividend-event-alert',
-          stockId: candidate.stock.id || '',
-          symbol: candidate.stock.symbol || '',
-          eventType: candidate.eventType,
-          eventDate: candidate.eventDate,
-          offsetDays: candidate.offsetDays,
-          createdAt: options.now.toISOString()
-        }
-      }
-    );
-    pushDeliveryStatus = pushDelivery?.deliveryStatus || 'none';
-    pushDeliveryError = formatPushDeliveryError(pushDelivery);
-    pushDeliverySent = Number(pushDelivery?.sent || 0);
-    pushDeliveryFailed = Number(pushDelivery?.failed || 0);
-  } catch (error) {
-    pushDeliveryStatus = 'failed';
-    pushDeliveryError = error.message;
-  }
-
-  const delivery = combineDelivery([
-    {
-      status: telegramDeliveryStatus,
-      error: telegramDeliveryError
-    },
-    {
-      status: pushDeliveryStatus,
-      error: pushDeliveryError
-    }
-  ]);
   const alert = await appendDividendEventAlert(store, candidate, {
     now: options.now,
     message,
-    deliveryStatus: delivery.deliveryStatus,
-    deliveryError: delivery.deliveryError,
+    deliveryStatus: telegramDeliveryStatus,
+    deliveryError: telegramDeliveryError,
     telegramDeliveryStatus,
-    telegramDeliveryError,
-    pushDeliveryStatus,
-    pushDeliveryError,
-    pushDeliverySent,
-    pushDeliveryFailed
+    telegramDeliveryError
   });
 
   return {
-    status: delivery.deliveryStatus,
-    deliveryStatus: delivery.deliveryStatus,
-    deliveryError: delivery.deliveryError,
+    status: telegramDeliveryStatus,
+    deliveryStatus: telegramDeliveryStatus,
+    deliveryError: telegramDeliveryError,
     telegramDeliveryStatus,
     telegramDeliveryError,
-    pushDeliveryStatus,
-    pushDeliveryError,
-    pushDeliverySent,
-    pushDeliveryFailed,
     alert
   };
 }
@@ -309,10 +256,10 @@ async function appendDividendEventAlert(store, candidate, delivery) {
     deliveryError: delivery.deliveryError,
     telegramDeliveryStatus: delivery.telegramDeliveryStatus,
     telegramDeliveryError: delivery.telegramDeliveryError,
-    pushDeliveryStatus: delivery.pushDeliveryStatus,
-    pushDeliveryError: delivery.pushDeliveryError,
-    pushDeliverySent: delivery.pushDeliverySent,
-    pushDeliveryFailed: delivery.pushDeliveryFailed,
+    pushDeliveryStatus: 'none',
+    pushDeliveryError: '',
+    pushDeliverySent: 0,
+    pushDeliveryFailed: 0,
     message: delivery.message,
     createdAt: delivery.now.toISOString()
   });
@@ -410,57 +357,6 @@ function pruneSentMap(value) {
     .slice(0, maxStoredSentRecords);
 
   return Object.fromEntries(entries);
-}
-
-function combineDelivery(channels) {
-  const activeChannels = channels.filter((channel) => channel.status && channel.status !== 'none');
-  const sent = activeChannels.some((channel) => channel.status === 'sent' || channel.status === 'partial');
-  const errors = activeChannels
-    .filter((channel) => !sent || channel.status === 'failed')
-    .map((channel) => channel.error)
-    .filter(Boolean);
-
-  if (sent) {
-    return {
-      deliveryStatus: 'sent',
-      deliveryError: errors.join(' · ')
-    };
-  }
-
-  if (activeChannels.some((channel) => channel.status === 'failed')) {
-    return {
-      deliveryStatus: 'failed',
-      deliveryError: errors.join(' · ')
-    };
-  }
-
-  if (activeChannels.some((channel) => channel.status === 'not_configured')) {
-    return {
-      deliveryStatus: 'not_configured',
-      deliveryError: errors.join(' · ')
-    };
-  }
-
-  return {
-    deliveryStatus: 'none',
-    deliveryError: ''
-  };
-}
-
-function formatPushDeliveryError(result) {
-  if (!result) {
-    return '';
-  }
-
-  if (Array.isArray(result.errors) && result.errors.length) {
-    return result.errors.join(' · ');
-  }
-
-  return result.reason || '';
-}
-
-function buildCompactDividendEventBody(candidate) {
-  return `${candidate.stock.displayName || candidate.stock.symbol} ${candidate.eventLabel} ${formatDateOnly(candidate.eventDate)} ${candidate.offsetLabel}`;
 }
 
 function compareDividendEventCandidates(left, right) {

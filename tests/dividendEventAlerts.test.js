@@ -55,26 +55,14 @@ test('formatDividendEventAlertMessage explains event date and expected dividend 
   assert.match(message, /예상 보유 배당금: 5 USD \(5주\)/);
 });
 
-test('runDividendEventAlertCheck sends telegram and push once per dividend event key', async () => {
+test('runDividendEventAlertCheck sends telegram once per dividend event key', async () => {
   const store = createMemoryStore(baseStock);
   const telegramMessages = [];
-  const pushMessages = [];
   const options = {
     now: new Date('2026-05-17T09:00:00.000Z'),
     sendTelegramMessage: async (config, message) => {
       assert.equal(config.telegramChatId, '5863355323');
       telegramMessages.push(message);
-    },
-    sendPushNotification: async (storeArg, config, deviceId, notification) => {
-      assert.equal(storeArg, store);
-      assert.equal(deviceId, 'device-1');
-      pushMessages.push(notification);
-      return {
-        deliveryStatus: 'sent',
-        sent: 1,
-        failed: 0,
-        errors: []
-      };
     }
   };
 
@@ -84,9 +72,9 @@ test('runDividendEventAlertCheck sends telegram and push once per dividend event
   assert.equal(first.summary.sent, 2);
   assert.equal(first.results[0].deliveryStatus, 'sent');
   assert.equal(telegramMessages.length, 2);
-  assert.equal(pushMessages.length, 2);
   assert.equal(store.alerts.length, 2);
   assert.equal(store.alerts[0].alertType, 'dividend_event');
+  assert.equal(store.alerts[0].pushDeliveryStatus, 'none');
   assert.equal(store.alerts[0].dividendEventOffsetLabel, '1일 전');
   assert.equal(Object.keys(store.meta[dividendEventAlertSentMetaKey]).length, 2);
 
@@ -95,7 +83,6 @@ test('runDividendEventAlertCheck sends telegram and push once per dividend event
   assert.equal(second.summary.due, 2);
   assert.equal(second.summary.alreadySent, 2);
   assert.equal(telegramMessages.length, 2);
-  assert.equal(pushMessages.length, 2);
   assert.equal(store.alerts.length, 2);
 });
 
@@ -126,7 +113,6 @@ function createConfig() {
   return {
     telegramBotToken: 'token',
     telegramChatId: '5863355323',
-    mobilePushEnabled: true,
     dividendEventAlertEnabled: true,
     dividendEventAlertExDateOffsets: [3, 1, 0, -1],
     dividendEventAlertPaymentDateOffsets: [1, 0]

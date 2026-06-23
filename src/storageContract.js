@@ -1,6 +1,5 @@
 export const STORAGE_ENGINES = Object.freeze({
-  JSON: 'json',
-  POSTGRES: 'postgres'
+  JSON: 'json'
 });
 
 export const STORE_CONTRACT_METHODS = Object.freeze([
@@ -36,12 +35,12 @@ export const STORE_CONTRACT_METHODS = Object.freeze([
 export function normalizeStorageEngine(value) {
   const engine = String(value || STORAGE_ENGINES.JSON).trim().toLowerCase();
 
-  if (Object.values(STORAGE_ENGINES).includes(engine)) {
+  if (engine === STORAGE_ENGINES.JSON) {
     return engine;
   }
 
   throw new Error(
-    `지원하지 않는 저장소 엔진입니다: ${engine}. 사용 가능: ${Object.values(STORAGE_ENGINES).join(', ')}`
+    `지원하지 않는 저장소 엔진입니다: ${engine}. 현재 실행 가능한 저장소는 json 입니다.`
   );
 }
 
@@ -77,6 +76,6 @@ export function getStoreContractSnapshot(store, options = {}) {
 
 export function createUnsupportedStorageError(engine) {
   return new Error(
-    `STORAGE_ENGINE=${engine} 저장소는 아직 구현되지 않았습니다. 현재 실행 가능한 저장소는 STORAGE_ENGINE=json 입니다.`
+    `STORAGE_ENGINE=${engine} 저장소는 지원하지 않습니다. 현재 실행 가능한 저장소는 json 입니다.`
   );
 }

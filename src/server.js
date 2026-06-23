@@ -41,7 +41,6 @@ import {
   runStockQuoteRetry
 } from './alertEngine.js';
 import { fetchHistoricalHighSince, fetchQuote } from './priceProvider.js';
-import { sendPushNotificationToDevice } from './pushNotifications.js';
 import {
   buildKisNaverCompareTrendSnapshot,
   buildKisNaverTrendRecommendation
@@ -170,17 +169,6 @@ function serializeBackup(backup) {
     size: backup.size,
     createdAt: backup.createdAt
   };
-}
-
-async function authenticateMobileDevice(request) {
-  const deviceId = request.headers['x-device-id'];
-  const deviceSecret = request.headers['x-device-secret'];
-
-  if (!deviceId || !deviceSecret) {
-    throw new Error('기기 인증 정보가 필요합니다.');
-  }
-
-  return store.authenticateDevice(deviceId, deviceSecret);
 }
 
 async function runCheckOnce() {
@@ -726,7 +714,7 @@ async function handleApi(request, response, url) {
       cwd: process.cwd(),
       rootDir: config.rootDir,
       dataDir: config.dataDir,
-      storageEngine: store.engine || config.storageEngine,
+      storageEngine: store.engine || 'json',
       host: config.host,
       railwayRuntime: config.isRailwayRuntime,
       startedAt,
@@ -1010,108 +998,6 @@ async function handleApi(request, response, url) {
     });
     response.end(createQrSvg(text));
     return;
-  }
-
-  if (request.method === 'GET' && url.pathname === '/api/mobile/ping') {
-    sendJson(response, 200, {
-      ok: true,
-      appName: APP_NAME,
-      appDisplayName: APP_DISPLAY_NAME,
-      pid: process.pid,
-      host: config.host,
-      port: activePort,
-      startedAt,
-      serverTime: new Date().toISOString(),
-      mobileApi: true
-    });
-    return;
-  }
-
-  if (request.method === 'POST' && url.pathname === '/api/devices') {
-    const body = await readJsonBody(request);
-    const result = await store.createDevice(body);
-
-    sendJson(response, 201, result);
-    return;
-  }
-
-  if (segments[0] === 'api' && segments[1] === 'mobile') {
-    const device = await authenticateMobileDevice(request);
-
-    if (request.method === 'GET' && segments[2] === 'me') {
-      sendJson(response, 200, { device });
-      return;
-    }
-
-    if (request.method === 'POST' && segments[2] === 'push-token') {
-      const body = await readJsonBody(request);
-      const updatedDevice = await store.upsertDevicePushToken(device.id, body);
-
-      sendJson(response, 200, { device: updatedDevice });
-      return;
-    }
-
-    if (request.method === 'POST' && segments[2] === 'push-test') {
-      const result = await sendPushNotificationToDevice(store, config, device.id, {
-        title: 'Stock Alarm 테스트',
-        body: `서버 시간이 ${new Date().toLocaleString('ko-KR')}로 확인되었습니다.`,
-        data: {
-          type: 'push-test',
-          createdAt: new Date().toISOString()
-        }
-      });
-
-      sendJson(response, 200, {
-        ok: result.deliveryStatus === 'sent' || result.deliveryStatus === 'partial',
-        ...result
-      });
-      return;
-    }
-
-    if (request.method === 'GET' && segments[2] === 'stocks' && !segments[3]) {
-      const [stocks, alerts] = await Promise.all([
-        store.listStocks({ deviceId: device.id }),
-        store.listAlerts(30, { deviceId: device.id })
-      ]);
-      const dividendCalendar = buildDividendCalendar(stocks);
-
-      sendJson(response, 200, { device, stocks, alerts, dividendCalendar });
-      return;
-    }
-
-    if (request.method === 'POST' && segments[2] === 'stocks' && !segments[3]) {
-      const body = await readJsonBody(request);
-      let stock = await store.addStock({
-        ...body,
-        deviceId: device.id
-      });
-      stock = await initializePurchaseHigh(stock);
-
-      sendJson(response, 201, { stock });
-      return;
-    }
-
-    if (segments[2] === 'stocks' && segments[3]) {
-      const id = segments[3];
-
-      if (request.method === 'PATCH') {
-        const body = await readJsonBody(request);
-        let stock = await store.updateStock(id, body, { deviceId: device.id });
-
-        if (body.resetHighPrice || body.purchaseDate !== undefined || body.kisMarketDivCode !== undefined) {
-          stock = await initializePurchaseHigh(stock);
-        }
-
-        sendJson(response, 200, { stock });
-        return;
-      }
-
-      if (request.method === 'DELETE') {
-        await store.deleteStock(id, { deviceId: device.id });
-        sendJson(response, 200, { ok: true });
-        return;
-      }
-    }
   }
 
   if (request.method === 'GET' && url.pathname === '/api/quote-preview') {

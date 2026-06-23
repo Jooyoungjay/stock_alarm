@@ -9,7 +9,7 @@ test('parseRoadmapMarkdown extracts roadmap metadata and next task', async () =>
   const roadmap = parseRoadmapMarkdown(markdown);
 
   assert.equal(roadmap.title, '개발 WBS 및 로드맵');
-  assert.equal(roadmap.dateLabel, '2026-05-26');
+  assert.equal(roadmap.dateLabel, '2026-06-22');
   assert.ok(roadmap.completedScope.some((item) => item.category === '공식 일봉 provider 실험'));
   assert.ok(roadmap.completedScope.some((item) => item.category === 'NXT provider 골격'));
   assert.ok(roadmap.completedScope.some((item) => item.category === '증권사 API adapter 검토'));
@@ -95,9 +95,10 @@ test('parseRoadmapMarkdown extracts roadmap metadata and next task', async () =>
   assert.ok(roadmap.completedScope.some((item) => item.category === '저장소별 백업 스냅샷 검증'));
   assert.ok(roadmap.completedScope.some((item) => item.category === 'Postgres 쿼리 어댑터'));
   assert.ok(roadmap.completedScope.some((item) => item.category === 'Postgres 연결 리허설'));
-  assert.ok(roadmap.sections.length >= 12);
-  assert.equal(roadmap.recommendedOrder[0], '앱 개발 재개 시 모바일 실기기 E2E 테스트');
-  assert.equal(roadmap.nextTask.title, '앱 개발 재개 시 모바일 실기기 E2E 테스트');
+  assert.ok(roadmap.completedScope.some((item) => item.category === '개인 로컬 운영 전환 WBS'));
+  assert.ok(roadmap.sections.length >= 14);
+  assert.equal(roadmap.recommendedOrder[0], '~~개인 로컬 운영 전환 1차 정리~~ (13.1 완료)');
+  assert.equal(roadmap.nextTask.title, '배당 실패 다음 조치 통일');
   assert.ok(roadmap.statusLegend.some((item) => item.status === 'pending' && item.label === '예정'));
   assert.ok(roadmap.summary.paused > 0);
   assert.ok(roadmap.summary.total > roadmap.summary.completed);
@@ -287,6 +288,57 @@ test('parseRoadmapMarkdown normalizes explicit WBS task statuses', async () => {
   const completedStoreSubmissionAssetsTask = roadmap.sections
     .find((section) => section.id === '9')
     .tasks.find((task) => task.id === '9.8');
+  const completedLocalDirectionTask = roadmap.sections
+    .find((section) => section.id === '13')
+    .tasks.find((task) => task.id === '13.1');
+  const completedEnvScriptsTask = roadmap.sections
+    .find((section) => section.id === '13')
+    .tasks.find((task) => task.id === '13.2');
+  const completedPostgresRemovalTask = roadmap.sections
+    .find((section) => section.id === '13')
+    .tasks.find((task) => task.id === '13.3');
+  const completedMobileRemovalTask = roadmap.sections
+    .find((section) => section.id === '13')
+    .tasks.find((task) => task.id === '13.4');
+  const completedStoreDocsTask = roadmap.sections
+    .find((section) => section.id === '13')
+    .tasks.find((task) => task.id === '13.5');
+  const completedTelegramAlertsTask = roadmap.sections
+    .find((section) => section.id === '13')
+    .tasks.find((task) => task.id === '13.6');
+  const completedRegressionTask = roadmap.sections
+    .find((section) => section.id === '13')
+    .tasks.find((task) => task.id === '13.10');
+  const completedLocalUxTask = roadmap.sections
+    .find((section) => section.id === '13')
+    .tasks.find((task) => task.id === '13.8');
+  const completedBackupPolicyTask = roadmap.sections
+    .find((section) => section.id === '13')
+    .tasks.find((task) => task.id === '13.7');
+  const completedTelegramRemoteTask = roadmap.sections
+    .find((section) => section.id === '13')
+    .tasks.find((task) => task.id === '13.9');
+  const completedWbs14AlignmentTask = roadmap.sections
+    .find((section) => section.id === '14')
+    .tasks.find((task) => task.id === '14.1');
+  const completedWbs14SkillTask = roadmap.sections
+    .find((section) => section.id === '14')
+    .tasks.find((task) => task.id === '14.2');
+  const completedWbs14BacklogTask = roadmap.sections
+    .find((section) => section.id === '14')
+    .tasks.find((task) => task.id === '14.3');
+  const completedWbs14RoutineTask = roadmap.sections
+    .find((section) => section.id === '14')
+    .tasks.find((task) => task.id === '14.4');
+  const completedWbs14BriefTask = roadmap.sections
+    .find((section) => section.id === '14')
+    .tasks.find((task) => task.id === '14.5');
+  const pendingWbs14DividendTask = roadmap.sections
+    .find((section) => section.id === '14')
+    .tasks.find((task) => task.id === '14.6');
+  const pendingLocalRegressionTask = roadmap.sections
+    .find((section) => section.id === '13')
+    .tasks.find((task) => task.id === '13.10');
 
   assert.equal(completedStatusTask.status, 'completed');
   assert.equal(completedStatusTask.statusLabel, '완료');
@@ -352,6 +404,23 @@ test('parseRoadmapMarkdown normalizes explicit WBS task statuses', async () => {
   assert.equal(completedStoreScreenshotTask.status, 'completed');
   assert.equal(completedMobileScreenshotGapTask.status, 'completed');
   assert.equal(completedStoreSubmissionAssetsTask.status, 'completed');
+  assert.equal(completedLocalDirectionTask.status, 'completed');
+  assert.equal(completedEnvScriptsTask.status, 'completed');
+  assert.equal(completedPostgresRemovalTask.status, 'completed');
+  assert.equal(completedMobileRemovalTask.status, 'completed');
+  assert.equal(completedStoreDocsTask.status, 'completed');
+  assert.equal(completedTelegramAlertsTask.status, 'completed');
+  assert.equal(completedRegressionTask.status, 'completed');
+  assert.equal(completedLocalUxTask.status, 'completed');
+  assert.equal(completedBackupPolicyTask.status, 'completed');
+  assert.equal(completedTelegramRemoteTask.status, 'completed');
+  assert.equal(completedWbs14AlignmentTask.status, 'completed');
+  assert.equal(completedWbs14SkillTask.status, 'completed');
+  assert.equal(completedWbs14BacklogTask.status, 'completed');
+  assert.equal(completedWbs14RoutineTask.status, 'completed');
+  assert.equal(completedWbs14BriefTask.status, 'completed');
+  assert.equal(pendingWbs14DividendTask.status, 'pending');
+  assert.equal(pendingLocalRegressionTask.status, 'completed');
   assert.equal(
     roadmap.sections.flatMap((section) => section.tasks).some((task) => task.priority === '완료'),
     false

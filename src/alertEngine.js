@@ -1,6 +1,5 @@
 import { fetchHistoricalHighSince, fetchQuote, getQuoteSourceMeta } from './priceProvider.js';
 import { resolveKisMarketDivCode } from './kisMarket.js';
-import { sendPushNotificationForStock } from './pushNotifications.js';
 import { ALERT_TYPES, DEFAULT_ALERT_TYPE, POSITION_STATUSES, normalizeAlertType } from './storage.js';
 import { formatAlertMessage, isTelegramConfigured, sendTelegramMessage } from './telegram.js';
 
@@ -693,56 +692,8 @@ async function markStockError(store, stock, error, now) {
   };
 }
 
-function combineAlertDelivery(channels) {
-  const activeChannels = channels.filter((channel) => channel.status && channel.status !== 'none');
-  const sent = activeChannels.some((channel) => channel.status === 'sent' || channel.status === 'partial');
-  const errors = activeChannels
-    .filter((channel) => !sent || channel.status === 'failed')
-    .map((channel) => channel.error)
-    .filter(Boolean);
-
-  if (sent) {
-    return {
-      deliveryStatus: 'sent',
-      deliveryError: errors.join(' · ')
-    };
-  }
-
-  if (activeChannels.some((channel) => channel.status === 'failed')) {
-    return {
-      deliveryStatus: 'failed',
-      deliveryError: errors.join(' · ')
-    };
-  }
-
-  if (activeChannels.some((channel) => channel.status === 'not_configured')) {
-    return {
-      deliveryStatus: 'not_configured',
-      deliveryError: errors.join(' · ')
-    };
-  }
-
-  return {
-    deliveryStatus: 'none',
-    deliveryError: ''
-  };
-}
-
-function formatPushDeliveryError(result) {
-  if (!result) {
-    return '';
-  }
-
-  if (Array.isArray(result.errors) && result.errors.length) {
-    return result.errors.join(' · ');
-  }
-
-  return result.reason || '';
-}
-
 async function processStockQuote(store, config, stock, quote, options = {}) {
   const telegramSender = options.sendTelegramMessage || sendTelegramMessage;
-  const pushSender = options.sendPushNotification || sendPushNotificationForStock;
   const now = options.now || new Date();
 
   if (isSoldPosition(stock)) {
@@ -805,32 +756,8 @@ async function processStockQuote(store, config, stock, quote, options = {}) {
         telegramDeliveryError = error.message;
       }
 
-      try {
-        const pushDelivery = await pushSender(store, config, nextStock, message, {
-          quote,
-          evaluation
-        });
-        pushDeliveryStatus = pushDelivery?.deliveryStatus || 'none';
-        pushDeliveryError = formatPushDeliveryError(pushDelivery);
-        pushDeliverySent = Number(pushDelivery?.sent || 0);
-        pushDeliveryFailed = Number(pushDelivery?.failed || 0);
-      } catch (error) {
-        pushDeliveryStatus = 'failed';
-        pushDeliveryError = error.message;
-      }
-
-      const delivery = combineAlertDelivery([
-        {
-          status: telegramDeliveryStatus,
-          error: telegramDeliveryError
-        },
-        {
-          status: pushDeliveryStatus,
-          error: pushDeliveryError
-        }
-      ]);
-      deliveryStatus = delivery.deliveryStatus;
-      deliveryError = delivery.deliveryError;
+      deliveryStatus = telegramDeliveryStatus;
+      deliveryError = telegramDeliveryError;
 
       nextStock = {
         ...nextStock,
@@ -966,8 +893,7 @@ export async function runAlertCheck(store, config, options = {}) {
       });
       const result = await processStockQuote(store, config, stock, quote, {
         now,
-        sendTelegramMessage: options.sendTelegramMessage,
-        sendPushNotification: options.sendPushNotification
+        sendTelegramMessage: options.sendTelegramMessage
       });
       results.push(result);
     } catch (error) {
@@ -1051,8 +977,7 @@ export async function runStockQuoteRetry(store, config, stockId, options = {}) {
 
     result = await processStockQuote(store, config, stock, quote, {
       now,
-      sendTelegramMessage: options.sendTelegramMessage,
-      sendPushNotification: options.sendPushNotification
+      sendTelegramMessage: options.sendTelegramMessage
     });
   } catch (error) {
     result = await markStockError(store, stock, error, now);
@@ -1094,8 +1019,7 @@ export async function runManualQuoteCheck(store, config, stockId, manualQuote, o
 
   const result = await processStockQuote(store, config, stock, quote, {
     now,
-    sendTelegramMessage: options.sendTelegramMessage,
-    sendPushNotification: options.sendPushNotification
+    sendTelegramMessage: options.sendTelegramMessage
   });
 
   return {

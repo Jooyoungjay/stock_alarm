@@ -415,7 +415,8 @@ test('handleTelegramMessage can send a risk briefing', async () => {
     purchasePrice: 90000,
     purchaseDate: '2026-05-11',
     alertType: 'high_drawdown',
-    thresholdPercent: 5
+    thresholdPercent: 5,
+    quantity: 10
   });
   stock = await store.replaceStock({
     ...stock,
@@ -430,9 +431,10 @@ test('handleTelegramMessage can send a risk briefing', async () => {
   await handleTelegramMessage(store, config, message('/brief'), options);
 
   assert.match(sent[0], /일일 브리핑/);
-  assert.match(sent[0], /위험도 순위/);
-  assert.match(sent[0], /두산퓨얼셀/);
-  assert.match(sent[0], /알림/);
+  assert.match(sent[0], /위험 종목/);
+  assert.match(sent[0], /\[알림\] 두산퓨얼셀/);
+  assert.match(sent[0], /이익금 반납/);
+  assert.match(sent[0], /반납/);
 });
 
 test('handleTelegramMessage can report dividend diagnostics', async () => {
