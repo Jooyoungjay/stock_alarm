@@ -432,7 +432,7 @@
 
 목표: WBS 15 이후 @pm이 취합한 직원 제안을 **세션당 WBS ID 하나**씩 반영합니다. 문서·smoke 신뢰 회복을 먼저 하고, 텔레그램 원격 점검·웹 일상 UX를 이어갑니다. WBS 14·15와 동일하게 신규 npm 의존성, Postgres, 모바일 앱, 스토어/Railway 배포는 범위에서 제외합니다.
 
-상태: 16.1~16.6 완료. 16.7~16.9 예정. 주간 점검은 `docs/personal-weekly-routine.md`, 백로그는 `docs/personal-backlog.md`를 따릅니다.
+상태: **WBS 16 완료** (16.1~16.9). 주간 점검은 `docs/personal-weekly-routine.md`, 백로그는 `docs/personal-backlog.md`를 따릅니다.
 
 | 역할 | 취합 제안 | WBS 반영 |
 |---|---|---|
@@ -451,9 +451,35 @@
 | 16.4 | 운영 문서 정합 | `personal-weekly-routine.md`, `personal-telegram-operations.md`, `json-legacy-fields-deprecation.md`, `local-webapp-observation-2026-05-21.md` — WBS 15·poll health·schema v2 반영 (BL-08~11) | 완료 | 높음 | 0.5일 |
 | 16.5 | observation smoke drift 수정 | `src/localObservationCheck.js` — `dividendFailureGuidance.js` 검사 대상 포함, W-04 `telegramPollHealth`·schema v2 예시 | 완료 | 중간 | 0.5일 |
 | 16.6 | 텔레그램 원격 점검 강화 | `src/telegramCommands.js` — `/status` 시세 신선도 요약, `/brief` poll health 힌트 (`quoteFreshness`·`telegramPollHealth` 재사용, BL-12) | 완료 | 중간 | 1일 |
-| 16.7 | 웹 시세 배너·오늘 할 일 | `public/app.js` — 신선도 배너→종목 필터 점프, 오늘 확인할 일 카드에 poll·신선도·manual 통합 (BL-14) | 예정 | 중간 | 1일 |
-| 16.8 | 백업·점검 UX 편의 | schema v2 `stripLegacy` 백업 기본 체크, 점검 히스토리 주간 체크리스트 복사 (BL-16) | 예정 | 낮음 | 1일 |
-| 16.9 | dead code·observation 상수화 | `createDeviceSecret` 등 미사용 export 제거, `localObservationCheck` 검사 문자열 상수화 (BL-15) | 예정 | 낮음 | 0.5일 |
+| 16.7 | 웹 시세 배너·오늘 할 일 | `public/app.js` — 신선도 배너→종목 필터 점프, 오늘 확인할 일 카드에 poll·신선도·manual 통합 (BL-14) | 완료 | 중간 | 1일 |
+| 16.8 | 백업·점검 UX 편의 | schema v2 `stripLegacy` 백업 기본 체크, 점검 히스토리 주간 체크리스트 복사 (BL-16) | 완료 | 낮음 | 1일 |
+| 16.9 | dead code·observation 상수화 | `createDeviceSecret` 등 미사용 export 제거, `localObservationStaticMarkers.js` 검사 문자열 상수화 (BL-15) | 완료 | 낮음 | 0.5일 |
+
+### 17. 장중·원격 운영 신뢰도 심화
+
+목표: WBS 16에서 만든 가시성(오늘 할 일·시세 신선도·poll health)을 **텔레그램·테스트·문서**까지 닫아 drift 재발을 막습니다. WBS 14~16과 동일하게 신규 npm 의존성, Postgres, 모바일 앱, 스토어/Railway 배포는 범위에서 제외합니다.
+
+상태: **WBS 17 완료** (17.1~17.8). 주간 점검은 `docs/personal-weekly-routine.md`, 백로그는 `docs/personal-backlog.md`를 따릅니다.
+
+| 역할 | 취합 제안 | WBS 반영 |
+|---|---|---|
+| @pm | 문서→테스트→텔레그램→웹→정리 순, WBS 17 스킬 | 17.1~17.3, 진행 순서 |
+| @docs | WBS 17 운영 문서 2차, `/today`·마커 유지보수 | 17.4 |
+| @qa | `OBSERVATION_STATIC_MARKERS` drift 방지 계약 테스트 | 17.5 |
+| @backend | `/today` 오늘 할 일 원격 요약, `/api/health` 시세 신선도 요약 | 17.6 |
+| @frontend | 오늘 할 일 원클릭 점프(배당·점검 패널) | 17.7 |
+| @cleanup | quote freshness 정렬, observation 마커 확장 | 17.8 |
+
+| ID | 작업 | 산출물 | 상태 | 우선순위 | 예상 작업량 |
+|---|---|---|---|---:|---:|
+| 17.1 | WBS·README·AGENTS 정합성 | WBS 17 반영, README 다음 개발 후보·`AGENTS.md` §17 우선순위 | 완료 | 높음 | 0.5일 |
+| 17.2 | AI 팀 WBS 17 스킬 | `.cursor/skills/wbs-17-evolution/SKILL.md` — 역할, 세션당 1 ID, 테스트·roadmap 갱신 체크리스트 | 완료 | 높음 | 0.5일 |
+| 17.3 | 실사용 백로그 triage 4차 | `docs/personal-backlog.md` — BL-17~22를 17.4~17.8에 매핑, 17.3 triage 요약 | 완료 | 높음 | 0.5일 |
+| 17.4 | 운영 문서 2차 정합 | `personal-weekly-routine.md`, `personal-telegram-operations.md`, 마커 유지보수 가이드 — `/today`·W-11~13 (BL-17~18) | 완료 | 중간 | 0.5일 |
+| 17.5 | observation 마커 drift 방지 | `tests/localObservationStaticMarkers.test.js` — 마커↔소스 파일 계약 테스트 (BL-19) | 완료 | 중간 | 0.5일 |
+| 17.6 | 텔레그램 `/today`·헬스 신선도 | `src/systemTodayActions.js`, `telegramCommands` `/today`, `/api/health` `quoteFreshnessSummary` (BL-20) | 완료 | 중간 | 1일 |
+| 17.7 | 오늘 할 일 원클릭 점프 | `public/app.js` — 배당 진단·점검 패널 스크롤, stale-quote 필터 유지 (BL-21) | 완료 | 중간 | 1일 |
+| 17.8 | observation·freshness 정리 | `quoteFreshness` 계약 테스트, `todayAction` 마커, 레거시 문서 device helper 제거 반영 (BL-22) | 완료 | 낮음 | 0.5일 |
 
 ## 추천 진행 순서
 
@@ -502,23 +528,36 @@ WBS 16 **개인 운영 편의성 개선**은 아래 순서로 진행합니다.
 30. ~~운영 문서 정합~~ (16.4 완료)
 31. ~~observation smoke drift 수정~~ (16.5 완료)
 32. ~~텔레그램 원격 점검 강화~~ (16.6 완료)
-33. 웹 시세 배너·오늘 할 일 (16.7 예정)
-34. 백업·점검 UX 편의 (16.8 예정)
-35. dead code·observation 상수화 (16.9 예정)
+33. ~~웹 시세 배너·오늘 할 일~~ (16.7 완료)
+34. ~~백업·점검 UX 편의~~ (16.8 완료)
+35. ~~dead code·observation 상수화~~ (16.9 완료)
+
+WBS 16 **개인 운영 편의성 개선** 작업은 모두 완료했습니다.
+
+WBS 17 **장중·원격 운영 신뢰도 심화**는 아래 순서로 진행합니다.
+
+36. ~~WBS·README·AGENTS 정합성~~ (17.1 완료)
+37. ~~AI 팀 WBS 17 스킬~~ (17.2 완료)
+38. ~~실사용 백로그 triage 4차~~ (17.3 완료)
+39. ~~observation 마커 drift 방지~~ (17.5 완료)
+40. ~~텔레그램 `/today`·헬스 신선도~~ (17.6 완료)
+41. ~~오늘 할 일 원클릭 점프~~ (17.7 완료)
+42. ~~운영 문서 2차 정합~~ (17.4 완료)
+43. ~~observation·freshness 정리~~ (17.8 완료)
 
 ## 다음 작업
 
-WBS 16 **개인 운영 편의성 개선** — 다음 ID: **16.7** 웹 시세 배너·오늘 할 일 (BL-14).
+WBS 17 **장중·원격 운영 신뢰도 심화** 작업은 모두 완료했습니다. 신규 기능은 `docs/personal-backlog.md` triage 후 WBS로 승격합니다.
 
-구현은 세션당 WBS ID 하나. 백로그 [personal-backlog.md](docs/personal-backlog.md) BL-08~15 연결.
+구현은 세션당 WBS ID 하나. 백로그 [personal-backlog.md](docs/personal-backlog.md) BL-17~22 연결.
 
-개인 운영 가이드 (WBS 13~15):
+개인 운영 가이드 (WBS 13~17):
 
 - [개인 PC 로컬 실행](docs/personal-local-execution-guide.md) (13.8)
 - [개인 PC 백업·복구 정책](docs/personal-backup-policy.md) (13.7)
-- [개인 텔레그램 원격 운영](docs/personal-telegram-operations.md) (13.9)
-- [개인 실사용 백로그](docs/personal-backlog.md) (14.3)
-- [주간 회귀 운영 루틴](docs/personal-weekly-routine.md) (14.4)
+- [개인 텔레그램 원격 운영](docs/personal-telegram-operations.md) (13.9·17.4)
+- [개인 실사용 백로그](docs/personal-backlog.md) (14.3·17.3)
+- [주간 회귀 운영 루틴](docs/personal-weekly-routine.md) (14.4·17.4)
 - [KIS/Naver 자동 비교 알림 운영](docs/personal-kis-naver-alert-operations.md) (14.7)
-- [JSON 레거시 필드 정리 계획](docs/json-legacy-fields-deprecation.md) (14.8)
-- [개인용 회귀 테스트 시나리오](docs/full-regression-test-scenarios.md) (13.10·16.6, `npm test` **279개**)
+- [JSON 레거시 필드 정리 계획](docs/json-legacy-fields-deprecation.md) (14.8·17.8)
+- [개인용 회귀 테스트 시나리오](docs/full-regression-test-scenarios.md) (13.10·17.5, `npm test` **295개**)

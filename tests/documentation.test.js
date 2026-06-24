@@ -269,6 +269,28 @@ test('wbs 16 evolution skill documents session workflow and constraints', async 
   assert.match(readme, /wbs-16-evolution/);
 });
 
+test('personal backlog triages OBS items and maps WBS 17 candidates', async () => {
+  const backlog = await fs.readFile(
+    new URL('../docs/personal-backlog.md', import.meta.url),
+    'utf8'
+  );
+  const roadmap = await fs.readFile(
+    new URL('../docs/development-roadmap.md', import.meta.url),
+    'utf8'
+  );
+
+  assert.match(backlog, /17\.3 triage/);
+  assert.match(backlog, /BL-17.*완료/);
+  assert.match(backlog, /BL-20.*완료/);
+  assert.match(backlog, /BL-22.*완료/);
+  assert.match(backlog, /WBS 17 완료/);
+  assert.match(backlog, /wbs-17-evolution/);
+  assert.match(backlog, /OBS-001~015/);
+  assert.match(roadmap, /17\.8.*완료/);
+  assert.match(roadmap, /WBS 17.*완료/);
+  assert.match(roadmap, /personal-backlog\.md/);
+});
+
 test('personal backlog triages OBS items and maps WBS 16 candidates', async () => {
   const backlog = await fs.readFile(
     new URL('../docs/personal-backlog.md', import.meta.url),
@@ -281,14 +303,14 @@ test('personal backlog triages OBS items and maps WBS 16 candidates', async () =
 
   assert.match(backlog, /16\.3 triage/);
   assert.match(backlog, /BL-08.*완료/);
-  assert.match(backlog, /BL-12.*완료/);
-  assert.match(backlog, /BL-14.*16\.7/);
-  assert.match(backlog, /16\.7/);
-  assert.match(backlog, /wbs-16-evolution/);
+  assert.match(backlog, /BL-14.*완료/);
+  assert.match(backlog, /BL-15.*완료/);
+  assert.match(backlog, /WBS 16 완료/);
+  assert.match(backlog, /wbs-17-evolution/);
   assert.match(backlog, /json-legacy-fields-deprecation/);
   assert.match(backlog, /OBS-001~015/);
-  assert.match(roadmap, /16\.6.*완료/);
-  assert.match(roadmap, /16\.7.*예정/);
+  assert.match(roadmap, /16\.9.*완료/);
+  assert.match(roadmap, /WBS 16.*완료/);
   assert.match(roadmap, /personal-backlog\.md/);
 });
 
@@ -339,7 +361,7 @@ test('WBS 16 operations docs align weekly routine telegram legacy and observatio
   );
 
   assert.match(routine, /telegramPollHealth/);
-  assert.match(routine, /stripLegacy/);
+  assert.match(routine, /stripLegacy 기본 체크/);
   assert.match(routine, /시세 신선도/);
   assert.match(routine, /16\.4/);
   assert.match(telegram, /telegramPollHealth/);
@@ -393,7 +415,35 @@ test('WBS 14 docs align README AGENTS roadmap and evolution skill', async () => 
   assert.match(roadmap, /14\.8.*완료/);
   assert.match(roadmap, /15\.8.*완료/);
   assert.match(roadmap, /개인 운영 안정화와 레거시 정리 2차/);
-  assert.match(regression, /279개 전부 통과/);
+  assert.match(regression, /295개 전부 통과/);
+});
+
+test('WBS 17 docs align README AGENTS roadmap after 17.1', async () => {
+  const readme = await fs.readFile(new URL('../README.md', import.meta.url), 'utf8');
+  const agents = await fs.readFile(new URL('../AGENTS.md', import.meta.url), 'utf8');
+  const roadmap = await fs.readFile(
+    new URL('../docs/development-roadmap.md', import.meta.url),
+    'utf8'
+  );
+  const regression = await fs.readFile(
+    new URL('../docs/full-regression-test-scenarios.md', import.meta.url),
+    'utf8'
+  );
+  const telegram = await fs.readFile(
+    new URL('../docs/personal-telegram-operations.md', import.meta.url),
+    'utf8'
+  );
+
+  assert.match(readme, /17\.1~17\.8 완료/);
+  assert.match(readme, /장중·원격 운영 신뢰도 심화/);
+  assert.match(agents, /WBS 17 완료/);
+  assert.match(agents, /wbs-17-evolution/);
+  assert.match(roadmap, /17\.1.*완료/);
+  assert.match(roadmap, /17\.8.*완료/);
+  assert.match(roadmap, /WBS 17.*완료/);
+  assert.match(roadmap, /장중·원격 운영 신뢰도 심화/);
+  assert.match(regression, /295개 전부 통과/);
+  assert.match(telegram, /\/today/);
 });
 
 test('WBS 16 docs align README AGENTS roadmap after 16.1', async () => {
@@ -408,16 +458,33 @@ test('WBS 16 docs align README AGENTS roadmap after 16.1', async () => {
     'utf8'
   );
 
-  assert.match(readme, /16\.1~16\.6 완료/);
-  assert.match(readme, /16\.7/);
+  assert.match(readme, /16\.1~16\.9 완료/);
   assert.match(readme, /개인 운영 편의성 개선/);
-  assert.match(agents, /16\.7/);
+  assert.match(agents, /WBS 16 완료/);
   assert.match(agents, /wbs-16-evolution/);
   assert.match(roadmap, /16\.1.*완료/);
-  assert.match(roadmap, /16\.6.*완료/);
-  assert.match(roadmap, /16\.7.*예정/);
+  assert.match(roadmap, /16\.9.*완료/);
+  assert.match(roadmap, /WBS 16.*완료/);
   assert.match(roadmap, /개인 운영 편의성 개선/);
-  assert.match(regression, /279개 전부 통과/);
+  assert.match(regression, /295개 전부 통과/);
+});
+
+test('development roadmap defines WBS 17 trust deepening backlog', async () => {
+  const roadmap = await fs.readFile(
+    new URL('../docs/development-roadmap.md', import.meta.url),
+    'utf8'
+  );
+  const backlog = await fs.readFile(
+    new URL('../docs/personal-backlog.md', import.meta.url),
+    'utf8'
+  );
+
+  assert.match(roadmap, /### 17\. 장중·원격 운영 신뢰도 심화/);
+  assert.match(roadmap, /17\.6.*\/today/);
+  assert.match(roadmap, /17\.5.*drift/);
+  assert.match(roadmap, /17\.7.*원클릭/);
+  assert.match(roadmap, /17\.8.*완료/);
+  assert.match(backlog, /BL-20.*17\.6|17\.6.*BL-20/);
 });
 
 test('development roadmap defines WBS 16 convenience improvement backlog', async () => {
@@ -436,10 +503,11 @@ test('development roadmap defines WBS 16 convenience improvement backlog', async
   assert.match(roadmap, /16\.4.*운영 문서 정합/);
   assert.match(roadmap, /세션당 WBS ID 하나/);
   assert.match(roadmap, /16\.4.*완료/);
-  assert.match(roadmap, /16\.6.*완료/);
+  assert.match(roadmap, /16\.9.*완료/);
   assert.match(backlog, /BL-08.*완료/);
-  assert.match(backlog, /BL-12.*16\.6/);
-  assert.match(backlog, /16\.1/);
+  assert.match(backlog, /16\.6.*BL-12|BL-12.*16\.6/);
+  assert.match(roadmap, /16\.1.*완료/);
+  assert.match(backlog, /BL-14.*완료/);
 });
 
 test('personal kis naver alert operations documents noise policy and admin handling', async () => {
@@ -483,7 +551,7 @@ test('personal regression scenario guide documents local telegram-focused covera
 
   assert.match(markdown, /개인용 회귀 테스트 시나리오/);
   assert.match(markdown, /WBS 13\.10/);
-  assert.match(markdown, /279개 전부 통과/);
+  assert.match(markdown, /295개 전부 통과/);
   assert.match(markdown, /npm test/);
   assert.match(markdown, /서버 실행\/종료 테스트/);
   assert.match(markdown, /사용자 웹앱 테스트/);
@@ -659,6 +727,13 @@ test('user webapp wires the today action panel into the first account area', asy
   assert.match(script, /알림 기준 도달/);
   assert.match(script, /배당락일 임박/);
   assert.match(script, /보유 종목 알림 꺼짐/);
+  assert.match(script, /buildSystemTodayActions/);
+  assert.match(script, /data-today-action-scroll-target/);
+  assert.match(script, /telegramPollHealth/);
+  assert.match(script, /stale-quote/);
+  assert.match(html, /data-watch-filter="stale-quote"/);
+  assert.match(script, /data-quote-freshness-filter/);
+  assert.match(styles, /quote-freshness-banner/);
   assert.match(styles, /today-action-panel/);
   assert.match(styles, /today-action-item/);
 });
@@ -669,11 +744,14 @@ test('user webapp persists watch filters and sort order locally', async () => {
 
   assert.match(html, /watchFilterButtons/);
   assert.match(html, /watchSortSelect/);
+  assert.match(html, /data-watch-filter="stale-quote"/);
   assert.match(script, /WATCH_VIEW_STORAGE_KEY/);
   assert.match(script, /loadWatchViewPreference/);
   assert.match(script, /saveWatchViewPreference/);
   assert.match(script, /normalizeWatchFilter/);
   assert.match(script, /normalizeWatchSort/);
+  assert.match(script, /stale-quote/);
+  assert.match(script, /stockNeedsQuoteAttention/);
   assert.match(script, /localStorage/);
 });
 
@@ -926,6 +1004,57 @@ test('admin page exposes local observation issue controls', async () => {
   assert.match(styles, /observation-history-retention/);
   assert.match(styles, /observation-action-editor/);
   assert.match(styles, /observation-run-card/);
+});
+
+test('admin backup and observation history expose stripLegacy default and weekly checklist copy', async () => {
+  const html = await fs.readFile(new URL('../public/index.html', import.meta.url), 'utf8');
+  const script = await fs.readFile(new URL('../public/app.js', import.meta.url), 'utf8');
+  const styles = await fs.readFile(new URL('../public/styles.css', import.meta.url), 'utf8');
+
+  assert.match(html, /stripLegacyBackupCheckbox/);
+  assert.match(html, /schema v2 기본 켜짐/);
+  assert.match(script, /syncStripLegacyBackupCheckbox/);
+  assert.match(script, /STRIP_LEGACY_BACKUP_PREFERENCE_KEY/);
+  assert.match(script, /buildWeeklyRoutineChecklistCopyText/);
+  assert.match(script, /data-copy-weekly-checklist/);
+  assert.match(script, /주간 체크리스트 복사/);
+  assert.match(styles, /observation-history-toolbar/);
+});
+
+test('WBS 17 telegram today and observation marker contracts', async () => {
+  const telegramCommands = await fs.readFile(
+    new URL('../src/telegramCommands.js', import.meta.url),
+    'utf8'
+  );
+  const systemTodayActions = await fs.readFile(
+    new URL('../src/systemTodayActions.js', import.meta.url),
+    'utf8'
+  );
+  const appJs = await fs.readFile(new URL('../public/app.js', import.meta.url), 'utf8');
+  const markers = await fs.readFile(
+    new URL('../src/localObservationStaticMarkers.js', import.meta.url),
+    'utf8'
+  );
+
+  assert.match(telegramCommands, /\/today/);
+  assert.match(telegramCommands, /systemTodayActions\.js/);
+  assert.match(systemTodayActions, /buildTelegramTodayActions/);
+  assert.match(appJs, /data-today-action-scroll-target/);
+  assert.match(appJs, /focusTodayActionScrollTarget/);
+  assert.match(markers, /todayActionControls/);
+});
+
+test('local observation static markers and storage dead code cleanup for WBS 16.9', async () => {
+  const script = await fs.readFile(new URL('../src/localObservationCheck.js', import.meta.url), 'utf8');
+  const markers = await fs.readFile(new URL('../src/localObservationStaticMarkers.js', import.meta.url), 'utf8');
+  const storage = await fs.readFile(new URL('../src/storage.js', import.meta.url), 'utf8');
+
+  assert.match(script, /OBSERVATION_STATIC_MARKERS/);
+  assert.match(script, /localObservationStaticMarkers\.js/);
+  assert.match(markers, /dividendFailureGuidance/);
+  assert.match(markers, /stale-quote/);
+  assert.doesNotMatch(storage, /createDeviceSecret/);
+  assert.doesNotMatch(storage, /sanitizeDevice/);
 });
 
 test('user stock forms expose per-stock KIS market settings', async () => {

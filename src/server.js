@@ -33,6 +33,7 @@ import {
 import { createQrSvg } from './qrCode.js';
 import { createStore } from './storageFactory.js';
 import { assessTelegramPollHealth } from './telegramPollHealth.js';
+import { summarizeQuoteFreshness } from './quoteFreshness.js';
 import {
   buildMonitoringHighBaseline,
   buildRegistrationPreview,
@@ -698,7 +699,8 @@ async function handleApi(request, response, url) {
       kisNaverAutoCompareSnapshot,
       autoBackupSnapshot,
       quoteProviderStats,
-      dataModelInfo
+      dataModelInfo,
+      stocks
     ] = await Promise.all([
       getLastDividendRefreshSnapshot(),
       getLastDividendEventAlertSnapshot(),
@@ -706,8 +708,10 @@ async function handleApi(request, response, url) {
       getLastKisNaverAutoCompareSnapshot(),
       getLastAutoBackupSnapshot(),
       store.getQuoteProviderStats(),
-      store.getDataModelInfo()
+      store.getDataModelInfo(),
+      store.listStocks()
     ]);
+    const quoteFreshnessSummary = summarizeQuoteFreshness(stocks);
 
     sendJson(response, 200, {
       ok: true,
@@ -770,6 +774,7 @@ async function handleApi(request, response, url) {
       lastAutoBackup: autoBackupSnapshot,
       lastDailyBriefing: dailyBriefingSnapshot,
       quoteProviderStats,
+      quoteFreshnessSummary,
       dataSchemaVersion: dataModelInfo.schemaVersion,
       dataModel: {
         schemaVersion: dataModelInfo.schemaVersion,

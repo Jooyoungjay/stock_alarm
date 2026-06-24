@@ -3130,6 +3130,18 @@ select:focus {
   align-items: stretch;
 }
 
+.observation-history-toolbar {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-bottom: 12px;
+}
+
+.observation-history-empty .btn {
+  margin-top: 12px;
+}
+
 .roadmap-next {
   display: grid;
   gap: 6px;
@@ -4321,6 +4333,41 @@ select:focus {
   gap: 8px;
   flex-wrap: wrap;
   justify-content: flex-end;
+}
+
+.quote-freshness-banner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin-bottom: 12px;
+  padding: 12px 16px;
+  border: 1px solid #d9a44166;
+  border-radius: var(--radius);
+  background: #fff8e8;
+  color: var(--text);
+}
+
+.quote-freshness-banner-copy {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+}
+
+.quote-freshness-banner strong,
+.quote-freshness-banner span {
+  display: block;
+}
+
+.quote-freshness-banner span {
+  color: var(--text-muted);
+  font-size: 12px;
+}
+
+.panel-focus {
+  outline: 2px solid var(--accent, #2563eb);
+  outline-offset: 4px;
 }
 
 .today-action-panel {

@@ -558,6 +558,42 @@ test('handleTelegramMessage brief warns when telegram polling looks stale', asyn
   assert.match(sent.at(-1), /다음 조치:/);
 });
 
+test('handleTelegramMessage today summarizes priority actions', async () => {
+  const store = await createStore();
+  const sent = [];
+  const options = {
+    sendTelegramMessage: async (_config, text) => {
+      sent.push(text);
+    },
+    initializeHighFromPurchaseDate: async (_store, _config, stock) => stock,
+    lastTelegramCommandPoll: {
+      checkedAt: '2026-05-22T11:59:58.000Z'
+    },
+    now: new Date('2026-05-22T12:00:00.000Z').getTime()
+  };
+
+  let stock = await store.addStock({
+    symbol: '005930',
+    displayName: '삼성전자',
+    purchasePrice: 70000,
+    thresholdPercent: 5
+  });
+  stock = await store.replaceStock({
+    ...stock,
+    active: true,
+    alertState: 'triggered',
+    lastPrice: 65000,
+    lastCheckedAt: '2026-05-22T11:59:00.000Z',
+    currency: 'KRW'
+  });
+
+  await handleTelegramMessage(store, config, message('/today'), options);
+
+  assert.match(sent.at(-1), /오늘 확인할 일/);
+  assert.match(sent.at(-1), /알림 기준 도달/);
+  assert.match(sent.at(-1), /\/status 005930/);
+});
+
 test('handleTelegramMessage can report dividend diagnostics', async () => {
   const store = await createStore();
   const sent = [];

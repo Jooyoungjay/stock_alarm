@@ -41,11 +41,11 @@ export function classifyQuoteFreshness(stock = {}, options = {}) {
 
   const checkedAt = getStockQuoteCheckedAt(stock);
 
-  if (!checkedAt) {
+  if (!checkedAt || !hasPositiveNumber(stock.lastPrice)) {
     return {
       status: 'missing',
       level: 'pending',
-      label: '확인 전',
+      label: '미확인',
       detail: '아직 서버에서 시세를 확인하지 않았습니다.',
       nextAction: QUOTE_FRESHNESS_NEXT_ACTION
     };
@@ -111,6 +111,11 @@ export function summarizeQuoteFreshness(stocks = [], options = {}) {
 function normalizeMaxAgeMinutes(value) {
   const minutes = Number(value);
   return Number.isFinite(minutes) && minutes > 0 ? minutes : DEFAULT_QUOTE_FRESHNESS_MAX_AGE_MINUTES;
+}
+
+function hasPositiveNumber(value) {
+  const number = Number(value);
+  return Number.isFinite(number) && number > 0;
 }
 
 function getProviderLabel(value) {

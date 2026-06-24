@@ -1,6 +1,6 @@
 import fs from 'node:fs/promises';
 import path from 'node:path';
-import { createHash, randomBytes, randomUUID } from 'node:crypto';
+import { randomUUID } from 'node:crypto';
 import {
   createBackup as createFileBackup,
   deleteBackup as deleteFileBackup,
@@ -226,25 +226,6 @@ export function normalizeStock(input, defaults) {
 
   validateAlertTypeFields(stock);
   return stock;
-}
-
-export function normalizeDevice(input) {
-  const now = new Date().toISOString();
-  const deviceId = String(input.deviceId || randomUUID()).trim();
-
-  if (!deviceId) {
-    throw new Error('기기 ID가 올바르지 않습니다.');
-  }
-
-  return {
-    id: deviceId,
-    label: String(input.label || '').trim(),
-    platform: normalizeDevicePlatform(input.platform),
-    pushTokens: [],
-    createdAt: now,
-    updatedAt: now,
-    lastSeenAt: now
-  };
 }
 
 export function applyStockPatch(stock, patch) {
@@ -536,21 +517,6 @@ export function normalizeStoredStock(stock) {
     lastAlertPrice: normalizeOptionalStoredNumber(stock.lastAlertPrice),
     lastAlertThresholdPrice: normalizeOptionalStoredNumber(stock.lastAlertThresholdPrice),
     lastAlertMetricPercent: normalizeOptionalStoredNumber(stock.lastAlertMetricPercent)
-  };
-}
-
-export function normalizeStoredDevice(device) {
-  return {
-    id: String(device.id || device.deviceId || '').trim(),
-    label: String(device.label || '').trim(),
-    platform: normalizeDevicePlatform(device.platform),
-    secretHash: device.secretHash || '',
-    pushTokens: Array.isArray(device.pushTokens)
-      ? device.pushTokens.map(normalizePushToken).filter((token) => token.token)
-      : [],
-    createdAt: device.createdAt || new Date().toISOString(),
-    updatedAt: device.updatedAt || device.createdAt || new Date().toISOString(),
-    lastSeenAt: device.lastSeenAt || device.updatedAt || device.createdAt || new Date().toISOString()
   };
 }
 
@@ -1399,11 +1365,6 @@ export function buildKisNaverCompareTrendSnapshot(value, limit = 100) {
   };
 }
 
-export function normalizeDeviceId(value) {
-  const id = String(value || '').trim();
-  return id || null;
-}
-
 export function normalizePositionStatus(value) {
   const normalized = String(value || DEFAULT_POSITION_STATUS).trim().toLowerCase();
 
@@ -1455,31 +1416,6 @@ export function buildStockAccountIdentityKey(stock) {
     normalizeAccountType(stock.accountType),
     normalizeAccountNameKey(stock.accountName)
   ].join('::');
-}
-
-function normalizeDevicePlatform(value) {
-  const platform = String(value || 'unknown').trim().toLowerCase();
-  const allowed = ['ios', 'android', 'web', 'unknown'];
-
-  return allowed.includes(platform) ? platform : 'unknown';
-}
-
-export function createDeviceSecret() {
-  return randomBytes(32).toString('base64url');
-}
-
-export function hashDeviceSecret(secret) {
-  return createHash('sha256').update(String(secret || '')).digest('hex');
-}
-
-export function normalizePushToken(input) {
-  return {
-    token: String(input.token || '').trim(),
-    provider: String(input.provider || 'expo').trim().toLowerCase(),
-    platform: normalizeDevicePlatform(input.platform),
-    enabled: input.enabled === undefined ? true : Boolean(input.enabled),
-    updatedAt: input.updatedAt || new Date().toISOString()
-  };
 }
 
 export function normalizeAlertType(value) {
@@ -1877,25 +1813,4 @@ export class JsonStore {
     await writeJson(this.filePath, data);
     return data;
   }
-}
-
-export function stockMatchesDevice() {
-  return true;
-}
-
-export function sanitizeDevice(device) {
-  return {
-    id: device.id,
-    label: device.label,
-    platform: device.platform,
-    pushTokens: device.pushTokens.map((token) => ({
-      provider: token.provider,
-      platform: token.platform,
-      enabled: token.enabled,
-      updatedAt: token.updatedAt
-    })),
-    createdAt: device.createdAt,
-    updatedAt: device.updatedAt,
-    lastSeenAt: device.lastSeenAt
-  };
 }

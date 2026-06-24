@@ -1,6 +1,6 @@
 # JSON 레거시 필드 정리 계획
 
-날짜 기준: 2026-06-24 (WBS 14.8·15.7·15.8·16.4)
+날짜 기준: 2026-06-24 (WBS 14.8·15.7·15.8·16.4·17.8)
 
 개인 로컬·텔레그램 운영 전환(WBS 13.4·13.6) 때 남았던 **모바일·푸시 시절 필드**는 WBS 15.8에서 **schemaVersion 2**로 제거했습니다. 이 문서는 deprecated 정책·제거 이력·과거 백업 호환의 단일 기준입니다.
 
@@ -49,6 +49,7 @@
 - ~~`authenticateDevice`~~
 - ~~`upsertDevicePushToken`~~
 - ~~`listDevicePushTokens`~~
+- ~~`createDeviceSecret`~~, ~~`sanitizeDevice`~~ 등 device helper (16.9 storage 정리)
 
 ## 제거 단계
 

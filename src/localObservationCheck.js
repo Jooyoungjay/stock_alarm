@@ -5,6 +5,7 @@ import {
   getQuoteAgeMinutes,
   getStockQuoteCheckedAt
 } from './quoteFreshness.js';
+import { OBSERVATION_STATIC_MARKERS } from './localObservationStaticMarkers.js';
 
 const defaultBaseUrl = 'http://127.0.0.1:3000';
 const defaultTimeoutMs = 10000;
@@ -27,6 +28,8 @@ const observationActionStatusLabels = {
   resolved: '해결',
   deferred: '보류'
 };
+
+export { OBSERVATION_STATIC_MARKERS } from './localObservationStaticMarkers.js';
 
 export function parseLocalObservationArgs(args = [], options = {}) {
   const parsed = {
@@ -201,6 +204,7 @@ export async function runLocalObservationCheck(input = {}) {
   const results = [
     checkServerAccess(context),
     checkUserHome(context),
+    checkTodayActionControls(staticFiles),
     checkAdminHome(context),
     checkManualQuoteFlow(context),
     checkQuoteQuality(staticFiles),
@@ -554,12 +558,7 @@ function checkServerAccess(context) {
 }
 
 function checkUserHome(context) {
-  const ok = containsAll(context.userHtml, [
-    'watchTitle',
-    'portfolioSummaryBar',
-    'todayActionPanel',
-    'stockList'
-  ]);
+  const ok = containsAll(context.userHtml, OBSERVATION_STATIC_MARKERS.userHome);
 
   return createResult(
     'user-home',
@@ -571,14 +570,21 @@ function checkUserHome(context) {
   );
 }
 
+function checkTodayActionControls(staticFiles) {
+  const ok = containsAll(staticFiles.appJs, OBSERVATION_STATIC_MARKERS.todayActionControls);
+
+  return createResult(
+    'today-action-controls',
+    '오늘 확인할 일',
+    '시세·poll·배당·점검 항목에서 원클릭 점프가 연결된다',
+    ok ? 'passed' : 'failed',
+    ok ? '오늘 확인할 일 패널 연결 마커를 확인했습니다.' : '오늘 확인할 일 패널 연결 마커를 찾지 못했습니다.',
+    ok ? '' : 'public/app.js의 today action 렌더링과 점프 버튼을 확인합니다.'
+  );
+}
+
 function checkAdminHome(context) {
-  const ok = containsAll(context.adminHtml, [
-    'serverStatusPanel',
-    'backupList',
-    'observationIssuesPanel',
-    'observationHistoryPanel',
-    'runObservationCheckButton'
-  ]);
+  const ok = containsAll(context.adminHtml, OBSERVATION_STATIC_MARKERS.adminHome);
 
   return createResult(
     'admin-home',
@@ -622,7 +628,7 @@ function checkManualQuoteFlow(context) {
 }
 
 function checkQuoteQuality(staticFiles) {
-  const ok = containsAll(staticFiles.appJs, ['function getQuoteQuality', 'quote-quality']);
+  const ok = containsAll(staticFiles.appJs, OBSERVATION_STATIC_MARKERS.quoteQuality);
 
   return createResult(
     'quote-quality',
@@ -636,12 +642,7 @@ function checkQuoteQuality(staticFiles) {
 
 function checkAlertControls(staticFiles, context) {
   const stocks = Array.isArray(context.stocks?.stocks) ? context.stocks.stocks : [];
-  const wired = containsAll(staticFiles.appJs, [
-    'function alertToggle',
-    'snoozeStockAlert',
-    'snoozeStockAlertUntilTomorrow',
-    '알림 재개'
-  ]);
+  const wired = containsAll(staticFiles.appJs, OBSERVATION_STATIC_MARKERS.alertControls);
 
   if (!wired) {
     return createResult(
@@ -685,8 +686,8 @@ function checkAlertControls(staticFiles, context) {
 }
 
 function checkPositionStatus(staticFiles) {
-  const ok = containsAll(staticFiles.indexHtml, ['data-watch-filter="holding"', 'data-watch-filter="watch"', 'data-watch-filter="sold"'])
-    && staticFiles.appJs.includes('normalizePositionStatus');
+  const ok = containsAll(staticFiles.indexHtml, OBSERVATION_STATIC_MARKERS.positionStatusFilters)
+    && containsAll(staticFiles.appJs, OBSERVATION_STATIC_MARKERS.positionStatusApp);
 
   return createResult(
     'position-status',
@@ -699,13 +700,7 @@ function checkPositionStatus(staticFiles) {
 }
 
 function checkWatchViewPreference(staticFiles) {
-  const ok = containsAll(staticFiles.appJs, [
-    'WATCH_VIEW_STORAGE_KEY',
-    'loadWatchViewPreference',
-    'saveWatchViewPreference',
-    'normalizeWatchFilter',
-    'normalizeWatchSort'
-  ]);
+  const ok = containsAll(staticFiles.appJs, OBSERVATION_STATIC_MARKERS.watchViewPreference);
 
   return createResult(
     'watch-view-preference',
@@ -718,20 +713,8 @@ function checkWatchViewPreference(staticFiles) {
 }
 
 function checkCsvImportExport(staticFiles) {
-  const ok = containsAll(staticFiles.indexHtml, [
-    'csvImportInput',
-    'csvImportResult',
-    'CSV 가져오기',
-    'CSV 내보내기',
-    'CSV 양식'
-  ]) && containsAll(staticFiles.appJs, [
-    'CSV_STOCK_FIELDS',
-    'parseCsvText',
-    'validateCsvStockRows',
-    'exportStocksCsv',
-    'importStocksCsv',
-    '/api/stocks'
-  ]);
+  const ok = containsAll(staticFiles.indexHtml, OBSERVATION_STATIC_MARKERS.csvImportExport.indexHtml)
+    && containsAll(staticFiles.appJs, OBSERVATION_STATIC_MARKERS.csvImportExport.appJs);
 
   return createResult(
     'csv-import-export',
@@ -744,16 +727,9 @@ function checkCsvImportExport(staticFiles) {
 }
 
 function checkAlertRuleGuide(staticFiles) {
-  const ok = containsAll(staticFiles.indexHtml, [
-    'alertRuleSummary',
-    'data-alert-rule-guide'
-  ]) && containsAll(staticFiles.appJs, [
-    'buildAlertRuleGuides',
-    'renderAlertRuleGuideComparison',
-    '필요 입력',
-    '계산식',
-    '투자 권유가 아니라'
-  ]) && staticFiles.stylesCss.includes('alert-rule-guide');
+  const ok = containsAll(staticFiles.indexHtml, OBSERVATION_STATIC_MARKERS.alertRuleGuide.indexHtml)
+    && containsAll(staticFiles.appJs, OBSERVATION_STATIC_MARKERS.alertRuleGuide.appJs)
+    && containsAll(staticFiles.stylesCss, OBSERVATION_STATIC_MARKERS.alertRuleGuide.stylesCss);
 
   return createResult(
     'alert-rule-guide',
@@ -768,24 +744,10 @@ function checkAlertRuleGuide(staticFiles) {
 function checkDividendApiDashboard(staticFiles) {
   const guidanceSource = staticFiles.dividendFailureGuidanceJs || staticFiles.appJs;
 
-  const ok = containsAll(staticFiles.indexHtml, [
-    'dividendDiagnosticsPanel',
-    '배당 provider 상태'
-  ]) && containsAll(staticFiles.appJs, [
-    'buildDividendApiDashboard',
-    'renderDividendApiDashboard',
-    'dividend-provider-grid',
-    'dividendFailureGuidance'
-  ]) && containsAll(guidanceSource, [
-    'buildDividendFailureNextActions',
-    'DATA_GO_KR_SERVICE_KEY',
-    'OPEN_DART_API_KEY',
-    'ALPHA_VANTAGE_API_KEY'
-  ]) && containsAll(staticFiles.stylesCss, [
-    'dividend-api-dashboard',
-    'dividend-provider-card',
-    'dividend-next-actions'
-  ]);
+  const ok = containsAll(staticFiles.indexHtml, OBSERVATION_STATIC_MARKERS.dividendDashboard.indexHtml)
+    && containsAll(staticFiles.appJs, OBSERVATION_STATIC_MARKERS.dividendDashboard.appJs)
+    && containsAll(guidanceSource, OBSERVATION_STATIC_MARKERS.dividendDashboard.guidanceJs)
+    && containsAll(staticFiles.stylesCss, OBSERVATION_STATIC_MARKERS.dividendDashboard.stylesCss);
 
   return createResult(
     'dividend-api-dashboard',
@@ -800,7 +762,7 @@ function checkDividendApiDashboard(staticFiles) {
 }
 
 function checkSellDecision(staticFiles) {
-  const ok = containsAll(staticFiles.appJs, ['renderSellDecisionPanel', 'maximumProfitAmount', 'retracement']);
+  const ok = containsAll(staticFiles.appJs, OBSERVATION_STATIC_MARKERS.sellDecision);
 
   return createResult(
     'sell-decision',
@@ -813,7 +775,7 @@ function checkSellDecision(staticFiles) {
 }
 
 function checkBackupPreview(staticFiles, context) {
-  const wired = containsAll(staticFiles.appJs, ['previewBackupItem', '/api/backups/preview']);
+  const wired = containsAll(staticFiles.appJs, OBSERVATION_STATIC_MARKERS.backupPreview);
   const backups = Array.isArray(context.backups?.backups) ? context.backups.backups : [];
 
   if (!wired) {
@@ -849,13 +811,7 @@ function checkBackupPreview(staticFiles, context) {
 }
 
 function checkConnectionFailure(staticFiles) {
-  const ok = containsAll(staticFiles.appJs, [
-    'connectionBanner',
-    '다시 연결',
-    '캐시 초기화',
-    'getDisplayErrorMessage',
-    'Failed to fetch'
-  ]);
+  const ok = containsAll(staticFiles.appJs, OBSERVATION_STATIC_MARKERS.connectionFailure);
 
   return createResult(
     'connection-failure',

@@ -1,4 +1,5 @@
 import { buildAlertRule, initializeHighFromPurchaseDate, runAlertCheck } from './alertEngine.js';
+import path from 'node:path';
 import { createBackup, deleteBackup, listBackups, restoreBackup } from './backups.js';
 import {
   formatDividendFailureNextActionsText
@@ -20,6 +21,11 @@ import {
   sendTelegramMessage
 } from './telegram.js';
 import { assessTelegramPollHealth } from './telegramPollHealth.js';
+import { readLocalObservationHistoryReport } from './localObservationCheck.js';
+import {
+  buildTelegramTodayActions,
+  formatTelegramTodayMessage
+} from './systemTodayActions.js';
 
 const updateOffsetKey = 'telegramUpdateOffset';
 
@@ -28,6 +34,7 @@ const helpMessage = [
   '/list - 감시 종목 목록',
   '/status [종목코드] - 종목 상태 상세',
   '/brief - 위험 종목·이익금 반납·배당·평가 요약',
+  '/today - 오늘 확인할 일 요약 (시세·poll·배당)',
   '/check - 지금 바로 전체 확인',
   '/dividend-status [종목코드] - 배당 API 진단 상태',
   '/pause <종목코드> - 알림 끄기',
@@ -190,6 +197,9 @@ async function executeCommand(store, config, command, options) {
     case 'briefing':
     case 'risk':
       return formatBriefingFromCommand(await store.listStocks(), config, options);
+    case 'today':
+    case 'today-actions':
+      return formatTodayFromCommand(store, config, options);
     case 'add':
       return addStockFromCommand(store, config, command, options);
     case 'pause':
@@ -249,6 +259,33 @@ function formatBriefingFromCommand(stocks, config, options = {}) {
   }
 
   return lines.join('\n');
+}
+
+async function formatTodayFromCommand(store, config, options = {}) {
+  const stocks = await store.listStocks();
+  const rootDir = config.rootDir || options.rootDir || process.cwd();
+  const dataDir = store?.dataDir || config.dataDir || path.join(rootDir, 'data');
+  const observationHistory = await readLocalObservationHistoryReport({
+    rootDir,
+    dataDir,
+    env: options.env
+  });
+  const actions = buildTelegramTodayActions({
+    stocks,
+    observationHistoryRecent: observationHistory.recent,
+    telegramConfigured: isTelegramConfigured(config),
+    telegramCommandPollSeconds: config.telegramCommandPollSeconds,
+    lastTelegramCommandPoll: options.lastTelegramCommandPoll ?? null,
+    telegramPollHealth: assessTelegramPollHealth({
+      telegramConfigured: isTelegramConfigured(config),
+      telegramCommandPollSeconds: config.telegramCommandPollSeconds,
+      lastTelegramCommandPoll: options.lastTelegramCommandPoll ?? null,
+      now: options.now
+    }),
+    now: options.now
+  });
+
+  return formatTelegramTodayMessage(actions);
 }
 
 function formatTelegramPollHealthLine(config, options = {}) {

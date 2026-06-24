@@ -13,6 +13,7 @@ import {
   readLocalObservationHistoryDetail,
   readLocalObservationHistoryReport,
   runAndSaveLocalObservationHistory,
+  OBSERVATION_STATIC_MARKERS,
   runLocalObservationCheck,
   updateLocalObservationHistoryResultAction
 } from '../src/localObservationCheck.js';
@@ -53,6 +54,12 @@ test('runLocalObservationCheck passes dividend dashboard wiring for production s
 
   const dividendCheck = result.results.find((item) => item.id === 'dividend-api-dashboard');
   assert.equal(dividendCheck?.status, 'passed', dividendCheck?.detail || 'missing dividend check');
+});
+
+test('OBSERVATION_STATIC_MARKERS cover dividend guidance and stale-quote filters', () => {
+  assert.ok(OBSERVATION_STATIC_MARKERS.dividendDashboard.appJs.includes('dividendFailureGuidance'));
+  assert.ok(OBSERVATION_STATIC_MARKERS.positionStatusFilters.includes('data-watch-filter="stale-quote"'));
+  assert.ok(OBSERVATION_STATIC_MARKERS.connectionFailure.includes('connectionBanner'));
 });
 
 test('runLocalObservationCheck can verify manual quote and alert controls with a temporary stock', async () => {
@@ -521,10 +528,12 @@ async function createObservationFixture() {
       'function renderAlertRuleGuideComparison() {}',
       'function buildDividendApiDashboard() {}',
       'function renderDividendApiDashboard() {}',
+      'function buildSystemTodayActions() {}',
+      'function focusStaleQuoteStocks() {}',
       'import { buildDividendFailureNextActions } from "./dividendFailureGuidance.js";',
       'const WATCH_VIEW_STORAGE_KEY = "stock_alarm_watch_view";',
       'const CSV_STOCK_FIELDS = [];',
-      'const a = "quote-quality maximumProfitAmount retracement 알림 재개 /api/backups/preview /api/stocks connectionBanner 다시 연결 캐시 초기화 Failed to fetch 필요 입력 계산식 투자 권유가 아니라 dividend-provider-grid 다음 조치 dividendFailureGuidance";'
+      'const a = "quote-quality maximumProfitAmount retracement 알림 재개 /api/backups/preview /api/stocks connectionBanner 다시 연결 캐시 초기화 Failed to fetch 필요 입력 계산식 투자 권유가 아니라 dividend-provider-grid 다음 조치 dividendFailureGuidance data-today-action-filter data-today-action-stock data-today-action-admin-target data-today-action-scroll-target";'
     ].join('\n')
   );
   await fs.writeFile(
@@ -540,7 +549,7 @@ async function createObservationFixture() {
   );
   await fs.writeFile(
     path.join(rootDir, 'public', 'index.html'),
-    '<button data-watch-filter="holding"></button><button data-watch-filter="watch"></button><button data-watch-filter="sold"></button><input id="csvImportInput"><div id="csvImportResult"></div><div id="alertRuleSummary" data-alert-rule-guide></div><div id="dividendDiagnosticsPanel">배당 provider 상태</div><button>CSV 가져오기</button><button>CSV 내보내기</button><button>CSV 양식</button>'
+    '<button data-watch-filter="holding"></button><button data-watch-filter="watch"></button><button data-watch-filter="sold"></button><button data-watch-filter="stale-quote"></button><input id="csvImportInput"><div id="csvImportResult"></div><div id="alertRuleSummary" data-alert-rule-guide></div><div id="dividendDiagnosticsPanel">배당 provider 상태</div><button>CSV 가져오기</button><button>CSV 내보내기</button><button>CSV 양식</button>'
   );
   await fs.writeFile(path.join(rootDir, 'public', 'styles.css'), '.alert-rule-guide {} .dividend-api-dashboard {} .dividend-provider-card {} .dividend-next-actions {}');
 

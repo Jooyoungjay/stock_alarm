@@ -35,11 +35,14 @@ const TODAY_ACTION_LIMIT = 5;
 const TODAY_ACTION_SOON_DAYS = 7;
 const TODAY_ACTION_MAX_PER_STOCK = 2;
 const WATCH_VIEW_STORAGE_KEY = 'stock_alarm_watch_view';
+const STRIP_LEGACY_BACKUP_PREFERENCE_KEY = 'stock_alarm_strip_legacy_backup';
+const WEEKLY_ROUTINE_TEST_COUNT = 295;
 const WATCH_FILTER_OPTIONS = Object.freeze([
   'all',
   'attention',
   'alert',
   'error',
+  'stale-quote',
   'inactive',
   'holding',
   'watch',
@@ -269,6 +272,8 @@ const state = {
   observationHistoryDetail: null,
   observationHistoryManualOnly: false,
   observationRun: null,
+  telegramPollHealth: null,
+  lastTelegramCommandPoll: null,
   kisQuoteSmokeTest: null,
   kisNaverQuoteComparison: null,
   kisNaverCompareHistory: [],
@@ -695,6 +700,10 @@ elements.refreshBackupsButton.addEventListener('click', async () => {
   await withBusy(elements.refreshBackupsButton, loadBackups);
 });
 
+elements.stripLegacyBackupCheckbox?.addEventListener('change', () => {
+  saveStripLegacyBackupPreference(Boolean(elements.stripLegacyBackupCheckbox.checked));
+});
+
 elements.refreshServerStatusButton.addEventListener('click', async () => {
   await withBusy(elements.refreshServerStatusButton, loadHealth);
 });
@@ -722,7 +731,8 @@ elements.observationHistoryPanel?.addEventListener('click', async (event) => {
   const deleteButton = event.target.closest('[data-observation-history-delete]');
   const pruneButton = event.target.closest('[data-observation-history-prune]');
   const manualFilterButton = event.target.closest('[data-observation-history-manual-filter]');
-  const button = actionSaveButton || detailButton || downloadButton || deleteButton || pruneButton || manualFilterButton;
+  const weeklyChecklistButton = event.target.closest('[data-copy-weekly-checklist]');
+  const button = actionSaveButton || detailButton || downloadButton || deleteButton || pruneButton || manualFilterButton || weeklyChecklistButton;
 
   if (!button) {
     return;
@@ -742,6 +752,11 @@ elements.observationHistoryPanel?.addEventListener('click', async (event) => {
     if (manualFilterButton) {
       state.observationHistoryManualOnly = manualFilterButton.dataset.observationHistoryManualFilter === 'true';
       renderObservationHistory(state.observationHistory);
+      return;
+    }
+
+    if (weeklyChecklistButton) {
+      await copyWeeklyRoutineChecklist();
       return;
     }
 
@@ -819,6 +834,12 @@ elements.watchFilterButtons.forEach((button) => {
   });
 });
 
+document.querySelector('#quoteFreshnessBanner')?.addEventListener('click', (event) => {
+  if (event.target.closest('[data-quote-freshness-filter]')) {
+    focusStaleQuoteStocks();
+  }
+});
+
 elements.watchSortSelect.addEventListener('change', () => {
   setWatchSort(elements.watchSortSelect.value);
   renderStocks();
@@ -860,9 +881,13 @@ async function loadHealth() {
   try {
     const health = await api('/api/health');
     state.health = health;
+    state.telegramPollHealth = health.telegramPollHealth || null;
+    state.lastTelegramCommandPoll = health.lastTelegramCommandPoll || null;
     state.lastKisNaverAutoCompare =
       health.lastKisNaverAutoCompare || state.lastKisNaverAutoCompare;
     renderServerStatus(health);
+    syncStripLegacyBackupCheckbox(health.dataSchemaVersion ?? health.dataModel?.schemaVersion);
+    refreshTodayActionPanel();
   } catch (error) {
     handleAdminAuthFailure(error);
     renderServerStatusError(error);
@@ -895,6 +920,8 @@ async function loadData() {
       state.kisNaverTrendRecommendation;
     state.lastKisNaverAutoCompare =
       data.lastKisNaverAutoCompare || state.lastKisNaverAutoCompare;
+    state.telegramPollHealth = data.telegramPollHealth || null;
+    state.lastTelegramCommandPoll = data.lastTelegramCommandPoll || null;
     renderStatus(data);
     renderStocks();
     renderDividendCalendar(state.dividendCalendar);
@@ -4471,12 +4498,16 @@ function renderObservationHistory(observationHistory) {
         <strong>아직 저장된 점검 기록이 없습니다.</strong>
         <span>장중 점검 후 아래 명령을 실행하면 이 카드에 기록이 쌓입니다.</span>
         <code>npm run check:observation -- --live-session --save-history</code>
+        ${renderWeeklyChecklistCopyButton()}
       </div>
     `;
     return;
   }
 
   elements.observationHistoryPanel.innerHTML = `
+    <div class="observation-history-toolbar">
+      ${renderWeeklyChecklistCopyButton()}
+    </div>
     <div class="observation-history-hero">
       <div class="observation-history-latest">
         <span class="roadmap-eyebrow">최근 점검</span>
@@ -4500,6 +4531,94 @@ function renderObservationHistory(observationHistory) {
     ${renderObservationHistoryDetail(state.observationHistoryDetail)}
     <div class="roadmap-note">저장 폴더: ${escapeHtml(observationHistory.historyDir || 'data/observation-history')}</div>
   `;
+  refreshTodayActionPanel();
+}
+
+function renderWeeklyChecklistCopyButton() {
+  return `<button type="button" class="btn btn-outline btn-sm secondary-button" data-copy-weekly-checklist>주간 체크리스트 복사</button>`;
+}
+
+function loadStripLegacyBackupPreference() {
+  try {
+    const raw = window.localStorage?.getItem(STRIP_LEGACY_BACKUP_PREFERENCE_KEY);
+
+    if (raw === 'true') {
+      return true;
+    }
+
+    if (raw === 'false') {
+      return false;
+    }
+  } catch {
+    // localStorage may be blocked in restricted contexts.
+  }
+
+  return null;
+}
+
+function saveStripLegacyBackupPreference(checked) {
+  try {
+    window.localStorage?.setItem(
+      STRIP_LEGACY_BACKUP_PREFERENCE_KEY,
+      checked ? 'true' : 'false'
+    );
+  } catch {
+    // Ignore storage failures; checkbox state still applies for this session.
+  }
+}
+
+function syncStripLegacyBackupCheckbox(schemaVersion) {
+  if (!elements.stripLegacyBackupCheckbox) {
+    return;
+  }
+
+  const version = Number(schemaVersion);
+  const stored = loadStripLegacyBackupPreference();
+  const defaultChecked = Number.isInteger(version) && version >= 2;
+
+  elements.stripLegacyBackupCheckbox.checked = stored ?? defaultChecked;
+}
+
+function buildWeeklyRoutineChecklistCopyText() {
+  const latest = state.observationHistory?.latest;
+  const health = state.health || {};
+  const schemaVersion = Number(health.dataSchemaVersion ?? health.dataModel?.schemaVersion) || 2;
+  const pollHealth = state.telegramPollHealth || health.telegramPollHealth || {};
+  const pollLabel = pollHealth.label || '확인';
+  const observationTarget = latest?.ready ? 'READY' : 'READY';
+  const observationNote = latest
+    ? `최근 점검 ${latest.ready ? 'READY' : 'NOT READY'} · 실패 ${latest.summary?.failed || 0} · 수동 ${latest.summary?.manual || 0} · ${formatDate(latest.generatedAt)}`
+    : '최근 저장 점검 없음 — W-03은 check:observation --save-history 실행 후 확인';
+  const autoBackupAt =
+    state.autoBackup?.last?.createdAt ||
+    state.autoBackup?.last?.checkedAt ||
+    health.lastAutoBackup?.createdAt ||
+    health.lastAutoBackup?.checkedAt;
+  const backupNote = autoBackupAt ? `lastAutoBackup ${formatDate(autoBackupAt)}` : 'lastAutoBackup 확인';
+
+  return [
+    `[ ] W-01 npm test (${WEEKLY_ROUTINE_TEST_COUNT} pass)`,
+    '[ ] W-02 node --check src/server.js',
+    `[ ] W-03 check:observation ${observationTarget}`,
+    `[ ] W-04 /api/health ok + dataSchemaVersion ${schemaVersion} + telegramPollHealth ${pollLabel}`,
+    '[ ] W-05 /backup 또는 관리자 백업 (stripLegacy 기본 체크)',
+    `[ ] W-06 ${backupNote}`,
+    '[ ] W-07 /status 응답',
+    '[ ] W-08 /check 응답',
+    '[ ] W-09 /dividend-status (필요 시)',
+    '[ ] W-10 personal-backlog BL-* 확인',
+    '[ ] W-11~13 live-session + 시세 배너 (장중, 선택)',
+    '',
+    `# 참고: ${observationNote}`,
+    `# 생성: ${new Date().toLocaleString('ko-KR')}`
+  ].join('\n');
+}
+
+async function copyWeeklyRoutineChecklist() {
+  await copyClipboardText(
+    buildWeeklyRoutineChecklistCopyText(),
+    '주간 체크리스트를 복사했습니다.'
+  );
 }
 
 function renderObservationHistoryManualSummary(manualSummary) {
@@ -6095,11 +6214,25 @@ function renderQuoteFreshnessBanner(stocks = []) {
   host.hidden = false;
   host.innerHTML = `
     <div class="quote-freshness-banner" role="status">
-      <strong>장중 시세 확인 필요 ${summary.needsAttention}개</strong>
-      <span>오래됨 ${summary.stale} · 실패 ${summary.error} · 미확인 ${summary.missing} · 기준 ${summary.maxAgeMinutes}분</span>
-      <span>${escapeHtml(QUOTE_FRESHNESS_NEXT_ACTION)}</span>
+      <div class="quote-freshness-banner-copy">
+        <strong>장중 시세 확인 필요 ${summary.needsAttention}개</strong>
+        <span>오래됨 ${summary.stale} · 실패 ${summary.error} · 미확인 ${summary.missing} · 기준 ${summary.maxAgeMinutes}분</span>
+        <span>${escapeHtml(QUOTE_FRESHNESS_NEXT_ACTION)}</span>
+      </div>
+      <button type="button" class="btn btn-outline btn-sm" data-quote-freshness-filter>
+        해당 ${summary.needsAttention}개만 보기
+      </button>
     </div>
   `;
+}
+
+function focusStaleQuoteStocks() {
+  setWatchFilter('stale-quote');
+  renderStocks();
+
+  requestAnimationFrame(() => {
+    elements.stockList?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  });
 }
 
 function renderStocks() {
@@ -6387,6 +6520,18 @@ function renderPortfolioSummary(items) {
   );
 }
 
+function refreshTodayActionPanel() {
+  if (!elements.todayActionPanel) {
+    return;
+  }
+
+  const decoratedStocks = state.stocks.map((stock) => ({
+    stock,
+    watchStatus: getWatchStatus(stock)
+  }));
+  renderTodayActionPanel(decoratedStocks);
+}
+
 function renderTodayActionPanel(items) {
   if (!elements.todayActionPanel) {
     return;
@@ -6441,12 +6586,134 @@ function renderTodayActionPanel(items) {
         focusTodayActionStock(button.dataset.todayActionStock);
       });
     });
+
+  elements.todayActionPanel
+    .querySelectorAll('[data-today-action-filter]')
+    .forEach((button) => {
+      button.addEventListener('click', () => {
+        const filter = button.dataset.todayActionFilter;
+
+        if (filter === 'stale-quote') {
+          focusStaleQuoteStocks();
+          return;
+        }
+
+        setWatchFilter(filter);
+        renderStocks();
+        requestAnimationFrame(() => {
+          elements.stockList?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        });
+      });
+    });
+
+  elements.todayActionPanel
+    .querySelectorAll('[data-today-action-admin-target]')
+    .forEach((button) => {
+      button.addEventListener('click', () => {
+        const targetId = button.dataset.todayActionAdminTarget;
+        focusAdminPanel(targetId);
+
+        if (targetId === 'observationHistoryPanel') {
+          state.observationHistoryManualOnly = true;
+          renderObservationHistory(state.observationHistory);
+        }
+      });
+    });
+
+  elements.todayActionPanel
+    .querySelectorAll('[data-today-action-scroll-target]')
+    .forEach((button) => {
+      button.addEventListener('click', () => {
+        focusTodayActionScrollTarget(
+          button.dataset.todayActionScrollTarget,
+          button.dataset.todayActionStock
+        );
+      });
+    });
 }
 
 function buildTodayActions(items) {
+  const systemActions = buildSystemTodayActions(items);
   const stockActions = items.flatMap(buildStockTodayActions);
   const dividendActions = buildDividendEventTodayActions(items.map(({ stock }) => stock));
-  return limitTodayActions([...stockActions, ...dividendActions]);
+  return limitTodayActions([...systemActions, ...stockActions, ...dividendActions]);
+}
+
+function buildSystemTodayActions(items) {
+  const actions = [];
+  const stocks = items.map(({ stock }) => stock);
+  const summary = summarizeQuoteFreshness(stocks);
+  const pollHealth = state.telegramPollHealth;
+
+  if (pollHealth && ['stale', 'error', 'unknown'].includes(pollHealth.status)) {
+    actions.push(
+      createTodayAction({
+        type: 'telegram-poll-health',
+        priority: pollHealth.level === 'bad' ? 'critical' : 'warning',
+        rank: 5,
+        title: `텔레그램 폴링 ${pollHealth.label}`,
+        detail: [pollHealth.detail, pollHealth.nextAction].filter(Boolean).join(' '),
+        meta: '원격 명령',
+        adminTarget: isAdminMode() ? 'serverStatusPanel' : '',
+        focusLabel: isAdminMode() ? '서버 상태 보기' : ''
+      })
+    );
+  }
+
+  if (summary.needsAttention > 0) {
+    actions.push(
+      createTodayAction({
+        type: 'quote-freshness-summary',
+        priority: summary.error > 0 || summary.missing > 0 ? 'critical' : 'warning',
+        rank: 6,
+        title: '장중 시세 확인 필요',
+        detail: `오래됨 ${summary.stale} · 실패 ${summary.error} · 미확인 ${summary.missing} · 기준 ${summary.maxAgeMinutes}분`,
+        meta: '시세 신선도',
+        filter: 'stale-quote',
+        focusLabel: '해당 종목만 보기'
+      })
+    );
+  }
+
+  const manualSummary = getLatestObservationManualSummary();
+
+  if (isAdminMode() && manualSummary) {
+    actions.push(
+      createTodayAction({
+        type: 'observation-manual',
+        priority: 'warning',
+        rank: 8,
+        title: '점검 수동 확인 필요',
+        detail: `수동 ${manualSummary.manual}개 · ${formatDate(manualSummary.generatedAt)}`,
+        meta: '점검 히스토리',
+        adminTarget: 'observationHistoryPanel',
+        focusLabel: '점검 히스토리 보기'
+      })
+    );
+  }
+
+  return actions;
+}
+
+function getLatestObservationManualSummary() {
+  const recent = state.observationHistory?.recent;
+
+  if (!Array.isArray(recent) || !recent.length) {
+    return null;
+  }
+
+  const latest = recent[0];
+  const manual = Number(latest.summary?.manual || 0);
+
+  if (!manual) {
+    return null;
+  }
+
+  return {
+    manual,
+    generatedAt: latest.generatedAt,
+    fileName: latest.fileName
+  };
 }
 
 function buildStockTodayActions({ stock, watchStatus }) {
@@ -6485,6 +6752,38 @@ function buildStockTodayActions({ stock, watchStatus }) {
         meta: getProviderLabel(stock.quoteProvider) || '시세'
       })
     );
+  } else {
+    const freshness = classifyQuoteFreshness(stock);
+
+    if (freshness.status === 'stale') {
+      actions.push(
+        createTodayAction({
+          type: 'quote-stale',
+          stock,
+          name,
+          priority: 'warning',
+          rank: 12,
+          title: '장중 시세 오래됨',
+          detail: freshness.detail,
+          meta: '시세 신선도',
+          filter: 'stale-quote',
+          focusLabel: '시세 지연 종목 보기'
+        })
+      );
+    } else if (freshness.status === 'missing') {
+      actions.push(
+        createTodayAction({
+          type: 'quote-missing',
+          stock,
+          name,
+          priority: 'warning',
+          rank: 11,
+          title: '시세 미확인',
+          detail: freshness.detail,
+          meta: '시세 신선도'
+        })
+      );
+    }
   }
 
   if (String(stock.dividendLastError || '').trim()) {
@@ -6497,7 +6796,9 @@ function buildStockTodayActions({ stock, watchStatus }) {
         rank: 20,
         title: '배당 조회 실패',
         detail: stock.dividendLastError,
-        meta: getProviderLabel(stock.dividendProvider) || '배당'
+        meta: getProviderLabel(stock.dividendProvider) || '배당',
+        scrollTarget: 'dividendDiagnosticsPanel',
+        focusLabel: '배당 진단 보기'
       })
     );
   }
@@ -6679,7 +6980,11 @@ function createTodayAction({
   rank,
   title,
   detail,
-  meta
+  meta,
+  filter = '',
+  adminTarget = '',
+  scrollTarget = '',
+  focusLabel = ''
 }) {
   return {
     id: `${type}-${stock?.id || stock?.symbol || name || title}`,
@@ -6690,7 +6995,11 @@ function createTodayAction({
     rank,
     title,
     detail,
-    meta
+    meta,
+    filter,
+    adminTarget,
+    scrollTarget,
+    focusLabel
   };
 }
 
@@ -6740,9 +7049,19 @@ function compareTodayActions(left, right) {
 
 function renderTodayActionItem(action) {
   const stockId = action.stock?.id ? String(action.stock.id) : '';
-  const focusButton = stockId
-    ? `<button type="button" class="btn btn-outline btn-sm" data-today-action-stock="${escapeHtml(stockId)}">종목 보기</button>`
-    : '';
+  let actionButton = '';
+
+  if (stockId && action.scrollTarget) {
+    actionButton = `<button type="button" class="btn btn-outline btn-sm" data-today-action-scroll-target="${escapeHtml(action.scrollTarget)}" data-today-action-stock="${escapeHtml(stockId)}">${escapeHtml(action.focusLabel || '패널 보기')}</button>`;
+  } else if (stockId) {
+    actionButton = `<button type="button" class="btn btn-outline btn-sm" data-today-action-stock="${escapeHtml(stockId)}">${escapeHtml(action.focusLabel || '종목 보기')}</button>`;
+  } else if (action.filter) {
+    actionButton = `<button type="button" class="btn btn-outline btn-sm" data-today-action-filter="${escapeHtml(action.filter)}">${escapeHtml(action.focusLabel || '필터 적용')}</button>`;
+  } else if (action.adminTarget) {
+    actionButton = `<button type="button" class="btn btn-outline btn-sm" data-today-action-admin-target="${escapeHtml(action.adminTarget)}">${escapeHtml(action.focusLabel || '관리자에서 보기')}</button>`;
+  } else if (action.scrollTarget) {
+    actionButton = `<button type="button" class="btn btn-outline btn-sm" data-today-action-scroll-target="${escapeHtml(action.scrollTarget)}">${escapeHtml(action.focusLabel || '패널 보기')}</button>`;
+  }
 
   return `
     <article class="today-action-item ${escapeHtml(action.priority)}">
@@ -6754,7 +7073,7 @@ function renderTodayActionItem(action) {
       </div>
       <div class="today-action-meta">
         <span>${escapeHtml(action.meta || '')}</span>
-        ${focusButton}
+        ${actionButton}
       </div>
     </article>
   `;
@@ -6781,6 +7100,35 @@ function focusTodayActionStock(stockId) {
     row.classList.add('stock-row-focus');
     window.setTimeout(() => row.classList.remove('stock-row-focus'), 1600);
   });
+}
+
+function focusAdminPanel(targetId) {
+  const panel = document.getElementById(String(targetId || '').trim());
+
+  if (!panel) {
+    return;
+  }
+
+  panel.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  panel.classList.add('panel-focus');
+  window.setTimeout(() => panel.classList.remove('panel-focus'), 1600);
+}
+
+function focusTodayActionScrollTarget(targetId, stockId) {
+  if (stockId) {
+    focusTodayActionStock(stockId);
+  }
+
+  focusAdminPanel(targetId);
+}
+
+function stockNeedsQuoteAttention(stock) {
+  if (stock?.active === false) {
+    return false;
+  }
+
+  const freshness = classifyQuoteFreshness(stock);
+  return ['stale', 'error', 'missing'].includes(freshness.status);
 }
 
 function getDateDistanceInfo(value) {
@@ -7540,6 +7888,10 @@ function filterWatchStocks(items) {
     return items.filter(({ watchStatus }) =>
       ['alert', 'warning', 'error'].includes(watchStatus.level)
     );
+  }
+
+  if (filter === 'stale-quote') {
+    return items.filter(({ stock }) => stockNeedsQuoteAttention(stock));
   }
 
   if (['holding', 'watch', 'sold'].includes(filter)) {
@@ -9211,7 +9563,7 @@ function isConnectionError(error) {
   );
 }
 
-async function copyText(text) {
+async function copyClipboardText(text, successMessage = '클립보드에 복사했습니다.') {
   const value = String(text || '');
 
   if (!value) {
@@ -9233,10 +9585,14 @@ async function copyText(text) {
       textarea.remove();
     }
 
-    showMessage('주소를 복사했습니다.');
+    showMessage(successMessage);
   } catch {
-    showMessage('주소 복사에 실패했습니다.', true);
+    showMessage('복사에 실패했습니다.', true);
   }
+}
+
+async function copyText(text) {
+  await copyClipboardText(text, '주소를 복사했습니다.');
 }
 
 function getDividendSchedule(input) {

@@ -96,9 +96,9 @@ test('parseRoadmapMarkdown extracts roadmap metadata and next task', async () =>
   assert.ok(roadmap.completedScope.some((item) => item.category === 'Postgres 쿼리 어댑터'));
   assert.ok(roadmap.completedScope.some((item) => item.category === 'Postgres 연결 리허설'));
   assert.ok(roadmap.completedScope.some((item) => item.category === '개인 로컬 운영 전환 WBS'));
-  assert.ok(roadmap.sections.length >= 16);
+  assert.ok(roadmap.sections.length >= 17);
   assert.equal(roadmap.recommendedOrder[0], '~~개인 로컬 운영 전환 1차 정리~~ (13.1 완료)');
-  assert.equal(roadmap.nextTask.title, '개인 운영 편의성 개선');
+  assert.equal(roadmap.nextTask.title, '장중·원격 운영 신뢰도 심화');
   assert.ok(roadmap.statusLegend.some((item) => item.status === 'pending' && item.label === '예정'));
   assert.ok(roadmap.summary.paused > 0);
   assert.ok(roadmap.summary.total > roadmap.summary.completed);

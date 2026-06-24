@@ -386,6 +386,7 @@
               <button type="button" data-watch-filter="attention">주의</button>
               <button type="button" data-watch-filter="alert">알림</button>
               <button type="button" data-watch-filter="error">조회 실패</button>
+              <button type="button" data-watch-filter="stale-quote">시세 지연</button>
               <button type="button" data-watch-filter="inactive">알림 꺼짐</button>
               <button type="button" data-watch-filter="holding">보유중</button>
               <button type="button" data-watch-filter="watch">관심</button>
@@ -672,8 +673,8 @@
 
           <div class="backup-note">
             <label class="backup-option">
-              <input id="stripLegacyBackupCheckbox" type="checkbox" />
-              레거시 필드 비우기 (devices·pushDelivery*)
+              <input id="stripLegacyBackupCheckbox" type="checkbox" checked />
+              레거시 필드 비우기 (devices·pushDelivery*, schema v2 기본 켜짐)
             </label>
             복구를 실행하면 현재 데이터는 먼저 안전 백업으로 저장됩니다. 삭제한 백업 파일은 되돌릴 수 없습니다.
           </div>
