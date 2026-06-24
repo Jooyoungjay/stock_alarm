@@ -34,7 +34,7 @@
 
 | # | 항목 | 명령/동작 | 합격 기준 |
 |---|---|---|---|
-| W-01 | 전체 자동 테스트 | `npm test` | **276개** 전부 통과 |
+| W-01 | 전체 자동 테스트 | `npm test` | **279개** 전부 통과 |
 | W-02 | 서버 문법 | `node --check src/server.js` | 오류 없음 |
 | W-03 | 로컬 smoke | `npm run check:observation -- --base-url http://127.0.0.1:PORT` | READY (manual 항목은 장중 분리) |
 | W-04 | 헬스 | `Invoke-RestMethod http://127.0.0.1:PORT/api/health` | `ok=true`, `telegramConfigured`, `dataSchemaVersion: 2`, `telegramPollHealth.status`가 `ok` (또는 `nextAction` 확인) |
@@ -122,7 +122,7 @@ npm run check:observation -- --base-url http://127.0.0.1:PORT --live-session --s
 ## 주간 체크리스트 (복사용)
 
 ```text
-[ ] W-01 npm test (276 pass)
+[ ] W-01 npm test (279 pass)
 [ ] W-02 node --check src/server.js
 [ ] W-03 check:observation READY
 [ ] W-04 /api/health ok + dataSchemaVersion 2 + telegramPollHealth

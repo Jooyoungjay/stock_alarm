@@ -51,9 +51,9 @@ docs/archive/          → 제거된 Postgres·모바일 설계 보관
 
 WBS 13·14·15는 완료했습니다. **WBS 16 개인 운영 편의성 개선** 진행 중입니다 (`docs/development-roadmap.md` §16).
 
-다음 구현 ID: **16.6** (텔레그램 원격 점검 강화, BL-12). 세션 규칙: **WBS ID 1개**, 완료 시 `npm test` 276개 통과.
+다음 구현 ID: **16.7** (웹 시세 배너·오늘 할 일, BL-14). 세션 규칙: **WBS ID 1개**, 완료 시 `npm test` 279개 통과.
 
-### WBS 16 남은 작업 (16.1~16.5 완료)
+### WBS 16 남은 작업 (16.1~16.6 완료)
 
 | ID | 작업 | 역할 |
 |---|---|---|
@@ -62,8 +62,8 @@ WBS 13·14·15는 완료했습니다. **WBS 16 개인 운영 편의성 개선** 
 | ~~16.3~~ | ~~실사용 백로그 triage 3차~~ | @pm / @docs |
 | ~~16.4~~ | ~~운영 문서 정합 (BL-08~11)~~ | @docs |
 | ~~16.5~~ | ~~observation smoke drift (BL-13)~~ | @qa |
-| **16.6** | 텔레그램 원격 점검 강화 (BL-12) | @backend |
-| 16.7 | 웹 시세 배너·오늘 할 일 | @frontend |
+| ~~16.6~~ | ~~텔레그램 원격 점검 강화 (BL-12)~~ | @backend |
+| **16.7** | 웹 시세 배너·오늘 할 일 (BL-14) | @frontend |
 | 16.8 | 백업·점검 UX 편의 | @frontend |
 | 16.9 | dead code·observation 상수화 | @cleanup |
 
@@ -81,7 +81,7 @@ WBS 13·14·15는 완료했습니다. **WBS 16 개인 운영 편의성 개선** 
 ### WBS 16 편의성 개선
 
 ```text
-1. roadmap §16에서 다음 16.x ID 확인 (현재 16.6)
+1. roadmap §16에서 다음 16.x ID 확인 (현재 16.7)
 2. `.cursor/skills/wbs-16-evolution/SKILL.md` 로드 (16.2 완료)
 3. 해당 역할 1명만 구현 (@docs / @qa / @backend / @frontend / @cleanup)
 4. @qa → npm test (+ 필요 시 check:observation)
@@ -120,7 +120,7 @@ WBS 15 전체 완료 — `.cursor/skills/wbs-15-evolution/SKILL.md` 참고용.
 
 ```powershell
 start-local.bat              # 서버 시작
-npm test                     # 276 tests
+npm test                     # 279 tests
 npm run check:observation      # 로컬 실사용 점검
 ```
 

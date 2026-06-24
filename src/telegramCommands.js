@@ -5,6 +5,7 @@ import {
 } from '../public/dividendFailureGuidance.js';
 import { formatKisMarketDivCode } from './kisMarket.js';
 import { buildDailyBriefing, formatDailyBriefingMessage } from './portfolioBriefing.js';
+import { classifyQuoteFreshness, summarizeQuoteFreshness } from './quoteFreshness.js';
 import {
   ALERT_TYPES,
   POSITION_STATUSES,
@@ -18,6 +19,7 @@ import {
   isTelegramConfigured,
   sendTelegramMessage
 } from './telegram.js';
+import { assessTelegramPollHealth } from './telegramPollHealth.js';
 
 const updateOffsetKey = 'telegramUpdateOffset';
 
@@ -183,11 +185,11 @@ async function executeCommand(store, config, command, options) {
     case 'list':
       return formatStockList(await store.listStocks());
     case 'status':
-      return formatStockStatusFromCommand(store, command.args[0]);
+      return formatStockStatusFromCommand(store, command.args[0], options);
     case 'brief':
     case 'briefing':
     case 'risk':
-      return formatBriefingFromCommand(await store.listStocks(), config);
+      return formatBriefingFromCommand(await store.listStocks(), config, options);
     case 'add':
       return addStockFromCommand(store, config, command, options);
     case 'pause':
@@ -233,13 +235,41 @@ async function executeCommand(store, config, command, options) {
   }
 }
 
-function formatBriefingFromCommand(stocks, config) {
+function formatBriefingFromCommand(stocks, config, options = {}) {
   const briefing = buildDailyBriefing(stocks, {
     warningDistancePercent: config.dailyBriefingWarningDistancePercent,
     topLimit: config.dailyBriefingTopLimit
   });
+  const lines = [formatDailyBriefingMessage(briefing)];
+  const pollHealthLine = formatTelegramPollHealthLine(config, options);
 
-  return formatDailyBriefingMessage(briefing);
+  if (pollHealthLine) {
+    lines.push('');
+    lines.push(pollHealthLine);
+  }
+
+  return lines.join('\n');
+}
+
+function formatTelegramPollHealthLine(config, options = {}) {
+  const health = assessTelegramPollHealth({
+    telegramConfigured: isTelegramConfigured(config),
+    telegramCommandPollSeconds: config.telegramCommandPollSeconds,
+    lastTelegramCommandPoll: options.lastTelegramCommandPoll ?? null,
+    now: options.now
+  });
+
+  if (health.status === 'ok') {
+    return `텔레그램 폴링: ${health.label} · ${health.detail}`;
+  }
+
+  const parts = [`텔레그램 폴링: ${health.label} · ${health.detail}`];
+
+  if (health.nextAction) {
+    parts.push(`다음 조치: ${health.nextAction}`);
+  }
+
+  return parts.join('\n');
 }
 
 async function formatDividendStatusFromCommand(store, command) {
@@ -1526,25 +1556,79 @@ function formatAmbiguousStockMessage(query, stocks) {
   ].join('\n');
 }
 
-function formatStockList(stocks) {
+function formatStockList(stocks, options = {}) {
   if (!stocks.length) {
     return '등록된 감시 종목이 없습니다.';
   }
 
-  return stocks.map((stock, index) => `${index + 1}. ${formatStockLine(stock)}`).join('\n\n');
+  return stocks.map((stock, index) => `${index + 1}. ${formatStockLine(stock, options)}`).join('\n\n');
 }
 
-async function formatStockStatusFromCommand(store, query) {
+async function formatStockStatusFromCommand(store, query, options = {}) {
+  const stocks = await store.listStocks();
+
   if (!query) {
-    return formatStockList(await store.listStocks());
+    const summaryLine = formatQuoteFreshnessSummaryLine(stocks, options);
+    const list = formatStockList(stocks, options);
+
+    return summaryLine ? `${summaryLine}\n\n${list}` : list;
   }
 
   const stock = await findStock(store, query);
 
-  return ['종목 상태', formatStockLine(stock)].join('\n');
+  return ['종목 상태', formatStockLine(stock, options)].join('\n');
 }
 
-function formatStockLine(stock) {
+function formatQuoteFreshnessSummaryLine(stocks, options = {}) {
+  const summary = summarizeQuoteFreshness(stocks, options);
+
+  if (!summary.activeCount) {
+    return '';
+  }
+
+  const parts = [
+    `시세 신선도 요약: 감시 ${summary.activeCount} · 정상 ${summary.fresh || 0}`
+  ];
+
+  if (summary.stale) {
+    parts.push(`오래됨 ${summary.stale}`);
+  }
+
+  if (summary.error) {
+    parts.push(`오류 ${summary.error}`);
+  }
+
+  if (summary.missing) {
+    parts.push(`미확인 ${summary.missing}`);
+  }
+
+  if (summary.delayed) {
+    parts.push(`지연 ${summary.delayed}`);
+  }
+
+  if (summary.needsAttention) {
+    parts.push(`기준 ${summary.maxAgeMinutes}분`);
+  }
+
+  return parts.join(' · ');
+}
+
+function formatQuoteFreshnessLine(stock, options = {}) {
+  if (stock?.active === false) {
+    return '';
+  }
+
+  const freshness = classifyQuoteFreshness(stock, options);
+  const parts = [`시세 신선도: ${freshness.label} · ${freshness.detail}`];
+
+  if (freshness.nextAction) {
+    parts.push(`다음 조치: ${freshness.nextAction}`);
+  }
+
+  return parts.join('\n');
+}
+
+function formatStockLine(stock, options = {}) {
   const currentPrice = Number(stock.lastPrice);
   const line = [
     formatStockTitle(stock),
@@ -1557,6 +1641,7 @@ function formatStockLine(stock) {
     stock.annualDividendPerShare ? `주당 연 배당금: ${formatNumber(stock.annualDividendPerShare)}` : '',
     formatKisMarketLine(stock),
     Number.isFinite(currentPrice) ? `현재가: ${formatNumber(currentPrice)}${stock.currency ? ` ${stock.currency}` : ''}` : '',
+    formatQuoteFreshnessLine(stock, options),
     formatDividendScheduleLine(stock),
     formatDividendEventLine(stock),
     formatDividendHistoryLine(stock),

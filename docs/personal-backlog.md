@@ -55,7 +55,7 @@ OBS-001~015는 [관찰 리포트](local-webapp-observation-2026-05-21.md) 기준
 | ID | P | 내용 | 재현/증거 | WBS | 상태 |
 |---|---|---|---|---|---|
 | BL-13 | P3 | `check:observation` 배당 대시보드 drift | `dividendFailureGuidance.js` 분리 후 static 오탐 | **16.5** | 완료 |
-| BL-12 | P3 | 텔레그램 `/status` 시세 신선도 없음 | 장중 `/status` vs 웹 배너 | **16.6** | 열림 |
+| BL-12 | P3 | 텔레그램 `/status` 시세 신선도 없음 | 장중 `/status` vs 웹 배너 | **16.6** | 완료 |
 | BL-14 | P3 | 시세 배너→종목 필터, 오늘 할 일 카드 통합 | @frontend 제안, 점검 2026-06-24 | **16.7** | 열림 |
 | BL-16 | P3 | `stripLegacy` 기본 체크, 점검 히스토리 체크리스트 복사 | @frontend 제안 | **16.8** | 열림 |
 | BL-15 | P3 | dead code·observation 검사 상수화 | `createDeviceSecret`, drift 재발 방지 | **16.9** | 열림 |
@@ -71,12 +71,12 @@ OBS-001~015는 [관찰 리포트](local-webapp-observation-2026-05-21.md) 기준
 | ~~16.3~~ | 실사용 백로그 triage 3차 | 이 표 | @pm / @docs | 완료 |
 | ~~16.4~~ | 운영 문서 정합 | BL-08~11 | @docs | 완료 |
 | ~~16.5~~ | observation smoke drift | BL-13 | @qa | 완료 |
-| **16.6** | 텔레그램 원격 점검 강화 | BL-12 | @backend | **다음** |
-| 16.7 | 웹 시세 배너·오늘 할 일 | BL-14 | @frontend | 4 |
+| ~~16.6~~ | 텔레그램 원격 점검 강화 | BL-12 | @backend | 완료 |
+| **16.7** | 웹 시세 배너·오늘 할 일 | BL-14 | @frontend | **다음** |
 | 16.8 | 백업·점검 UX 편의 | BL-16 | @frontend | 5 |
 | 16.9 | dead code·observation 상수화 | BL-15 | @cleanup | 6 |
 
-**다음 WBS:** **16.6** 텔레그램 원격 점검 강화 (BL-12, @backend).
+**다음 WBS:** **16.7** 웹 시세 배너·오늘 할 일 (BL-14, @frontend).
 
 ## 보류·제외
 
@@ -112,4 +112,4 @@ OBS-001~015는 [관찰 리포트](local-webapp-observation-2026-05-21.md) 기준
 | 열린 BL | BL-08~16 (8건) — WBS 16.4~16.9에 1:1 매핑 |
 | BL-14 분리 | 16.7(배너·오늘 할 일) / BL-16→16.8(백업·점검 복사) |
 | P1/P2 | 없음 |
-| 다음 WBS | **16.6** — 16.5 observation smoke drift 완료 |
+| 다음 WBS | **16.7** — 16.6 텔레그램 원격 점검 완료 |

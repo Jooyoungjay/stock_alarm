@@ -206,7 +206,9 @@ async function runTelegramCommandPollOnce() {
   try {
     lastTelegramCommandPoll = {
       checkedAt: new Date().toISOString(),
-      ...(await pollTelegramCommands(store, config))
+      ...(await pollTelegramCommands(store, config, {
+        lastTelegramCommandPoll
+      }))
     };
     return lastTelegramCommandPoll;
   } finally {

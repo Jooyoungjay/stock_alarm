@@ -437,6 +437,127 @@ test('handleTelegramMessage can send a risk briefing', async () => {
   assert.match(sent[0], /반납/);
 });
 
+test('handleTelegramMessage status includes quote freshness for stale holdings', async () => {
+  const store = await createStore();
+  const sent = [];
+  const options = {
+    sendTelegramMessage: async (_config, text) => {
+      sent.push(text);
+    },
+    now: new Date('2026-05-22T12:00:00.000Z').getTime()
+  };
+
+  let stock = await store.addStock({
+    symbol: '005930',
+    displayName: '삼성전자',
+    purchasePrice: 70000,
+    thresholdPercent: 5
+  });
+  stock = await store.replaceStock({
+    ...stock,
+    lastPrice: 72000,
+    lastCheckedAt: '2026-05-22T10:00:00.000Z',
+    currency: 'KRW'
+  });
+
+  await handleTelegramMessage(store, config, message('/status 005930'), options);
+
+  assert.match(sent.at(-1), /시세 신선도: 장중 오래됨/);
+  assert.match(sent.at(-1), /120분 전 확인/);
+  assert.match(sent.at(-1), /다음 조치:/);
+});
+
+test('handleTelegramMessage status list summarizes quote freshness', async () => {
+  const store = await createStore();
+  const sent = [];
+  const options = {
+    sendTelegramMessage: async (_config, text) => {
+      sent.push(text);
+    },
+    now: new Date('2026-05-22T12:00:00.000Z').getTime()
+  };
+
+  let stock = await store.addStock({
+    symbol: '005930',
+    displayName: '삼성전자',
+    purchasePrice: 70000,
+    thresholdPercent: 5
+  });
+  await store.replaceStock({
+    ...stock,
+    lastPrice: 72000,
+    lastCheckedAt: '2026-05-22T10:00:00.000Z',
+    currency: 'KRW'
+  });
+
+  await handleTelegramMessage(store, config, message('/status'), options);
+
+  assert.match(sent.at(-1), /시세 신선도 요약/);
+  assert.match(sent.at(-1), /오래됨 1/);
+});
+
+test('handleTelegramMessage brief appends telegram poll health hint', async () => {
+  const store = await createStore();
+  const sent = [];
+  const options = {
+    sendTelegramMessage: async (_config, text) => {
+      sent.push(text);
+    },
+    initializeHighFromPurchaseDate: async (_store, _config, stock) => stock,
+    lastTelegramCommandPoll: {
+      checkedAt: '2026-05-22T11:59:58.000Z'
+    },
+    now: new Date('2026-05-22T12:00:00.000Z').getTime()
+  };
+
+  let stock = await store.addStock({
+    symbol: '336260',
+    displayName: '두산퓨얼셀',
+    purchasePrice: 90000,
+    thresholdPercent: 5
+  });
+  stock = await store.replaceStock({
+    ...stock,
+    lastPrice: 92000,
+    lastCheckedAt: '2026-05-22T11:55:00.000Z',
+    currency: 'KRW'
+  });
+
+  await handleTelegramMessage(store, config, message('/brief'), options);
+
+  assert.match(sent.at(-1), /일일 브리핑/);
+  assert.match(sent.at(-1), /텔레그램 폴링: 정상/);
+});
+
+test('handleTelegramMessage brief warns when telegram polling looks stale', async () => {
+  const store = await createStore();
+  const sent = [];
+  const options = {
+    sendTelegramMessage: async (_config, text) => {
+      sent.push(text);
+    },
+    initializeHighFromPurchaseDate: async (_store, _config, stock) => stock,
+    lastTelegramCommandPoll: {
+      checkedAt: '2026-05-22T11:58:00.000Z'
+    },
+    now: new Date('2026-05-22T12:00:00.000Z').getTime()
+  };
+
+  await store.addStock({
+    symbol: '336260',
+    displayName: '두산퓨얼셀',
+    purchasePrice: 90000,
+    thresholdPercent: 5,
+    lastPrice: 92000,
+    lastCheckedAt: '2026-05-22T11:55:00.000Z'
+  });
+
+  await handleTelegramMessage(store, config, message('/brief'), options);
+
+  assert.match(sent.at(-1), /텔레그램 폴링: 무응답 의심/);
+  assert.match(sent.at(-1), /다음 조치:/);
+});
+
 test('handleTelegramMessage can report dividend diagnostics', async () => {
   const store = await createStore();
   const sent = [];
