@@ -10,47 +10,48 @@ import {
   JsonStore
 } from '../src/storage.js';
 
-test('JsonStore creates and authenticates anonymous devices', async () => {
+test('JsonStore migrates legacy devices and push fields to schema v2', async () => {
   const store = await createStore();
-  const created = await store.createDevice({
-    label: 'Joo iPhone',
-    platform: 'ios'
-  });
+  await fs.writeFile(
+    store.filePath,
+    JSON.stringify(
+      {
+        devices: [{ id: 'device-1', platform: 'ios', pushTokens: [{ token: 'x', provider: 'expo' }] }],
+        stocks: [
+          stockInput({
+            id: 'stock-1',
+            deviceId: 'device-1',
+            active: true
+          })
+        ],
+        alerts: [
+          {
+            id: 'alert-1',
+            symbol: 'AAPL',
+            deviceId: 'device-1',
+            pushDeliveryStatus: 'none',
+            createdAt: '2026-05-15T00:00:00.000Z'
+          }
+        ],
+        meta: { schemaVersion: 1 }
+      },
+      null,
+      2
+    ),
+    'utf8'
+  );
 
-  assert.equal(created.device.label, 'Joo iPhone');
-  assert.equal(created.device.platform, 'ios');
-  assert.ok(created.device.id);
-  assert.ok(created.deviceSecret);
-  assert.equal(created.device.secretHash, undefined);
+  const data = await store.read();
+  assert.equal(data.meta.schemaVersion, DATA_SCHEMA_VERSION);
+  assert.equal(data.stocks[0].deviceId, undefined);
+  assert.equal(data.alerts[0].deviceId, undefined);
+  assert.equal(data.alerts[0].pushDeliveryStatus, undefined);
+  assert.equal(data.devices, undefined);
 
-  const authenticated = await store.authenticateDevice(created.device.id, created.deviceSecret);
-  assert.equal(authenticated.id, created.device.id);
-
-  await assert.rejects(() => store.authenticateDevice(created.device.id, 'wrong-secret'));
-});
-
-test('JsonStore stores sanitized push tokens for devices', async () => {
-  const store = await createStore();
-  const created = await store.createDevice({ platform: 'android' });
-  const device = await store.upsertDevicePushToken(created.device.id, {
-    token: 'ExponentPushToken[test]',
-    provider: 'expo',
-    platform: 'android'
-  });
-
-  assert.equal(device.pushTokens.length, 1);
-  assert.equal(device.pushTokens[0].provider, 'expo');
-  assert.equal(device.pushTokens[0].platform, 'android');
-  assert.equal(device.pushTokens[0].enabled, true);
-  assert.equal(device.pushTokens[0].token, undefined);
-
-  const tokens = await store.listDevicePushTokens(created.device.id, {
-    provider: 'expo',
-    enabledOnly: true
-  });
-  assert.equal(tokens.length, 1);
-  assert.equal(tokens[0].token, 'ExponentPushToken[test]');
-  assert.equal(tokens[0].deviceId, created.device.id);
+  const info = await store.getDataModelInfo();
+  assert.equal(info.schemaVersion, DATA_SCHEMA_VERSION);
+  assert.equal(info.store.counts.stocks, 1);
+  assert.equal(info.store.counts.alerts, 1);
 });
 
 test('JsonStore serializes concurrent writes without leaving temp files', async () => {
@@ -60,7 +61,6 @@ test('JsonStore serializes concurrent writes without leaving temp files', async 
   await Promise.all(
     Array.from({ length: 12 }, (_, index) =>
       store.write({
-        devices: [],
         stocks: [],
         alerts: [],
         meta: { concurrentWriteIndex: index }
@@ -79,36 +79,34 @@ test('JsonStore serializes concurrent writes without leaving temp files', async 
   assert.equal(files.includes('store.json.tmp'), false);
 });
 
-test('JsonStore scopes stocks and alerts by anonymous device', async () => {
+test('JsonStore exportBackupSnapshot can strip legacy fields on demand', async () => {
   const store = await createStore();
-  const first = await store.createDevice({ label: 'first' });
-  const second = await store.createDevice({ label: 'second' });
-
-  const firstStock = await store.addStock(stockInput({ deviceId: first.device.id }));
-  const secondStock = await store.addStock(stockInput({ deviceId: second.device.id }));
-
-  await assert.rejects(() => store.addStock(stockInput({ deviceId: first.device.id })));
-
-  assert.equal((await store.listStocks({ deviceId: first.device.id })).length, 1);
-  assert.equal((await store.listStocks({ deviceId: second.device.id })).length, 1);
-  assert.equal((await store.listStocks()).length, 2);
-
-  await assert.rejects(() =>
-    store.updateStock(firstStock.id, { thresholdPercent: 8 }, { deviceId: second.device.id })
+  await fs.writeFile(
+    store.filePath,
+    JSON.stringify(
+      {
+        devices: [{ id: 'device-1', pushTokens: [] }],
+        stocks: [stockInput({ id: 'stock-1', deviceId: 'device-1' })],
+        alerts: [
+          {
+            id: 'alert-1',
+            symbol: 'AAPL',
+            pushDeliveryStatus: 'none',
+            createdAt: '2026-05-15T00:00:00.000Z'
+          }
+        ],
+        meta: { schemaVersion: 1 }
+      },
+      null,
+      2
+    ),
+    'utf8'
   );
 
-  await store.updateStock(firstStock.id, { thresholdPercent: 8 }, { deviceId: first.device.id });
-  assert.equal((await store.listStocks({ deviceId: first.device.id }))[0].thresholdPercent, 8);
-
-  await store.appendAlert({ deviceId: first.device.id, stockId: firstStock.id, symbol: 'AAPL' });
-  await store.appendAlert({ deviceId: second.device.id, stockId: secondStock.id, symbol: 'AAPL' });
-
-  assert.equal((await store.listAlerts(10, { deviceId: first.device.id })).length, 1);
-  assert.equal((await store.listAlerts(10, { deviceId: second.device.id })).length, 1);
-
-  await store.deleteStock(firstStock.id, { deviceId: first.device.id });
-  assert.equal((await store.listStocks({ deviceId: first.device.id })).length, 0);
-  assert.equal((await store.listStocks({ deviceId: second.device.id })).length, 1);
+  const stripped = await store.exportBackupSnapshot({ stripLegacy: true });
+  assert.equal(stripped.devices, undefined);
+  assert.equal(stripped.stocks[0].deviceId, undefined);
+  assert.equal(stripped.alerts[0].pushDeliveryStatus, undefined);
 });
 
 test('JsonStore separates duplicate symbols by account type and account name', async () => {
@@ -681,8 +679,6 @@ test('JsonStore normalizes schema metadata and reports data model counts', async
   assert.equal(info.schemaVersion, DATA_SCHEMA_VERSION);
   assert.equal(info.storageEngine, 'json');
   assert.ok(info.entities.some((entity) => entity.name === 'stocks'));
-  assert.equal(info.store.counts.devices, 1);
-  assert.equal(info.store.counts.pushTokens, 1);
   assert.equal(info.store.counts.stocks, 1);
   assert.equal(info.store.counts.activeStocks, 1);
   assert.equal(info.store.counts.alerts, 1);

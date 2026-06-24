@@ -248,7 +248,7 @@ test('wbs 14 evolution skill documents session workflow and constraints', async 
   assert.match(agents, /wbs-14-evolution/);
 });
 
-test('personal backlog triages OBS items and maps WBS 14 candidates', async () => {
+test('personal backlog triages OBS items and maps WBS 15 candidates', async () => {
   const backlog = await fs.readFile(
     new URL('../docs/personal-backlog.md', import.meta.url),
     'utf8'
@@ -258,13 +258,17 @@ test('personal backlog triages OBS items and maps WBS 14 candidates', async () =
     'utf8'
   );
 
-  assert.match(backlog, /WBS 14\.3/);
-  assert.match(backlog, /BL-01.*완료/);
-  assert.match(backlog, /14\.6/);
+  assert.match(backlog, /15\.3 triage/);
+  assert.match(backlog, /BL-03.*완료/);
+  assert.match(backlog, /BL-04.*완료/);
+  assert.match(backlog, /14\.8/);
   assert.match(backlog, /BL-M01/);
-  assert.match(backlog, /다음 WBS.*14\.6/);
+  assert.match(backlog, /BL-M01.*완료/);
+  assert.match(backlog, /WBS 15 완료/);
+  assert.match(backlog, /json-legacy-fields-deprecation/);
+  assert.match(backlog, /personal-kis-naver-alert-operations\.md/);
   assert.match(backlog, /OBS-001~015/);
-  assert.match(roadmap, /14\.3.*완료/);
+  assert.match(roadmap, /15\.8.*완료/);
   assert.match(roadmap, /personal-backlog\.md/);
 });
 
@@ -302,15 +306,47 @@ test('WBS 14 docs align README AGENTS roadmap and evolution skill', async () => 
     'utf8'
   );
 
-  assert.match(readme, /14\.6.*다음/);
-  assert.match(readme, /14\.5 완료/);
-  assert.match(readme, /personal-weekly-routine\.md/);
-  assert.match(agents, /14\.5.*완료/);
-  assert.match(agents, /14\.6.*다음/);
-  assert.match(agents, /wbs-14-evolution/);
-  assert.match(roadmap, /14\.5.*완료/);
-  assert.match(roadmap, /배당 실패 다음 조치 통일.*14\.6/);
-  assert.match(regression, /251개 전부 통과/);
+  assert.match(readme, /14\.1~14\.8.*완료/);
+  assert.match(readme, /WBS 15 완료/);
+  assert.match(agents, /13·14·15/);
+  assert.match(agents, /wbs-15-evolution/);
+  assert.match(roadmap, /14\.8.*완료/);
+  assert.match(roadmap, /15\.8.*완료/);
+  assert.match(roadmap, /개인 운영 안정화와 레거시 정리 2차/);
+  assert.match(regression, /270개 전부 통과/);
+});
+
+test('personal kis naver alert operations documents noise policy and admin handling', async () => {
+  const markdown = await fs.readFile(
+    new URL('../docs/personal-kis-naver-alert-operations.md', import.meta.url),
+    'utf8'
+  );
+  const readme = await fs.readFile(new URL('../README.md', import.meta.url), 'utf8');
+
+  assert.match(markdown, /WBS 14\.7/);
+  assert.match(markdown, /확인·보류/);
+  assert.match(markdown, /RESOLVED_REOPEN_COOLDOWN/);
+  assert.match(markdown, /KA-01/);
+  assert.match(readme, /personal-kis-naver-alert-operations\.md/);
+  assert.match(readme, /KIS_NAVER_AUTO_COMPARE_RESOLVED_REOPEN_COOLDOWN_MINUTES/);
+});
+
+test('json legacy fields deprecation doc links backup checks and data model API', async () => {
+  const markdown = await fs.readFile(
+    new URL('../docs/json-legacy-fields-deprecation.md', import.meta.url),
+    'utf8'
+  );
+  const readme = await fs.readFile(new URL('../README.md', import.meta.url), 'utf8');
+  const roadmap = await fs.readFile(
+    new URL('../docs/development-roadmap.md', import.meta.url),
+    'utf8'
+  );
+
+  assert.match(markdown, /WBS 14\.8/);
+  assert.match(markdown, /기기\(레거시\)/);
+  assert.match(markdown, /GET \/api\/data-model/);
+  assert.match(readme, /json-legacy-fields-deprecation\.md/);
+  assert.match(roadmap, /json-legacy-fields-deprecation\.md/);
 });
 
 test('personal regression scenario guide documents local telegram-focused coverage', async () => {
@@ -321,7 +357,7 @@ test('personal regression scenario guide documents local telegram-focused covera
 
   assert.match(markdown, /개인용 회귀 테스트 시나리오/);
   assert.match(markdown, /WBS 13\.10/);
-  assert.match(markdown, /251개 전부 통과/);
+  assert.match(markdown, /270개 전부 통과/);
   assert.match(markdown, /npm test/);
   assert.match(markdown, /서버 실행\/종료 테스트/);
   assert.match(markdown, /사용자 웹앱 테스트/);
@@ -557,6 +593,10 @@ test('user webapp explains alert rule formulas without investment advice', async
 test('admin page exposes dividend API automatic validation dashboard', async () => {
   const html = await fs.readFile(new URL('../public/index.html', import.meta.url), 'utf8');
   const script = await fs.readFile(new URL('../public/app.js', import.meta.url), 'utf8');
+  const guidance = await fs.readFile(
+    new URL('../public/dividendFailureGuidance.js', import.meta.url),
+    'utf8'
+  );
   const styles = await fs.readFile(new URL('../public/styles.css', import.meta.url), 'utf8');
 
   assert.match(html, /dividendDiagnosticsPanel/);
@@ -564,9 +604,11 @@ test('admin page exposes dividend API automatic validation dashboard', async () 
   assert.match(script, /renderDividendApiDashboard/);
   assert.match(script, /dividend-provider-grid/);
   assert.match(script, /다음 조치/);
-  assert.match(script, /DATA_GO_KR_SERVICE_KEY/);
-  assert.match(script, /OPEN_DART_API_KEY/);
-  assert.match(script, /ALPHA_VANTAGE_API_KEY/);
+  assert.match(script, /showHandledKisCompareIssues/);
+  assert.match(script, /data-kis-issue-toggle-handled/);
+  assert.match(guidance, /DATA_GO_KR_SERVICE_KEY/);
+  assert.match(guidance, /OPEN_DART_API_KEY/);
+  assert.match(guidance, /ALPHA_VANTAGE_API_KEY/);
   assert.match(styles, /dividend-api-dashboard/);
   assert.match(styles, /dividend-provider-card/);
   assert.match(styles, /dividend-next-actions/);

@@ -578,10 +578,9 @@ test('manual quote check sends an alert through the same alert path', async () =
   assert.equal(sentMessages.length, 1);
 });
 
-test('manual quote check records telegram-only delivery for device stocks', async () => {
+test('manual quote check records telegram delivery without legacy push fields', async () => {
   const store = createMemoryStore({
     ...baseStock,
-    deviceId: 'device-1',
     highPrice: 100,
     highPriceAt: '2026-05-11T00:01:00.000Z'
   });
@@ -607,11 +606,10 @@ test('manual quote check records telegram-only delivery for device stocks', asyn
 
   assert.equal(result.results[0].deliveryStatus, 'sent');
   assert.equal(result.results[0].telegramDeliveryStatus, 'sent');
-  assert.equal(result.results[0].pushDeliveryStatus, 'none');
   assert.equal(sentMessages.length, 1);
   assert.equal(store.alerts[0].telegramDeliveryStatus, 'sent');
-  assert.equal(store.alerts[0].pushDeliveryStatus, 'none');
-  assert.equal(store.alerts[0].pushDeliverySent, 0);
+  assert.equal(store.alerts[0].pushDeliveryStatus, undefined);
+  assert.equal(store.alerts[0].deviceId, undefined);
 });
 
 test('manual quote check marks recovery without sending an alert', async () => {

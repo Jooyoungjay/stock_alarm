@@ -9,12 +9,12 @@ import {
   restoreBackup as restoreFileBackup
 } from './backups.js';
 import { buildDataModelInfo, normalizeStoreEnvelope, touchStoreEnvelope } from './dataModel.js';
+import { stripLegacyStoreFields } from './legacyStoreCleanup.js';
 import { normalizeKisMarketDivCode } from './kisMarket.js';
 import { STORAGE_ENGINES } from './storageContract.js';
 import { normalizeSymbolInput } from './symbols.js';
 
 const emptyStore = {
-  devices: [],
   stocks: [],
   alerts: [],
   meta: {}
@@ -137,7 +137,6 @@ export function normalizeStock(input, defaults) {
 
   const stock = {
     id: randomUUID(),
-    deviceId: normalizeDeviceId(input.deviceId),
     accountType: normalizeAccountType(input.accountType || input.account),
     accountName: normalizeAccountName(
       input.accountName || input.brokerName || input.broker || input.accountLabel
@@ -452,7 +451,6 @@ export function normalizeStoredStock(stock) {
 
   return {
     ...stock,
-    deviceId: normalizeDeviceId(stock.deviceId),
     accountType: normalizeAccountType(stock.accountType || stock.account),
     accountName: normalizeAccountName(stock.accountName || stock.brokerName || stock.broker || stock.accountLabel),
     positionStatus: normalizePositionStatus(stock.positionStatus),
@@ -1649,7 +1647,6 @@ export class JsonStore {
     const data = normalizeStoreEnvelope(await readJson(this.filePath, emptyStore));
 
     return {
-      devices: Array.isArray(data.devices) ? data.devices.map(normalizeStoredDevice) : [],
       stocks: Array.isArray(data.stocks) ? data.stocks.map(normalizeStoredStock) : [],
       alerts: Array.isArray(data.alerts) ? data.alerts : [],
       meta: data.meta
@@ -1669,121 +1666,9 @@ export class JsonStore {
     return buildDataModelInfo(data);
   }
 
-  async createDevice(input = {}) {
+  async listStocks() {
     const data = await this.read();
-    const secret = createDeviceSecret();
-    const device = {
-      ...normalizeDevice(input),
-      secretHash: hashDeviceSecret(secret)
-    };
-
-    if (data.devices.some((item) => item.id === device.id)) {
-      throw new Error('이미 등록된 기기입니다.');
-    }
-
-    data.devices.push(device);
-    await this.write(data);
-
-    return {
-      device: sanitizeDevice(device),
-      deviceSecret: secret
-    };
-  }
-
-  async authenticateDevice(deviceId, deviceSecret) {
-    const data = await this.read();
-    const id = String(deviceId || '').trim();
-    const secretHash = hashDeviceSecret(deviceSecret);
-    const index = data.devices.findIndex((device) => device.id === id);
-
-    if (index === -1 || data.devices[index].secretHash !== secretHash) {
-      throw new Error('기기 인증에 실패했습니다.');
-    }
-
-    const now = new Date().toISOString();
-    data.devices[index] = {
-      ...data.devices[index],
-      lastSeenAt: now,
-      updatedAt: now
-    };
-    await this.write(data);
-
-    return sanitizeDevice(data.devices[index]);
-  }
-
-  async upsertDevicePushToken(deviceId, input) {
-    const data = await this.read();
-    const index = data.devices.findIndex((device) => device.id === deviceId);
-
-    if (index === -1) {
-      throw new Error('기기를 찾을 수 없습니다.');
-    }
-
-    const now = new Date().toISOString();
-    const pushToken = normalizePushToken({
-      ...input,
-      updatedAt: now
-    });
-
-    if (!pushToken.token) {
-      throw new Error('푸시 토큰을 입력하세요.');
-    }
-
-    const device = data.devices[index];
-    const tokenIndex = device.pushTokens.findIndex(
-      (item) => item.provider === pushToken.provider && item.token === pushToken.token
-    );
-
-    if (tokenIndex === -1) {
-      device.pushTokens.push(pushToken);
-    } else {
-      device.pushTokens[tokenIndex] = {
-        ...device.pushTokens[tokenIndex],
-        ...pushToken
-      };
-    }
-
-    device.platform = pushToken.platform === 'unknown' ? device.platform : pushToken.platform;
-    device.updatedAt = now;
-    device.lastSeenAt = now;
-    data.devices[index] = device;
-    await this.write(data);
-
-    return sanitizeDevice(device);
-  }
-
-  async listDevicePushTokens(deviceId, options = {}) {
-    const data = await this.read();
-    const id = String(deviceId || '').trim();
-    const provider = String(options.provider || '').trim().toLowerCase();
-    const enabledOnly = options.enabledOnly !== false;
-    const device = data.devices.find((item) => item.id === id);
-
-    if (!device) {
-      return [];
-    }
-
-    return device.pushTokens
-      .map(normalizePushToken)
-      .filter((token) => token.token)
-      .filter((token) => !provider || token.provider === provider)
-      .filter((token) => !enabledOnly || token.enabled)
-      .map((token) => ({
-        ...token,
-        deviceId: device.id,
-        deviceLabel: device.label
-      }));
-  }
-
-  async listStocks(options = {}) {
-    const data = await this.read();
-    const deviceId = normalizeDeviceId(options.deviceId);
-
-    if (!deviceId) {
-      return data.stocks;
-    }
-
-    return data.stocks.filter((stock) => normalizeDeviceId(stock.deviceId) === deviceId);
+    return data.stocks;
   }
 
   async addStock(input) {
@@ -1792,9 +1677,7 @@ export class JsonStore {
 
     if (
       data.stocks.some(
-        (item) =>
-          buildStockAccountIdentityKey(item) === buildStockAccountIdentityKey(stock) &&
-          normalizeDeviceId(item.deviceId) === normalizeDeviceId(stock.deviceId)
+        (item) => buildStockAccountIdentityKey(item) === buildStockAccountIdentityKey(stock)
       )
     ) {
       throw new Error('같은 계좌에 이미 등록된 종목입니다.');
@@ -1811,7 +1694,7 @@ export class JsonStore {
     const data = await this.read();
     const index = data.stocks.findIndex((stock) => stock.id === id);
 
-    if (index === -1 || !stockMatchesDevice(data.stocks[index], options.deviceId)) {
+    if (index === -1) {
       throw new Error('종목을 찾을 수 없습니다.');
     }
 
@@ -1820,9 +1703,7 @@ export class JsonStore {
     if (
       data.stocks.some(
         (item, itemIndex) =>
-          itemIndex !== index &&
-          buildStockAccountIdentityKey(item) === buildStockAccountIdentityKey(updated) &&
-          normalizeDeviceId(item.deviceId) === normalizeDeviceId(updated.deviceId)
+          itemIndex !== index && buildStockAccountIdentityKey(item) === buildStockAccountIdentityKey(updated)
       )
     ) {
       throw new Error('같은 계좌에 이미 등록된 종목입니다.');
@@ -1856,9 +1737,7 @@ export class JsonStore {
     const data = await this.read();
     const beforeCount = data.stocks.length;
     await this.createBackup('before-delete-stock');
-    data.stocks = data.stocks.filter(
-      (stock) => stock.id !== id || !stockMatchesDevice(stock, options.deviceId)
-    );
+    data.stocks = data.stocks.filter((stock) => stock.id !== id);
 
     if (data.stocks.length === beforeCount) {
       throw new Error('종목을 찾을 수 없습니다.');
@@ -1868,14 +1747,9 @@ export class JsonStore {
     await this.createBackup('after-delete-stock');
   }
 
-  async listAlerts(limit = 50, options = {}) {
+  async listAlerts(limit = 50) {
     const data = await this.read();
-    const deviceId = normalizeDeviceId(options.deviceId);
-    const alerts = deviceId
-      ? data.alerts.filter((alert) => normalizeDeviceId(alert.deviceId) === deviceId)
-      : data.alerts;
-
-    return alerts.slice(-limit).reverse();
+    return data.alerts.slice(-limit).reverse();
   }
 
   async getMetaValue(key, fallback = null) {
@@ -1944,7 +1818,7 @@ export class JsonStore {
     return item;
   }
 
-  async createBackup(reason = 'manual') {
+  async createBackup(reason = 'manual', options = {}) {
     if (!this.backups.enabled) {
       return {
         created: false,
@@ -1956,7 +1830,7 @@ export class JsonStore {
     return createFileBackup(this.dataDir, {
       reason,
       maxBackups: this.backups.maxBackups,
-      readSnapshot: () => this.exportBackupSnapshot()
+      readSnapshot: () => this.exportBackupSnapshot(options)
     });
   }
 
@@ -1985,8 +1859,16 @@ export class JsonStore {
     return previewFileBackup(this.dataDir, target);
   }
 
-  async exportBackupSnapshot() {
-    return this.read();
+  async exportBackupSnapshot(options = {}) {
+    const data = await this.read();
+
+    if (options.stripLegacy) {
+      return stripLegacyStoreFields(data, {
+        schemaVersion: data.meta?.schemaVersion || 2
+      });
+    }
+
+    return data;
   }
 
   async importBackupSnapshot(snapshot) {
@@ -1997,12 +1879,8 @@ export class JsonStore {
   }
 }
 
-export function stockMatchesDevice(stock, deviceId) {
-  if (deviceId === undefined) {
-    return true;
-  }
-
-  return normalizeDeviceId(stock.deviceId) === normalizeDeviceId(deviceId);
+export function stockMatchesDevice() {
+  return true;
 }
 
 export function sanitizeDevice(device) {

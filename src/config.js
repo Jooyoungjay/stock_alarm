@@ -220,6 +220,11 @@ export const config = {
     360,
     { min: 1 }
   ),
+  kisNaverAutoCompareResolvedReopenCooldownMinutes: toNumber(
+    process.env.KIS_NAVER_AUTO_COMPARE_RESOLVED_REOPEN_COOLDOWN_MINUTES,
+    1440,
+    { min: 1 }
+  ),
   telegramBotToken: process.env.TELEGRAM_BOT_TOKEN || '',
   telegramChatId: process.env.TELEGRAM_CHAT_ID || ''
 };

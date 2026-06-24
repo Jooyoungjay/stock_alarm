@@ -1,5 +1,8 @@
 import { buildAlertRule, initializeHighFromPurchaseDate, runAlertCheck } from './alertEngine.js';
 import { createBackup, deleteBackup, listBackups, restoreBackup } from './backups.js';
+import {
+  formatDividendFailureNextActionsText
+} from '../public/dividendFailureGuidance.js';
 import { formatKisMarketDivCode } from './kisMarket.js';
 import { buildDailyBriefing, formatDailyBriefingMessage } from './portfolioBriefing.js';
 import {
@@ -328,6 +331,20 @@ function formatDividendDiagnosticSummaryLine(row, index) {
     diagnostic.reason ? `   사유: ${formatDividendDiagnosticReason(diagnostic.reason)}` : ''
   ];
 
+  if (diagnostic.status === 'error' && diagnostic.error) {
+    const nextActions = formatDividendFailureNextActionsText({
+      error: diagnostic.error,
+      provider: diagnostic.provider,
+      attempts,
+      preservedAnnualDividendPerShare: diagnostic.preservedAnnualDividendPerShare,
+      includeCause: false
+    });
+
+    if (nextActions) {
+      lines.push(`   다음 조치: ${nextActions}`);
+    }
+  }
+
   return lines.filter(Boolean).join('\n');
 }
 
@@ -375,6 +392,17 @@ function formatDividendDiagnosticDetail(stock) {
 
   if (diagnostic.error) {
     lines.push(`실패 사유: ${diagnostic.error}`);
+    const nextActions = formatDividendFailureNextActionsText({
+      error: diagnostic.error,
+      provider: diagnostic.provider,
+      attempts,
+      preservedAnnualDividendPerShare: diagnostic.preservedAnnualDividendPerShare,
+      includeCause: false
+    });
+
+    if (nextActions) {
+      lines.push(`다음 조치: ${nextActions}`);
+    }
   }
 
   if (diagnostic.reason) {

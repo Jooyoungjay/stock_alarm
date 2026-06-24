@@ -1,5 +1,10 @@
 import fs from 'node:fs/promises';
 import path from 'node:path';
+import {
+  DEFAULT_QUOTE_FRESHNESS_MAX_AGE_MINUTES,
+  getQuoteAgeMinutes,
+  getStockQuoteCheckedAt
+} from './quoteFreshness.js';
 
 const defaultBaseUrl = 'http://127.0.0.1:3000';
 const defaultTimeoutMs = 10000;
@@ -330,6 +335,7 @@ export async function readLocalObservationHistoryReport(input = {}) {
     limit,
     count: entries.length,
     totalCount: allEntries.length,
+    manualSummary: buildObservationManualSummary(entries),
     retention: {
       defaultKeepLatest: defaultHistoryLimit,
       currentLimit: limit,
@@ -903,7 +909,7 @@ function checkLiveQuoteFreshness(context, values, generatedAt) {
   const missing = activeStocks.filter((stock) => getStockQuoteCheckedAt(stock) === '' || !hasPositiveNumber(stock.lastPrice));
   const stale = activeStocks.filter((stock) => {
     const checkedAt = getStockQuoteCheckedAt(stock);
-    const age = getAgeMinutes(checkedAt, now);
+    const age = getQuoteAgeMinutes(stock, now);
 
     return checkedAt && Number.isFinite(age) && age > maxAgeMinutes;
   });
@@ -1628,6 +1634,29 @@ function compareObservationHistory(current, previous) {
   };
 }
 
+function buildObservationManualSummary(entries = []) {
+  const manualEntries = entries
+    .filter((entry) => normalizeHistorySummary(entry.summary).manual > 0)
+    .slice(0, 5)
+    .map((entry) => ({
+      fileName: entry.fileName || '',
+      generatedAt: entry.generatedAt || '',
+      manual: normalizeHistorySummary(entry.summary).manual,
+      manualResultIds: (entry.results || [])
+        .filter((item) => item.status === 'manual')
+        .map((item) => item.id)
+    }));
+
+  return {
+    entriesWithManual: manualEntries.length,
+    recent: manualEntries,
+    hint:
+      manualEntries.length > 0
+        ? '장중 --live-session 없이도 아래 수동 항목을 확인하세요.'
+        : '최근 저장된 점검에 수동 확인 항목이 없습니다.'
+  };
+}
+
 function summarizeObservationHistoryEntry(entry) {
   const summary = normalizeHistorySummary(entry.summary);
 
@@ -2068,10 +2097,6 @@ function normalizePositionStatus(value) {
   }
 
   return 'holding';
-}
-
-function getStockQuoteCheckedAt(stock) {
-  return normalizeIsoDateTime(stock.lastCheckedAt) || normalizeIsoDateTime(stock.quoteRegularMarketTime) || '';
 }
 
 function getStockDividendCheckedAt(stock) {

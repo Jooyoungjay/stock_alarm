@@ -1,3 +1,8 @@
+import {
+  buildLegacyKisNaverCompareIssueKeys,
+  resolveKisNaverCompareIssueState
+} from './kisNaverCompareAlertPolicy.js';
+
 export const kisNaverCompareIssueStatesMetaKey = 'kisNaverCompareIssueStates';
 
 export const KIS_NAVER_COMPARE_ISSUE_STATUSES = Object.freeze({
@@ -191,7 +196,14 @@ export function decorateKisNaverCompareIssues(issues = [], issueStates = {}) {
 
   return (Array.isArray(issues) ? issues : []).map((issue) => {
     const key = normalizeKisNaverCompareIssueKey(issue?.key);
-    const resolution = normalizedStates[key] || buildOpenIssueState(key);
+    const legacyKeys = buildLegacyKisNaverCompareIssueKeys(issue);
+    const stored = resolveKisNaverCompareIssueState(key, normalizedStates, legacyKeys);
+    const resolution = stored
+      ? {
+          ...stored,
+          issueKey: key
+        }
+      : buildOpenIssueState(key);
 
     return {
       ...issue,

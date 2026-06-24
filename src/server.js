@@ -32,6 +32,7 @@ import {
 } from './portfolioBriefing.js';
 import { createQrSvg } from './qrCode.js';
 import { createStore } from './storageFactory.js';
+import { assessTelegramPollHealth } from './telegramPollHealth.js';
 import {
   buildMonitoringHighBaseline,
   buildRegistrationPreview,
@@ -756,6 +757,11 @@ async function handleApi(request, response, url) {
       dailyBriefingTopLimit: config.dailyBriefingTopLimit,
       telegramCommandPollSeconds: config.telegramCommandPollSeconds,
       lastTelegramCommandPoll,
+      telegramPollHealth: assessTelegramPollHealth({
+        telegramConfigured: isTelegramConfigured(config),
+        lastTelegramCommandPoll,
+        telegramCommandPollSeconds: config.telegramCommandPollSeconds
+      }),
       lastKisNaverAutoCompare: kisNaverAutoCompareSnapshot,
       lastDividendRefresh: dividendRefreshSnapshot,
       lastDividendEventAlert: dividendEventAlertSnapshot,
@@ -841,6 +847,11 @@ async function handleApi(request, response, url) {
       lastDailyBriefing: dailyBriefingSnapshot,
       telegramCommandPollSeconds: config.telegramCommandPollSeconds,
       lastTelegramCommandPoll,
+      telegramPollHealth: assessTelegramPollHealth({
+        telegramConfigured: isTelegramConfigured(config),
+        lastTelegramCommandPoll,
+        telegramCommandPollSeconds: config.telegramCommandPollSeconds
+      }),
       lastKisNaverAutoCompare: kisNaverAutoCompareSnapshot,
       lastDividendRefresh: dividendRefreshSnapshot,
       lastDividendEventAlert: dividendEventAlertSnapshot,
@@ -1230,12 +1241,16 @@ async function handleApi(request, response, url) {
   }
 
   if (request.method === 'POST' && url.pathname === '/api/backups') {
-    const backup = await store.createBackup('manual-web');
+    const body = await readJsonBody(request);
+    const backup = await store.createBackup('manual-web', {
+      stripLegacy: Boolean(body?.stripLegacy)
+    });
     const backups = await store.listBackups({ limit: config.backupRetention });
 
     sendJson(response, 200, {
       backup: serializeBackup(backup),
       backups: backups.map(serializeBackup),
+      stripLegacy: Boolean(body?.stripLegacy),
       autoBackup: {
         enabled: config.autoBackupEnabled,
         intervalHours: config.autoBackupIntervalHours,

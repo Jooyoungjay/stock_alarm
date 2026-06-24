@@ -402,6 +402,7 @@
               </select>
             </label>
           </div>
+          <div id="quoteFreshnessBanner" hidden></div>
           <div id="stockList" class="stock-list"></div>
         </div>
       </section>
@@ -670,6 +671,10 @@
           </div>
 
           <div class="backup-note">
+            <label class="backup-option">
+              <input id="stripLegacyBackupCheckbox" type="checkbox" />
+              레거시 필드 비우기 (devices·pushDelivery*)
+            </label>
             복구를 실행하면 현재 데이터는 먼저 안전 백업으로 저장됩니다. 삭제한 백업 파일은 되돌릴 수 없습니다.
           </div>
           <div id="backupList" class="backup-list" aria-live="polite"></div>

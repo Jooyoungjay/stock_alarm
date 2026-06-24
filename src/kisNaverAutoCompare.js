@@ -1,7 +1,14 @@
 import { buildKisNaverQuoteComparison } from './kisNaverCompare.js';
 import {
+  buildKisNaverAutoCompareStableIssueKey,
+  buildLegacyKisNaverCompareIssueKeys,
+  resolveKisNaverCompareIssueState,
+  shouldResendReopenedResolvedIssues
+} from './kisNaverCompareAlertPolicy.js';
+import {
   KIS_NAVER_COMPARE_ISSUE_STATUSES,
   decorateKisNaverCompareIssues,
+  normalizeKisNaverCompareIssueKey,
   readKisNaverCompareIssueStates,
   reopenResolvedKisNaverCompareIssues
 } from './kisNaverCompareIssues.js';
@@ -164,7 +171,10 @@ export function buildKisNaverAutoCompareAlertIssues(result = {}, previousSnapsho
 
       addIssue({
         type: 'comparison_failed',
-        key: `comparison_failed:${symbol || name}:${status}:${reason}`,
+        key: buildKisNaverAutoCompareStableIssueKey({
+          type: 'comparison_failed',
+          symbol
+        }),
         severity: 'error',
         title: `${name} 비교 실패`,
         detail: reason,
@@ -189,7 +199,11 @@ export function buildKisNaverAutoCompareAlertIssues(result = {}, previousSnapsho
 
       addIssue({
         type: 'current_drift',
-        key: `current_drift:${symbol || name}:${market}:${driftStatus || 'abnormal'}`,
+        key: buildKisNaverAutoCompareStableIssueKey({
+          type: 'current_drift',
+          symbol,
+          market
+        }),
         severity: driftStatus === 'critical' ? 'critical' : 'warning',
         title: `${name} 가격 괴리 ${getDriftStatusLabel(driftStatus)}`,
         detail: `${marketLabel} 최대 괴리율 ${difference}, 기준 ${threshold}`,
@@ -210,7 +224,10 @@ export function buildKisNaverAutoCompareAlertIssues(result = {}, previousSnapsho
     if (market.repeatedAbnormal) {
       addIssue({
         type: 'trend_repeated_abnormal',
-        key: `trend_repeated_abnormal:${marketCode}`,
+        key: buildKisNaverAutoCompareStableIssueKey({
+          type: 'trend_repeated_abnormal',
+          market: marketCode
+        }),
         severity: 'critical',
         title: `${marketLabel} 반복 이상치`,
         detail: `이상치 ${market.abnormalCount || 0}회 · 최근 괴리율 ${formatPercentValue(market.latestAbsoluteDifferencePercent)}`,
@@ -220,7 +237,10 @@ export function buildKisNaverAutoCompareAlertIssues(result = {}, previousSnapsho
     } else if (status === 'critical') {
       addIssue({
         type: 'trend_critical',
-        key: `trend_critical:${marketCode}`,
+        key: buildKisNaverAutoCompareStableIssueKey({
+          type: 'trend_critical',
+          market: marketCode
+        }),
         severity: 'critical',
         title: `${marketLabel} 추세 경고`,
         detail: `최근 상태 ${getDriftStatusLabel(market.latestStatus)} · 최대 괴리율 ${formatPercentValue(market.maxAbsoluteDifferencePercent)}`,
@@ -255,7 +275,12 @@ export function buildKisNaverAutoCompareAlertIssues(result = {}, previousSnapsho
   ) {
     addIssue({
       type: 'recommendation_review',
-      key: `recommendation_review:${currentRecommendation.market || ''}:${currentRecommendation.currentMarket || ''}`,
+      key: buildKisNaverAutoCompareStableIssueKey({
+        type: 'recommendation_review',
+        market: currentRecommendation.market || '',
+        currentMarket: currentRecommendation.currentMarket || '',
+        detail: currentRecommendation.reason || ''
+      }),
       severity: 'warning',
       title: '추세 추천 추가 확인 필요',
       detail:
@@ -318,6 +343,12 @@ export async function maybeSendKisNaverAutoCompareAlert(
   const checkedAt = result.checkedAt || now.toISOString();
   const rawIssues = buildKisNaverAutoCompareAlertIssues(result, options.previousSnapshot || {});
   let issueStates = await readKisNaverCompareIssueStates(store);
+  const preReopenIssueStates = { ...issueStates };
+  const resolvedReopenCooldownMinutes = normalizePositiveInteger(
+    config.kisNaverAutoCompareResolvedReopenCooldownMinutes,
+    1440,
+    { min: 1 }
+  );
   const resolvedIssueKeys = getIssueKeysByState(rawIssues, issueStates, KIS_NAVER_COMPARE_ISSUE_STATUSES.RESOLVED);
   const reopened = await reopenResolvedKisNaverCompareIssues(store, resolvedIssueKeys, {
     now,
@@ -330,7 +361,12 @@ export async function maybeSendKisNaverAutoCompareAlert(
 
   const issuePolicy = buildKisNaverAutoCompareIssueAlertPolicy(
     decorateKisNaverCompareIssues(rawIssues, issueStates),
-    reopened.reopenedIssueKeys
+    reopened.reopenedIssueKeys,
+    {
+      issueStates: preReopenIssueStates,
+      now,
+      resolvedReopenCooldownMinutes
+    }
   );
   const issues = issuePolicy.issues;
   const alertableIssues = issuePolicy.alertableIssues;
@@ -380,7 +416,14 @@ export async function maybeSendKisNaverAutoCompareAlert(
 
   const previousNotificationFingerprint = getPreviousNotificationFingerprint(previousAlert);
   const sameNotificationFingerprint = previousNotificationFingerprint === notificationFingerprint;
-  const forceResolvedIssueResend = issuePolicy.reopenedIssueKeys.length > 0;
+  const forceResolvedIssueResend =
+    issuePolicy.reopenedIssueKeys.length > 0 &&
+    shouldResendReopenedResolvedIssues(
+      issuePolicy.reopenedIssueKeys,
+      preReopenIssueStates,
+      now,
+      resolvedReopenCooldownMinutes
+    );
 
   if (sameNotificationFingerprint && previousAlert?.sentAt && !forceResolvedIssueResend) {
     return persistKisNaverAutoCompareAlert(store, {
@@ -440,6 +483,7 @@ export async function maybeSendKisNaverAutoCompareAlert(
       attemptedAt,
       sentAt: attemptedAt,
       cooldownMinutes,
+      resolvedReopenCooldownMinutes,
       messagePreview: message
     });
   } catch (error) {
@@ -454,11 +498,18 @@ export async function maybeSendKisNaverAutoCompareAlert(
   }
 }
 
-function buildKisNaverAutoCompareIssueAlertPolicy(issues = [], reopenedIssueKeys = []) {
+function buildKisNaverAutoCompareIssueAlertPolicy(issues = [], reopenedIssueKeys = [], options = {}) {
   const reopenedSet = new Set(
     (Array.isArray(reopenedIssueKeys) ? reopenedIssueKeys : [])
       .map((key) => String(key || '').trim())
       .filter(Boolean)
+  );
+  const issueStates = options.issueStates || {};
+  const now = toDate(options.now);
+  const resolvedReopenCooldownMinutes = normalizePositiveInteger(
+    options.resolvedReopenCooldownMinutes,
+    1440,
+    { min: 1 }
   );
   const normalizedIssues = (Array.isArray(issues) ? issues : []).map((issue) => ({
     ...issue,
@@ -471,12 +522,32 @@ function buildKisNaverAutoCompareIssueAlertPolicy(issues = [], reopenedIssueKeys
 
   for (const issue of normalizedIssues) {
     const status = getIssueResolutionStatus(issue);
+    const issueKey = String(issue?.key || '').trim();
 
     if (
       status === KIS_NAVER_COMPARE_ISSUE_STATUSES.ACKNOWLEDGED ||
       status === KIS_NAVER_COMPARE_ISSUE_STATUSES.ON_HOLD
     ) {
       suppressedIssues.push(issue);
+      continue;
+    }
+
+    if (
+      issue.alertPolicy.reopened &&
+      !shouldResendReopenedResolvedIssues(
+        [issueKey],
+        issueStates,
+        now,
+        resolvedReopenCooldownMinutes
+      )
+    ) {
+      suppressedIssues.push({
+        ...issue,
+        alertPolicy: {
+          ...issue.alertPolicy,
+          resolvedReopenCooldown: true
+        }
+      });
       continue;
     }
 
@@ -492,9 +563,19 @@ function buildKisNaverAutoCompareIssueAlertPolicy(issues = [], reopenedIssueKeys
 }
 
 function getIssueKeysByState(issues = [], issueStates = {}, status) {
-  return (Array.isArray(issues) ? issues : [])
-    .map((issue) => String(issue?.key || '').trim())
-    .filter((key) => key && issueStates[key]?.status === status);
+  const keys = [];
+
+  for (const issue of Array.isArray(issues) ? issues : []) {
+    const stableKey = normalizeKisNaverCompareIssueKey(issue?.key);
+    const legacyKeys = buildLegacyKisNaverCompareIssueKeys(issue);
+    const state = resolveKisNaverCompareIssueState(stableKey, issueStates, legacyKeys);
+
+    if (stableKey && state?.status === status) {
+      keys.push(stableKey);
+    }
+  }
+
+  return keys;
 }
 
 function getIssueResolutionStatus(issue = {}) {

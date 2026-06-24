@@ -524,8 +524,11 @@ test('handleTelegramMessage can report dividend diagnostics', async () => {
   assert.match(sent[0], /삼성전자/);
   assert.match(sent[0], /두산퓨얼셀우/);
   assert.match(sent[0], /공공데이터 실패/);
+  assert.match(sent[0], /다음 조치:/);
   assert.match(sent[1], /배당 API 진단: 두산퓨얼셀우/);
   assert.match(sent[1], /500 KRW 유지/);
+  assert.match(sent[1], /다음 조치:/);
+  assert.match(sent[1], /배당 재시도/);
   assert.match(sent[1], /Provider 시도/);
   assert.match(sent[1], /OpenDART: 실패/);
 });

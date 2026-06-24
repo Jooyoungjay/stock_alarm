@@ -256,10 +256,6 @@ async function appendDividendEventAlert(store, candidate, delivery) {
     deliveryError: delivery.deliveryError,
     telegramDeliveryStatus: delivery.telegramDeliveryStatus,
     telegramDeliveryError: delivery.telegramDeliveryError,
-    pushDeliveryStatus: 'none',
-    pushDeliveryError: '',
-    pushDeliverySent: 0,
-    pushDeliveryFailed: 0,
     message: delivery.message,
     createdAt: delivery.now.toISOString()
   });

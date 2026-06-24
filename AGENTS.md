@@ -15,7 +15,7 @@
 | **@cleanup** | WBS 13번(로컬 운영 전환·코드 정리) | WBS에 없는 신규 기능 |
 | **@docs** | `README.md`, `docs/` | 동작 변경 없는 문서만; 코드 변경 시 해당 역할에 위임 |
 
-역할을 지정하지 않으면 **@backend** 기본. WBS 14 작업은 **세션당 ID 하나**, 문서·범위는 **@pm** / 구현은 역할별 분담.
+역할을 지정하지 않으면 **@backend** 기본. WBS 15 작업은 **세션당 ID 하나**, 문서·범위는 **@pm** / 구현은 역할별 분담.
 
 ## 파일 소유권
 
@@ -47,17 +47,11 @@ docs/archive/          → 제거된 Postgres·모바일 설계 보관
 - 모바일/스토어/Railway **신규 기능 추가 금지** — 정리(제거)만 허용
 - Node.js 20+, ESM (`import`/`export`) 유지
 
-## 현재 우선순위 (WBS 14)
+## 현재 우선순위
 
-1. ~~**14.1** WBS·README·AGENTS 정합성~~ (완료)
-2. ~~**14.2** AI 팀 점진 개선 스킬~~ (완료)
-3. ~~**14.3** 실사용 백로그 triage~~ (완료)
-4. ~~**14.4** 주간 회귀 운영 루틴~~ (완료)
-5. ~~**14.5** 텔레그램 `/brief` 가독성~~ (완료)
-6. **14.6** 배당 실패 다음 조치 통일 ← **다음**
-7. 14.7~14.8 기능·정리 ([personal-backlog.md](docs/personal-backlog.md) 순서)
+WBS 13·14·15 **개인 로컬 운영·점진 개선·안정화**는 모두 완료했습니다.
 
-세션 규칙: **WBS ID 1개**, 완료 시 `npm test` 251개 통과, roadmap 상태 갱신.
+신규 개선은 `docs/personal-backlog.md` triage 후 WBS 행 추가로 진행합니다. 세션 규칙: **WBS ID 1개**, 완료 시 `npm test` 270개 통과.
 
 ## 워크플로
 
@@ -70,11 +64,11 @@ docs/archive/          → 제거된 Postgres·모바일 설계 보관
 4. roadmap/README 반영
 ```
 
-### WBS 14 점진 개선
+### WBS 15 안정화·레거시 2차
 
 ```text
-1. roadmap에서 다음 WBS 14.x ID 확인
-2. `.cursor/skills/wbs-14-evolution/SKILL.md` 로드
+1. roadmap에서 다음 WBS 15.x ID 확인
+2. `.cursor/skills/wbs-15-evolution/SKILL.md` 로드 (15.2 완료 후)
 3. 해당 역할 1명만 구현 (@backend / @frontend / @docs)
 4. @qa → npm test (+ 필요 시 check:observation)
 5. roadmap 해당 행 완료, 다음 ID를 "다음 작업"에 반영
@@ -93,7 +87,8 @@ docs/archive/          → 제거된 Postgres·모바일 설계 보관
 
 | 스킬 | 경로 | 사용 시점 |
 |---|---|---|
-| WBS 14 점진 개선 | `.cursor/skills/wbs-14-evolution/` | WBS 14.x 한 ID씩 구현·문서·회귀 |
+| WBS 15 안정화·레거시 | `.cursor/skills/wbs-15-evolution/` | WBS 15.x 한 ID씩 (15.2 완료 후) |
+| WBS 14 점진 개선 | `.cursor/skills/wbs-14-evolution/` | WBS 14 완료 — 참고용 |
 | WBS 13 정리 | `.cursor/skills/wbs-13-cleanup/` | Postgres/모바일/Railway 제거 (완료) |
 | 로컬 점검 | `.cursor/skills/local-smoke-check/` | 실사용 smoke check, observation 히스토리 |
 
@@ -106,7 +101,7 @@ docs/archive/          → 제거된 Postgres·모바일 설계 보관
 
 ```powershell
 start-local.bat              # 서버 시작
-npm test                     # 251 tests
+npm test                     # 270 tests
 npm run check:observation      # 로컬 실사용 점검
 ```
 

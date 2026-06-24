@@ -21,8 +21,8 @@ description: Executes Stock Alarm WBS 14 incremental personal-operation improvem
 | 14.3 | 실사용 백로그 triage | @pm / @docs | `docs/personal-backlog.md`, `docs/local-webapp-observation-2026-05-21.md` |
 | 14.4 | 주간 회귀 운영 루틴 | @docs | `docs/personal-weekly-routine.md` |
 | 14.5 | 텔레그램 `/brief` 가독성 | @backend | `src/telegramCommands.js`, `src/portfolioBriefing.js` |
-| 14.6 | 배당 실패 다음 조치 통일 | @backend / @frontend | `src/dividendProvider.js`, `public/app.js`, `telegramCommands.js` |
-| 14.7 | KIS/Naver 자동 비교 알림 노이즈 | @backend | `src/kisNaverAutoCompare.js`, `README.md` env |
+| 14.6 | 배당 실패 다음 조치 통일 | @backend / @frontend | `public/dividendFailureGuidance.js` |
+| 14.7 | KIS/Naver 자동 비교 알림 노이즈 | @backend | `src/kisNaverCompareAlertPolicy.js`, `docs/personal-kis-naver-alert-operations.md` |
 | 14.8 | JSON 레거시 필드 정리 계획 | @cleanup / @docs | `src/storage.js`, `docs/` deprecation note |
 
 Status and priority: always trust `docs/development-roadmap.md` over this table.

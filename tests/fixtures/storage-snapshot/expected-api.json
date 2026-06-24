@@ -1,7 +1,5 @@
 {
   "dataModelCounts": {
-    "devices": 2,
-    "pushTokens": 2,
     "stocks": 2,
     "activeStocks": 1,
     "alerts": 2,
@@ -9,70 +7,5 @@
     "kisNaverCompareHistory": 0
   },
   "stockSymbols": ["336260", "AAPL"],
-  "deviceStockSymbols": {
-    "device-1": ["336260"],
-    "device-2": ["AAPL"]
-  },
-  "alertIds": ["alert-deleted-stock", "alert-profit-1"],
-  "deviceAlertIds": {
-    "device-1": ["alert-profit-1"],
-    "device-2": ["alert-deleted-stock"]
-  },
-  "dryRunCounts": {
-    "devices": 2,
-    "push_tokens": 2,
-    "stocks": 2,
-    "dividend_events": 1,
-    "alerts": 2,
-    "quote_provider_stats": 2,
-    "quote_provider_attempts": 2,
-    "kis_naver_compare_history": 0,
-    "job_runs": 3,
-    "settings": 1
-  },
-  "dryRunWarnings": [
-    "알림 alert-deleted-stock의 stock_id가 stocks에 없습니다: stock-deleted-old"
-  ],
-  "dryRunStockRows": [
-    {
-      "id": "stock-kr-profit",
-      "device_id": "device-1",
-      "account_type": "general",
-      "account_name": "",
-      "symbol": "336260",
-      "purchase_price": 88779,
-      "quantity": 10,
-      "alert_type": "profit_retracement",
-      "active": true,
-      "dividendAnnual": 1200
-    },
-    {
-      "id": "stock-us-target",
-      "device_id": "device-2",
-      "account_type": "general",
-      "account_name": "",
-      "symbol": "AAPL",
-      "purchase_price": 180,
-      "quantity": 3,
-      "alert_type": "target_price",
-      "active": false,
-      "dividendAnnual": 1.04
-    }
-  ],
-  "dryRunAlertRows": [
-    {
-      "id": "alert-profit-1",
-      "stock_id": "stock-kr-profit",
-      "symbol": "336260",
-      "alert_type": "profit_retracement",
-      "sent": true
-    },
-    {
-      "id": "alert-deleted-stock",
-      "stock_id": "stock-deleted-old",
-      "symbol": "TSLA",
-      "alert_type": "target_price",
-      "sent": true
-    }
-  ]
+  "alertIds": ["alert-deleted-stock", "alert-profit-1"]
 }

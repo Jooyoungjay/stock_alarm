@@ -152,7 +152,7 @@ test('runKisNaverAutoCompare sends a Telegram alert for comparison issues', asyn
 });
 
 test('runKisNaverAutoCompare skips duplicate alert fingerprints', async () => {
-  const fingerprint = 'comparison_failed:336260:error:KIS timeout';
+  const fingerprint = 'comparison_failed:336260';
   const store = createMemoryStore(
     [{ id: 'stock-1', symbol: '336260', displayName: '두산퓨얼셀', active: true }],
     {
@@ -192,7 +192,7 @@ test('runKisNaverAutoCompare skips duplicate alert fingerprints', async () => {
 });
 
 test('runKisNaverAutoCompare suppresses alert issues marked acknowledged or on hold', async () => {
-  const issueKey = 'comparison_failed:336260:error:KIS timeout';
+  const issueKey = 'comparison_failed:336260';
   const store = createMemoryStore(
     [{ id: 'stock-1', symbol: '336260', displayName: '두산퓨얼셀', active: true }],
     {
@@ -236,7 +236,7 @@ test('runKisNaverAutoCompare suppresses alert issues marked acknowledged or on h
 });
 
 test('runKisNaverAutoCompare resends and reopens resolved issues when they reappear', async () => {
-  const issueKey = 'comparison_failed:336260:error:KIS timeout';
+  const issueKey = 'comparison_failed:336260';
   const store = createMemoryStore(
     [{ id: 'stock-1', symbol: '336260', displayName: '두산퓨얼셀', active: true }],
     {
@@ -244,14 +244,14 @@ test('runKisNaverAutoCompare resends and reopens resolved issues when they reapp
         deliveryStatus: 'sent',
         fingerprint: issueKey,
         notificationFingerprint: issueKey,
-        attemptedAt: '2026-05-20T03:00:00.000Z',
-        sentAt: '2026-05-20T03:00:00.000Z'
+        attemptedAt: '2026-05-19T03:00:00.000Z',
+        sentAt: '2026-05-19T03:00:00.000Z'
       },
       [kisNaverCompareIssueStatesMetaKey]: {
         [issueKey]: {
           issueKey,
           status: 'resolved',
-          updatedAt: '2026-05-20T03:30:00.000Z'
+          updatedAt: '2026-05-19T03:30:00.000Z'
         }
       }
     }
@@ -263,6 +263,7 @@ test('runKisNaverAutoCompare resends and reopens resolved issues when they reapp
       kisNaverAutoCompareEnabled: true,
       kisNaverAutoCompareLimit: 1,
       kisNaverAutoCompareAlertCooldownMinutes: 360,
+      kisNaverAutoCompareResolvedReopenCooldownMinutes: 60,
       telegramBotToken: 'token',
       telegramChatId: '5863355323'
     },
@@ -285,6 +286,83 @@ test('runKisNaverAutoCompare resends and reopens resolved issues when they reapp
   assert.equal(result.alert.issues[0].resolution.status, 'open');
   assert.equal(store.meta[kisNaverCompareIssueStatesMetaKey][issueKey].status, 'open');
   assert.equal(store.meta[lastKisNaverAutoCompareAlertMetaKey].notificationFingerprint, issueKey);
+});
+
+test('runKisNaverAutoCompare keeps resolved reopen quiet during cooldown but reopens issue', async () => {
+  const issueKey = 'comparison_failed:336260';
+  const store = createMemoryStore(
+    [{ id: 'stock-1', symbol: '336260', displayName: '두산퓨얼셀', active: true }],
+    {
+      [kisNaverCompareIssueStatesMetaKey]: {
+        [issueKey]: {
+          issueKey,
+          status: 'resolved',
+          updatedAt: '2026-05-20T03:30:00.000Z'
+        }
+      }
+    }
+  );
+  const messages = [];
+  const result = await runKisNaverAutoCompare(
+    store,
+    {
+      kisNaverAutoCompareEnabled: true,
+      kisNaverAutoCompareLimit: 1,
+      kisNaverAutoCompareResolvedReopenCooldownMinutes: 1440,
+      telegramBotToken: 'token',
+      telegramChatId: '5863355323'
+    },
+    {
+      now: new Date('2026-05-20T04:00:00.000Z'),
+      compare: async () => {
+        throw new Error('KIS timeout');
+      },
+      sendTelegramMessage: async (_config, text) => {
+        messages.push(text);
+        return { ok: true };
+      }
+    }
+  );
+
+  assert.equal(messages.length, 0);
+  assert.equal(result.alert.deliveryStatus, 'skipped');
+  assert.equal(result.alert.reason, 'all_issues_handled');
+  assert.equal(result.alert.alertableIssueCount, 0);
+  assert.equal(result.alert.suppressedIssueCount, 1);
+  assert.equal(result.alert.issues[0].resolution.status, 'open');
+});
+
+test('buildKisNaverAutoCompareAlertIssues uses stable keys for repeated failures and drift', () => {
+  const issues = buildKisNaverAutoCompareAlertIssues({
+    results: [
+      {
+        symbol: '336260',
+        displayName: '두산퓨얼셀',
+        status: 'error',
+        ok: false,
+        error: 'KIS timeout'
+      },
+      {
+        symbol: '005930',
+        displayName: '삼성전자',
+        status: 'checked',
+        ok: true,
+        drift: {
+          status: 'warning',
+          abnormal: 1,
+          worstMarket: 'J',
+          worstMarketLabel: 'KRX',
+          maxAbsoluteDifferencePercent: 1.2,
+          thresholdPercent: 1
+        }
+      }
+    ],
+    kisNaverCompareTrend: { markets: [] },
+    kisNaverTrendRecommendation: null
+  });
+
+  assert.equal(issues[0].key, 'comparison_failed:336260');
+  assert.equal(issues[1].key, 'current_drift:005930:J');
 });
 
 test('buildKisNaverAutoCompareAlertIssues detects repeated drift and recommendation changes', () => {

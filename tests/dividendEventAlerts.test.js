@@ -74,7 +74,7 @@ test('runDividendEventAlertCheck sends telegram once per dividend event key', as
   assert.equal(telegramMessages.length, 2);
   assert.equal(store.alerts.length, 2);
   assert.equal(store.alerts[0].alertType, 'dividend_event');
-  assert.equal(store.alerts[0].pushDeliveryStatus, 'none');
+  assert.equal(store.alerts[0].pushDeliveryStatus, undefined);
   assert.equal(store.alerts[0].dividendEventOffsetLabel, '1일 전');
   assert.equal(Object.keys(store.meta[dividendEventAlertSentMetaKey]).length, 2);
 

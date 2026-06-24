@@ -721,10 +721,6 @@ async function processStockQuote(store, config, stock, quote, options = {}) {
     let deliveryError = '';
     let telegramDeliveryStatus = 'none';
     let telegramDeliveryError = '';
-    let pushDeliveryStatus = 'none';
-    let pushDeliveryError = '';
-    let pushDeliverySent = 0;
-    let pushDeliveryFailed = 0;
     let alert = null;
     const status = evaluation.alertDue
       ? 'alert'
@@ -770,7 +766,6 @@ async function processStockQuote(store, config, stock, quote, options = {}) {
 
       alert = await store.appendAlert({
         stockId: stock.id,
-        deviceId: stock.deviceId || null,
         symbol: stock.symbol,
         displayName: stock.displayName || quote.name || stock.symbol,
         price: quote.price,
@@ -793,10 +788,6 @@ async function processStockQuote(store, config, stock, quote, options = {}) {
         deliveryError,
         telegramDeliveryStatus,
         telegramDeliveryError,
-        pushDeliveryStatus,
-        pushDeliveryError,
-        pushDeliverySent,
-        pushDeliveryFailed,
         message,
         createdAt: now.toISOString()
       });
@@ -831,7 +822,6 @@ async function processStockQuote(store, config, stock, quote, options = {}) {
       retracedProfitPercent: evaluation.retracedProfitPercent,
       deliveryStatus,
       telegramDeliveryStatus,
-      pushDeliveryStatus,
       alert
     };
   } catch (error) {

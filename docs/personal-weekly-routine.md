@@ -33,7 +33,7 @@
 
 | # | 항목 | 명령/동작 | 합격 기준 |
 |---|---|---|---|
-| W-01 | 전체 자동 테스트 | `npm test` | **251개** 전부 통과 |
+| W-01 | 전체 자동 테스트 | `npm test` | **270개** 전부 통과 |
 | W-02 | 서버 문법 | `node --check src/server.js` | 오류 없음 |
 | W-03 | 로컬 smoke | `npm run check:observation -- --base-url http://127.0.0.1:PORT` | READY (manual 항목은 장중 분리) |
 | W-04 | 헬스 | `Invoke-RestMethod http://127.0.0.1:PORT/api/health` | `ok=true`, `telegramConfigured` 확인 |
@@ -101,7 +101,7 @@ npm run check:observation -- --base-url http://127.0.0.1:PORT --live-session --s
 ## 주간 체크리스트 (복사용)
 
 ```text
-[ ] W-01 npm test (251 pass)
+[ ] W-01 npm test (270 pass)
 [ ] W-02 node --check src/server.js
 [ ] W-03 check:observation READY
 [ ] W-04 /api/health ok
@@ -120,4 +120,4 @@ npm run check:observation -- --base-url http://127.0.0.1:PORT --live-session --s
 |---|---|
 | 주간 절차 문서화 | 이 문서 |
 | BL-05 (루틴 문서 없음) | 해결 |
-| 다음 WBS | 14.6 배당 실패 다음 조치 통일 |
+| 다음 WBS | WBS 15 완료 — 백로그 triage 후 신규 승격 |

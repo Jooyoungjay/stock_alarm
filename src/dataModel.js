@@ -1,35 +1,9 @@
-export const DATA_SCHEMA_VERSION = 1;
+import { getJsonLegacyFieldsPolicy } from './jsonLegacyFields.js';
+import { migrateStoreToSchemaV2 } from './legacyStoreCleanup.js';
+
+export const DATA_SCHEMA_VERSION = 2;
 
 const entities = [
-  {
-    name: 'devices',
-    storagePath: 'devices[]',
-    primaryKey: 'id',
-    description: '익명 모바일 기기와 웹 사용자를 식별합니다.',
-    fields: [
-      { name: 'id', type: 'string', required: true },
-      { name: 'label', type: 'string', required: false },
-      { name: 'platform', type: 'ios | android | web | unknown', required: true },
-      { name: 'secretHash', type: 'string', required: true },
-      { name: 'pushTokens', type: 'push_tokens[]', required: true },
-      { name: 'createdAt', type: 'datetime', required: true },
-      { name: 'updatedAt', type: 'datetime', required: true },
-      { name: 'lastSeenAt', type: 'datetime', required: true }
-    ]
-  },
-  {
-    name: 'push_tokens',
-    storagePath: 'devices[].pushTokens[]',
-    primaryKey: 'provider + token',
-    description: '향후 앱 푸시 알림을 보낼 기기 토큰입니다.',
-    fields: [
-      { name: 'token', type: 'string', required: true },
-      { name: 'provider', type: 'expo | fcm | apns', required: true },
-      { name: 'platform', type: 'ios | android | web | unknown', required: true },
-      { name: 'enabled', type: 'boolean', required: true },
-      { name: 'updatedAt', type: 'datetime', required: true }
-    ]
-  },
   {
     name: 'stocks',
     storagePath: 'stocks[]',
@@ -37,7 +11,6 @@ const entities = [
     description: '사용자가 감시하는 보유 종목과 알림 기준입니다.',
     fields: [
       { name: 'id', type: 'uuid', required: true },
-      { name: 'deviceId', type: 'string | null', required: false },
       { name: 'accountType', type: 'general | isa | pension | other', required: true },
       { name: 'accountName', type: 'string', required: false },
       { name: 'symbol', type: 'string', required: true },
@@ -70,7 +43,6 @@ const entities = [
     description: '텔레그램 또는 앱으로 보낸 알림 기록입니다.',
     fields: [
       { name: 'id', type: 'uuid', required: true },
-      { name: 'deviceId', type: 'string | null', required: false },
       { name: 'stockId', type: 'uuid | empty', required: false },
       { name: 'symbol', type: 'string', required: true },
       { name: 'alertType', type: 'string', required: false },
@@ -141,32 +113,11 @@ const entities = [
 
 const relationships = [
   {
-    from: 'stocks.deviceId',
-    to: 'devices.id',
-    type: 'many_to_one',
-    required: false,
-    description: '모바일 앱에서는 기기별 종목을 격리합니다.'
-  },
-  {
-    from: 'alerts.deviceId',
-    to: 'devices.id',
-    type: 'many_to_one',
-    required: false,
-    description: '모바일 앱에서는 기기별 알림 기록을 격리합니다.'
-  },
-  {
     from: 'alerts.stockId',
     to: 'stocks.id',
     type: 'many_to_one',
     required: false,
     description: '알림이 어떤 종목에서 발생했는지 연결합니다.'
-  },
-  {
-    from: 'devices.pushTokens',
-    to: 'push_tokens',
-    type: 'embedded',
-    required: false,
-    description: '현재 JSON MVP에서는 푸시 토큰을 기기 아래에 저장합니다.'
   },
   {
     from: 'stocks.dividendHistory',
@@ -178,14 +129,22 @@ const relationships = [
 ];
 
 export function getDataModelSnapshot() {
+  const legacy = getJsonLegacyFieldsPolicy();
+
   return cloneJson({
     schemaVersion: DATA_SCHEMA_VERSION,
     storageEngine: 'json',
     entities,
     relationships,
+    legacy: {
+      ...legacy,
+      note: 'schemaVersion 2부터 devices·push 필드는 저장소 envelope에서 제거됐습니다.'
+    },
     summary: {
       entityCount: entities.length,
-      relationshipCount: relationships.length
+      relationshipCount: relationships.length,
+      legacyEntityCount: legacy.summary.entityCount,
+      legacyFieldCount: legacy.summary.fieldCount
     }
   });
 }
@@ -199,7 +158,6 @@ export function buildDataModelInfo(data) {
 
 export function buildStoreSummary(input = {}) {
   const data = normalizeStoreEnvelope(input);
-  const devices = data.devices;
   const stocks = data.stocks;
   const alerts = data.alerts;
 
@@ -211,11 +169,6 @@ export function buildStoreSummary(input = {}) {
       updatedAt: data.meta.updatedAt
     },
     counts: {
-      devices: devices.length,
-      pushTokens: devices.reduce(
-        (sum, device) => sum + (Array.isArray(device?.pushTokens) ? device.pushTokens.length : 0),
-        0
-      ),
       stocks: stocks.length,
       activeStocks: stocks.filter((stock) => stock?.active !== false).length,
       alerts: alerts.length,
@@ -243,18 +196,61 @@ export function normalizeStoreEnvelope(input = {}, options = {}) {
     normalizeIsoDateTime(source.updatedAt) ||
     createdAt ||
     now;
-
-  return {
-    devices: Array.isArray(source.devices) ? source.devices : [],
+  const schemaVersion = normalizeSchemaVersion(meta.schemaVersion);
+  const envelope = {
     stocks: Array.isArray(source.stocks) ? source.stocks : [],
     alerts: Array.isArray(source.alerts) ? source.alerts : [],
     meta: {
       ...meta,
-      schemaVersion: normalizeSchemaVersion(meta.schemaVersion),
+      schemaVersion,
       createdAt,
       updatedAt
     }
   };
+
+  if (needsLegacyMigration(source, schemaVersion)) {
+    return migrateStoreToSchemaV2(
+      {
+        ...source,
+        ...envelope
+      },
+      { now }
+    );
+  }
+
+  return {
+    ...envelope,
+    meta: {
+      ...envelope.meta,
+      schemaVersion: DATA_SCHEMA_VERSION,
+      updatedAt
+    }
+  };
+}
+
+function needsLegacyMigration(source, schemaVersion) {
+  if (schemaVersion < DATA_SCHEMA_VERSION) {
+    return true;
+  }
+
+  if (Array.isArray(source.devices) && source.devices.length > 0) {
+    return true;
+  }
+
+  const stocks = Array.isArray(source.stocks) ? source.stocks : [];
+  const alerts = Array.isArray(source.alerts) ? source.alerts : [];
+
+  return (
+    stocks.some((stock) => stock?.deviceId) ||
+    alerts.some(
+      (alert) =>
+        alert?.deviceId ||
+        alert?.pushDeliveryStatus ||
+        alert?.pushDeliveryError ||
+        alert?.pushDeliverySent ||
+        alert?.pushDeliveryFailed
+    )
+  );
 }
 
 export function touchStoreEnvelope(input = {}, options = {}) {

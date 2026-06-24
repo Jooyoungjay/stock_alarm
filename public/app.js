@@ -1,4 +1,19 @@
 import { buildAveragingPlan } from './averagingCalculator.js';
+import {
+  DIVIDEND_REFRESH_ALL_ACTION,
+  DIVIDEND_RETRY_STOCK_ACTION,
+  buildDividendFailureNextActions,
+  formatDividendFailureCause,
+  formatDividendFailureGuidance,
+  formatDividendFailureNextActionsText,
+  getDividendProviderStatusAction
+} from './dividendFailureGuidance.js';
+import {
+  DEFAULT_QUOTE_FRESHNESS_MAX_AGE_MINUTES,
+  QUOTE_FRESHNESS_NEXT_ACTION,
+  classifyQuoteFreshness,
+  summarizeQuoteFreshness
+} from './quoteFreshness.js';
 
 const APP_MODES = Object.freeze({
   USER: 'user',
@@ -252,6 +267,7 @@ const state = {
   observationIssues: null,
   observationHistory: null,
   observationHistoryDetail: null,
+  observationHistoryManualOnly: false,
   observationRun: null,
   kisQuoteSmokeTest: null,
   kisNaverQuoteComparison: null,
@@ -259,6 +275,7 @@ const state = {
   kisNaverCompareTrend: null,
   kisNaverTrendRecommendation: null,
   lastKisNaverAutoCompare: null,
+  showHandledKisCompareIssues: false,
   adminAuthRequired: false,
   adminAuthenticated: false,
   backupRetention: 0,
@@ -341,6 +358,7 @@ const elements = {
   sendBriefingButton: document.querySelector('#sendBriefingButton'),
   testTelegramButton: document.querySelector('#testTelegramButton'),
   createBackupButton: document.querySelector('#createBackupButton'),
+  stripLegacyBackupCheckbox: document.querySelector('#stripLegacyBackupCheckbox'),
   runAutoBackupButton: document.querySelector('#runAutoBackupButton'),
   refreshBackupsButton: document.querySelector('#refreshBackupsButton'),
   refreshServerStatusButton: document.querySelector('#refreshServerStatusButton'),
@@ -640,7 +658,11 @@ elements.testTelegramButton.addEventListener('click', async () => {
 
 elements.createBackupButton.addEventListener('click', async () => {
   await withBusy(elements.createBackupButton, async () => {
-    const result = await api('/api/backups', { method: 'POST' });
+    const stripLegacy = Boolean(elements.stripLegacyBackupCheckbox?.checked);
+    const result = await api('/api/backups', {
+      method: 'POST',
+      body: JSON.stringify({ stripLegacy })
+    });
     state.backups = result.backups || [];
     state.autoBackup = result.autoBackup || state.autoBackup;
     renderBackups();
@@ -650,7 +672,11 @@ elements.createBackupButton.addEventListener('click', async () => {
       return;
     }
 
-    showMessage('현재 데이터를 백업했습니다.');
+    showMessage(
+      stripLegacy
+        ? '레거시 필드를 비운 백업을 생성했습니다.'
+        : '현재 데이터를 백업했습니다.'
+    );
   });
 });
 
@@ -695,7 +721,8 @@ elements.observationHistoryPanel?.addEventListener('click', async (event) => {
   const downloadButton = event.target.closest('[data-observation-history-download]');
   const deleteButton = event.target.closest('[data-observation-history-delete]');
   const pruneButton = event.target.closest('[data-observation-history-prune]');
-  const button = actionSaveButton || detailButton || downloadButton || deleteButton || pruneButton;
+  const manualFilterButton = event.target.closest('[data-observation-history-manual-filter]');
+  const button = actionSaveButton || detailButton || downloadButton || deleteButton || pruneButton || manualFilterButton;
 
   if (!button) {
     return;
@@ -709,6 +736,12 @@ elements.observationHistoryPanel?.addEventListener('click', async (event) => {
 
     if (pruneButton) {
       await pruneObservationHistoryFiles();
+      return;
+    }
+
+    if (manualFilterButton) {
+      state.observationHistoryManualOnly = manualFilterButton.dataset.observationHistoryManualFilter === 'true';
+      renderObservationHistory(state.observationHistory);
       return;
     }
 
@@ -758,6 +791,18 @@ elements.kisNaverCompareResult?.addEventListener('click', async (event) => {
 });
 
 elements.kisNaverCompareHistoryPanel?.addEventListener('click', async (event) => {
+  const toggleButton = event.target?.closest?.('[data-kis-issue-toggle-handled]');
+
+  if (toggleButton) {
+    state.showHandledKisCompareIssues = toggleButton.dataset.kisIssueToggleHandled === 'show';
+    renderKisNaverCompareHistory(
+      state.kisNaverCompareHistory,
+      state.kisNaverCompareTrend,
+      state.lastKisNaverAutoCompare
+    );
+    return;
+  }
+
   const button = event.target?.closest?.('[data-kis-issue-status]');
 
   if (!button) {
@@ -3177,13 +3222,18 @@ function renderServerStatus(health) {
     <div class="server-status-grid">
       ${renderServerMetric('서버', '정상 실행', `시작 ${formatDate(health.startedAt)}`)}
       ${renderServerMetric('Telegram', health.telegramConfigured ? '연결됨' : '미설정', health.telegramConfigured ? '알림 전송 가능' : '.env 설정 필요')}
+      ${renderServerMetric(
+        '명령 폴링',
+        health.telegramPollHealth?.label || formatDate(health.lastTelegramCommandPoll?.checkedAt),
+        health.telegramPollHealth?.detail || `${health.telegramCommandPollSeconds || 5}초 주기`
+      )}
+      ${health.telegramPollHealth?.nextAction ? `<div class="roadmap-note">${escapeHtml(health.telegramPollHealth.nextAction)}</div>` : ''}
       ${renderServerMetric('시세', formatProviderList(health.quoteProviders), `${health.pollIntervalSeconds || 60}초 주기`)}
       ${renderServerMetric('일봉', formatProviderList(health.historicalQuoteProviders || health.quoteProviders), '최고가 계산용')}
       ${renderServerMetric('배당', formatProviderList(health.dividendProviders), `${formatInterval(health.dividendRefreshIntervalSeconds || 86400)} 주기`)}
       ${renderServerMetric('배당 알림', formatDividendEventAlertSetting(health), getLastDividendEventAlertDetail(health.lastDividendEventAlert))}
       ${renderServerMetric('브리핑', formatDailyBriefingSetting(health), getLastDailyBriefingDetail(health.lastDailyBriefing))}
       ${renderServerMetric('가격 비교', formatKisNaverAutoCompareSetting(health), getLastKisNaverAutoCompareDetail(health.lastKisNaverAutoCompare))}
-      ${renderServerMetric('명령', formatDate(health.lastTelegramCommandPoll?.checkedAt), `${health.telegramCommandPollSeconds || 5}초 주기`)}
       ${renderServerMetric('마지막 확인', formatDate(health.lastCheck?.checkedAt), getLastCheckDetail(health.lastCheck))}
       ${renderServerMetric('배당 갱신', formatDate(health.lastDividendRefresh?.checkedAt), getLastDividendRefreshDetail(health.lastDividendRefresh))}
       ${renderServerMetric('포트', String(health.port || '-'), `HOST ${health.host || '-'}`)}
@@ -3482,12 +3532,21 @@ function renderKisNaverAutoCompareIssuePanel(alert = null) {
   }
 
   const summary = buildKisNaverCompareIssueSummary(issues, alert.issueStateSummary);
+  const visibleIssues = issues.filter((issue) => {
+    const status = getKisNaverCompareIssueStatus(issue?.resolution?.status);
+    return state.showHandledKisCompareIssues || status === 'open';
+  });
+  const hiddenHandledCount = issues.length - visibleIssues.length;
   const summaryText = [
     `열림 ${summary.open}`,
     `확인 ${summary.acknowledged}`,
     `보류 ${summary.on_hold}`,
     `해결 ${summary.resolved}`
   ].join(' · ');
+  const alertMeta = [
+    alert.alertableIssueCount !== undefined ? `알림 대상 ${alert.alertableIssueCount}개` : '',
+    alert.suppressedIssueCount ? `알림 제외 ${alert.suppressedIssueCount}개` : ''
+  ].filter(Boolean);
 
   return `
     <div class="kis-issue-panel" aria-label="가격 비교 이슈 처리">
@@ -3500,8 +3559,30 @@ function renderKisNaverAutoCompareIssuePanel(alert = null) {
           ${summary.open ? `미처리 ${escapeHtml(summary.open)}개` : '처리 완료'}
         </span>
       </div>
+      ${
+        alertMeta.length
+          ? `<div class="kis-issue-policy">${alertMeta.map((item) => `<span>${escapeHtml(item)}</span>`).join('')}</div>`
+          : ''
+      }
+      <div class="kis-issue-toolbar">
+        <button
+          type="button"
+          class="btn btn-ghost btn-sm"
+          data-kis-issue-toggle-handled="${state.showHandledKisCompareIssues ? 'hide' : 'show'}"
+        >
+          ${state.showHandledKisCompareIssues ? '미처리만 보기' : `처리됨 포함 (${hiddenHandledCount})`}
+        </button>
+      </div>
       <div class="kis-issue-list">
-        ${issues.map(renderKisNaverCompareIssueItem).join('')}
+        ${
+          visibleIssues.length
+            ? visibleIssues.map(renderKisNaverCompareIssueItem).join('')
+            : '<div class="kis-issue-empty">열린 이슈가 없습니다. 처리됨 포함으로 전체 이력을 볼 수 있습니다.</div>'
+        }
+      </div>
+      <div class="kis-issue-policy">
+        <span>확인·보류 이슈는 같은 내용이 반복되어도 텔레그램 알림에서 제외됩니다.</span>
+        <span>해결 후 재감지는 열림으로 되돌리며, 재알림은 해결 후 쿨다운이 지난 뒤에만 보냅니다.</span>
       </div>
     </div>
   `;
@@ -4039,7 +4120,7 @@ function formatDataModelStoreSummary(store) {
     return '스키마 요약 없음';
   }
 
-  return `종목 ${counts.stocks || 0} · 알림 ${counts.alerts || 0} · 기기 ${counts.devices || 0}`;
+  return `종목 ${counts.stocks || 0} · 알림 ${counts.alerts || 0} · 스키마 v${store.schemaVersion || 2}`;
 }
 
 function formatStorageEngine(engine) {
@@ -4371,7 +4452,10 @@ function renderObservationHistory(observationHistory) {
     return;
   }
 
-  const recent = Array.isArray(observationHistory.recent) ? observationHistory.recent : [];
+  const recent = (Array.isArray(observationHistory.recent) ? observationHistory.recent : []).filter(
+    (item) => !state.observationHistoryManualOnly || Number(item.summary?.manual || 0) > 0
+  );
+  const manualSummary = observationHistory.manualSummary || null;
   const latest = observationHistory.latest || null;
   const comparison = observationHistory.comparison || null;
   const selectedFileName = state.observationHistoryDetail?.fileName || '';
@@ -4407,6 +4491,7 @@ function renderObservationHistory(observationHistory) {
         ${renderRoadmapStat('항목', latest.resultCount || 0, '전체 점검', 'active')}
       </div>
     </div>
+    ${renderObservationHistoryManualSummary(manualSummary)}
     ${renderObservationHistoryRetention(observationHistory)}
     ${renderObservationHistoryComparison(comparison)}
     <div class="observation-history-list">
@@ -4414,6 +4499,37 @@ function renderObservationHistory(observationHistory) {
     </div>
     ${renderObservationHistoryDetail(state.observationHistoryDetail)}
     <div class="roadmap-note">저장 폴더: ${escapeHtml(observationHistory.historyDir || 'data/observation-history')}</div>
+  `;
+}
+
+function renderObservationHistoryManualSummary(manualSummary) {
+  if (!manualSummary) {
+    return '';
+  }
+
+  const recent = Array.isArray(manualSummary.recent) ? manualSummary.recent : [];
+  const lines = recent
+    .map(
+      (item) =>
+        `<li>${escapeHtml(formatDate(item.generatedAt))} · 수동 ${escapeHtml(item.manual || 0)}개 · ${escapeHtml((item.manualResultIds || []).join(', ') || '항목 없음')}</li>`
+    )
+    .join('');
+
+  return `
+    <section class="observation-history-manual-summary" aria-label="수동 점검 요약">
+      <div class="observation-checklist-head">
+        <div>
+          <span class="roadmap-eyebrow">수동 점검 요약</span>
+          <strong>최근 ${escapeHtml(manualSummary.entriesWithManual || 0)}건</strong>
+          <p>${escapeHtml(manualSummary.hint || '')}</p>
+        </div>
+        <div class="observation-history-actions">
+          <button type="button" class="btn btn-outline btn-sm secondary-button" data-observation-history-manual-filter="false" ${state.observationHistoryManualOnly ? '' : 'disabled'}>전체</button>
+          <button type="button" class="btn btn-outline btn-sm secondary-button" data-observation-history-manual-filter="true" ${state.observationHistoryManualOnly ? 'disabled' : ''}>수동만</button>
+        </div>
+      </div>
+      ${lines ? `<ul class="observation-history-manual-list">${lines}</ul>` : '<div class="roadmap-note">최근 저장된 점검에 수동 항목이 없습니다.</div>'}
+    </section>
   `;
 }
 
@@ -5127,7 +5243,9 @@ function formatKisNaverAutoCompareAlertStatus(alert = {}) {
 
   if (alert.deliveryStatus === 'skipped') {
     if (alert.reason === 'all_issues_handled') {
-      return '처리 상태로 생략';
+      return alert.suppressedIssueCount
+        ? `처리·쿨다운으로 생략 (${alert.suppressedIssueCount}개 제외)`
+        : '처리 상태로 생략';
     }
 
     if (alert.reason === 'duplicate_issue') {
@@ -5135,7 +5253,7 @@ function formatKisNaverAutoCompareAlertStatus(alert = {}) {
     }
 
     if (alert.reason === 'cooldown') {
-      return '쿨다운 생략';
+      return `쿨다운 생략${alert.cooldownMinutes ? ` (${alert.cooldownMinutes}분)` : ''}`;
     }
   }
 
@@ -5503,7 +5621,7 @@ function finalizeDividendProviderAccumulator(stats) {
     lastError: stats.lastError,
     lastCheckedAt: stats.lastCheckedAt,
     symbolCount: stats.symbols.size,
-    action: getDividendProviderNextAction(stats.provider, status, stats.lastError)
+    action: getDividendProviderStatusAction(stats.provider, status, stats.lastError)
   };
 }
 
@@ -5614,11 +5732,11 @@ function buildDividendDashboardNextActions({ checkedAt, counts, missingDiagnosti
   }
 
   if (counts.error > 0) {
-    actions.push('실패 종목의 배당 재시도 버튼으로 단일 종목 provider 응답을 다시 확인하세요.');
+    actions.push(DIVIDEND_RETRY_STOCK_ACTION);
   }
 
   if (missingDiagnostics > 0) {
-    actions.push(`${missingDiagnostics}개 종목은 최근 배당 진단 이력이 없습니다. 전체 배당 새로고침으로 검증 범위를 채우세요.`);
+    actions.push(`${missingDiagnostics}개 종목은 최근 배당 진단 이력이 없습니다. ${DIVIDEND_REFRESH_ALL_ACTION}`);
   }
 
   if (stale) {
@@ -5629,7 +5747,7 @@ function buildDividendDashboardNextActions({ checkedAt, counts, missingDiagnosti
     .filter((provider) => provider.status === 'error' && provider.success === 0)
     .slice(0, 3)
     .forEach((provider) => {
-      actions.push(`${provider.label}: ${provider.action}`);
+      actions.push(provider.action);
     });
 
   if (!actions.length) {
@@ -5640,27 +5758,7 @@ function buildDividendDashboardNextActions({ checkedAt, counts, missingDiagnosti
 }
 
 function getDividendProviderNextAction(provider, status, error = '') {
-  if (status === 'success') {
-    return '최근 검증에서 정상 응답을 받았습니다.';
-  }
-
-  if (status === 'pending') {
-    return '아직 최근 검증에서 호출되지 않았습니다.';
-  }
-
-  const setupHints = {
-    publicdata: 'DATA_GO_KR_SERVICE_KEY와 금융위원회_주식배당정보 활용 권한을 확인하세요.',
-    opendart: 'OPEN_DART_API_KEY와 회사명 매칭을 확인하세요.',
-    alphavantage: 'ALPHA_VANTAGE_API_KEY와 호출 한도를 확인하세요.',
-    yahoo: 'Yahoo 심볼 매핑과 네트워크 응답을 확인하세요.'
-  };
-  const text = String(error || '').toLowerCase();
-
-  if (text.includes('key') || text.includes('service') || text.includes('인증') || text.includes('권한')) {
-    return setupHints[provider] || 'API 키와 provider 설정을 확인하세요.';
-  }
-
-  return setupHints[provider] || 'provider 오류와 종목 코드 매핑을 확인하세요.';
+  return getDividendProviderStatusAction(provider, status, error);
 }
 
 function getNextDividendRefreshAt(checkedAt, intervalSeconds) {
@@ -5848,7 +5946,9 @@ function renderDividendDiagnosticRow({ stock, diagnostic }) {
       </div>
       ${
         diagnostic.error
-          ? `<div class="dividend-diagnostic-error">${escapeHtml([formatDividendFailureReason(diagnostic.error), diagnostic.error].filter(Boolean).join(' '))}</div>`
+          ? `<div class="dividend-diagnostic-error">${escapeHtml(
+              formatDividendDiagnosticFailureMessage(diagnostic, stock)
+            )}</div>`
           : ''
       }
       ${
@@ -5865,7 +5965,7 @@ function renderDividendAttempt(attempt, stock) {
   const value =
     status === 'success'
       ? formatDividendAttemptValue(attempt, stock)
-      : formatDividendAttemptError(attempt.error);
+      : formatDividendAttemptError(attempt.error, stock);
 
   return `
     <span class="dividend-attempt ${status}">
@@ -5875,8 +5975,34 @@ function renderDividendAttempt(attempt, stock) {
   `;
 }
 
-function formatDividendAttemptError(error) {
-  return [formatDividendFailureReason(error), error || '실패'].filter(Boolean).join(' ');
+function formatDividendAttemptError(error, stock = {}) {
+  const cause = formatDividendFailureCause(error);
+  return [cause, error || '실패'].filter(Boolean).join(' ');
+}
+
+function formatDividendDiagnosticFailureMessage(diagnostic, stock = {}) {
+  const attempts = Array.isArray(diagnostic?.attempts) ? diagnostic.attempts : [];
+  const preserved =
+    diagnostic?.preservedAnnualDividendPerShare ?? stock?.dividendLastDiagnostic?.preservedAnnualDividendPerShare;
+  const lastFailed = [...attempts].reverse().find((attempt) => attempt?.status === 'error');
+  const lines = [];
+
+  if (diagnostic?.error) {
+    lines.push(`실패: ${diagnostic.error}`);
+  }
+
+  const nextActions = formatDividendFailureNextActionsText({
+    error: diagnostic?.error || lastFailed?.error || '',
+    provider: diagnostic?.provider || lastFailed?.provider || '',
+    attempts,
+    preservedAnnualDividendPerShare: preserved
+  });
+
+  if (nextActions) {
+    lines.push(`다음 조치: ${nextActions}`);
+  }
+
+  return lines.join('\n');
 }
 
 function formatDividendAttemptValue(attempt, stock) {
@@ -5951,6 +6077,31 @@ function shortenPath(value) {
   return `...${text.slice(-33)}`;
 }
 
+function renderQuoteFreshnessBanner(stocks = []) {
+  const host = document.querySelector('#quoteFreshnessBanner');
+
+  if (!host) {
+    return;
+  }
+
+  const summary = summarizeQuoteFreshness(stocks);
+
+  if (!summary.needsAttention) {
+    host.innerHTML = '';
+    host.hidden = true;
+    return;
+  }
+
+  host.hidden = false;
+  host.innerHTML = `
+    <div class="quote-freshness-banner" role="status">
+      <strong>장중 시세 확인 필요 ${summary.needsAttention}개</strong>
+      <span>오래됨 ${summary.stale} · 실패 ${summary.error} · 미확인 ${summary.missing} · 기준 ${summary.maxAgeMinutes}분</span>
+      <span>${escapeHtml(QUOTE_FRESHNESS_NEXT_ACTION)}</span>
+    </div>
+  `;
+}
+
 function renderStocks() {
   const decoratedStocks = state.stocks.map((stock) => ({
     stock,
@@ -5963,6 +6114,7 @@ function renderStocks() {
   renderTodayActionPanel(decoratedStocks);
   renderSellDecisionPanel(decoratedStocks);
   renderWatchControls();
+  renderQuoteFreshnessBanner(state.stocks);
 
   if (!state.stocks.length) {
     elements.stockList.innerHTML = '<div class="empty">등록된 종목이 없습니다.</div>';
@@ -6040,6 +6192,7 @@ function renderStocks() {
             ${quoteSourceDetail ? `<span class="status-src">${escapeHtml(quoteSourceDetail)}</span>` : ''}
             ${stock.quoteRegularMarketTime ? `<span class="status-src">시세 시각 ${escapeHtml(formatDate(stock.quoteRegularMarketTime))}</span>` : ''}
             <span class="status-src quote-quality ${escapeHtml(quoteQuality.level)}">시세 품질 ${escapeHtml(quoteQuality.label)} · ${escapeHtml(quoteQuality.detail)}</span>
+            ${quoteQuality.nextAction ? `<span class="status-src quote-freshness-action">${escapeHtml(quoteQuality.nextAction)}</span>` : ''}
             ${stock.lastError ? `<span class="metric-error">${escapeHtml(stock.lastError)}</span>` : ''}
           </div>
         </div>
@@ -7835,7 +7988,7 @@ async function previewBackupItem(backup) {
       '',
       `파일: ${preview.backup?.name || backup.name}`,
       `종목: ${counts.stocks || 0}개 · 활성 ${counts.activeStocks || 0}개`,
-      `알림 기록: ${counts.alerts || 0}개 · 기기: ${counts.devices || 0}개`,
+      `알림 기록: ${counts.alerts || 0}개`,
       preview.meta?.updatedAt ? `마지막 저장: ${formatDate(preview.meta.updatedAt)}` : '',
       '',
       '샘플 종목',
@@ -8195,47 +8348,15 @@ function formatQuoteSourceDetail(source) {
 }
 
 function getQuoteQuality(stock) {
-  if (stock.lastCheckStatus === 'error') {
-    return {
-      level: 'bad',
-      label: '조회 실패',
-      detail: stock.lastError || '최근 시세를 가져오지 못했습니다.'
-    };
-  }
-
-  if (!stock.lastCheckedAt) {
-    return {
-      level: 'pending',
-      label: '확인 전',
-      detail: '아직 서버에서 시세를 확인하지 않았습니다.'
-    };
-  }
-
-  const checkedAgeMinutes = getAgeMinutes(stock.lastCheckedAt);
-  const quoteAgeMinutes = getAgeMinutes(stock.quoteRegularMarketTime || stock.lastCheckedAt);
-  const delay = String(stock.quoteDataDelay || '').toLowerCase();
-  const provider = getProviderLabel(stock.quoteProvider);
-
-  if (checkedAgeMinutes !== null && checkedAgeMinutes > 180) {
-    return {
-      level: 'stale',
-      label: '오래됨',
-      detail: `${Math.round(checkedAgeMinutes)}분 전 확인 · ${provider || 'provider 미상'}`
-    };
-  }
-
-  if (delay.includes('delayed') || delay.includes('eod') || quoteAgeMinutes > 60) {
-    return {
-      level: 'delayed',
-      label: '지연 가능',
-      detail: `${provider || 'provider 미상'} · ${getQuoteDataDelayLabel(stock.quoteDataDelay)}`
-    };
-  }
+  const freshness = classifyQuoteFreshness(stock, {
+    maxAgeMinutes: DEFAULT_QUOTE_FRESHNESS_MAX_AGE_MINUTES
+  });
 
   return {
-    level: 'ok',
-    label: '정상',
-    detail: `${provider || 'provider 미상'} · ${formatDate(stock.lastCheckedAt)}`
+    level: freshness.level,
+    label: freshness.label,
+    detail: freshness.detail,
+    nextAction: freshness.nextAction || ''
   };
 }
 
@@ -8718,7 +8839,12 @@ function renderRetryFailurePanel(stock) {
               stock.dividendLastDiagnostic.currency || stock.dividendCurrency || stock.currency
             )} 유지`
           : '',
-        guidance: getDividendFailureGuidance(stock.dividendLastError),
+        guidance: formatDividendFailureGuidance(stock.dividendLastError, {
+          attempts: stock.dividendLastDiagnostic?.attempts || [],
+          provider: stock.dividendLastDiagnostic?.provider || '',
+          preservedAnnualDividendPerShare: stock.dividendLastDiagnostic?.preservedAnnualDividendPerShare,
+          includeCause: false
+        }).replace(/^/, '다음 조치: '),
         attempts: Array.isArray(stock.dividendLastDiagnostic?.attempts)
           ? stock.dividendLastDiagnostic.attempts
           : [],
@@ -8751,49 +8877,6 @@ function renderRetryFailureItem({ title, detail, time, meta = '', guidance = '',
       }
     </div>
   `;
-}
-
-function getDividendFailureGuidance(error) {
-  const reason = formatDividendFailureReason(error);
-
-  return [
-    reason,
-    '자동 조회가 막히면 편집에서 주당 연 배당금을 직접 입력하면 배당 계산에 바로 반영됩니다.'
-  ].filter(Boolean).join(' ');
-}
-
-function formatDividendFailureReason(error) {
-  const message = String(error || '');
-
-  if (!message) {
-    return '';
-  }
-
-  if (/OPENDART_API_KEY|OpenDART.*키|missing_opendart/i.test(message)) {
-    return 'OpenDART 키가 없어 해당 provider를 사용할 수 없습니다.';
-  }
-
-  if (/ALPHA_VANTAGE_API_KEY|Alpha Vantage.*키|missing_alpha/i.test(message)) {
-    return 'Alpha Vantage 키가 없어 해외 배당 provider를 사용할 수 없습니다.';
-  }
-
-  if (/DATA_GO_KR_SERVICE_KEY|공공데이터.*키|missing_data_go_kr/i.test(message)) {
-    return '공공데이터포털 키가 없거나 인증키가 아직 승인되지 않았을 수 있습니다.';
-  }
-
-  if (/HTTP 401|Unauthorized|unauthorized/i.test(message)) {
-    return '비공식 Yahoo 조회가 인증 제한으로 실패했습니다.';
-  }
-
-  if (/한국 종목이 아니|not korean|korean.*only/i.test(message)) {
-    return '공공데이터와 OpenDART는 국내 종목용이라 해외 종목은 다른 provider 키가 필요합니다.';
-  }
-
-  if (/찾을 수 없습니다|not found|no dividend|empty|배당 정보/i.test(message)) {
-    return 'provider 데이터에 해당 종목 또는 우선주 배당 행이 아직 없거나 회사명 매칭이 실패했을 수 있습니다.';
-  }
-
-  return '';
 }
 
 function renderInvestmentPlanCard(stock) {
