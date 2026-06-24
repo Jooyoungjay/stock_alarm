@@ -2,7 +2,7 @@
 
 이 저장소는 **개인 PC 로컬 실행 + 텔레그램 알림** MVP입니다. AI 에이전트는 아래 역할 중 하나로 동작합니다. 작업 시작 전 역할을 확인하고, **단일 진실 공급원**은 `docs/development-roadmap.md`(WBS)입니다.
 
-날짜 기준: 2026-06-24 — WBS 18 완료. Postgres, 모바일 앱 출시, Railway 상시 배포는 **진행하지 않음**.
+날짜 기준: 2026-06-24 — WBS 18 완료. WBS 19 착수 중.
 
 ## 역할 (@멘션)
 
@@ -15,7 +15,7 @@
 | **@cleanup** | WBS 13번(로컬 운영 전환·코드 정리) | WBS에 없는 신규 기능 |
 | **@docs** | `README.md`, `docs/` | 동작 변경 없는 문서만; 코드 변경 시 해당 역할에 위임 |
 
-역할을 지정하지 않으면 **@backend** 기본. WBS 18 작업은 **세션당 ID 하나**, 문서·범위는 **@pm** / 구현은 역할별 분담.
+역할을 지정하지 않으면 **@backend** 기본. WBS 19 작업은 **세션당 ID 하나**, 문서·범위는 **@pm** / 구현은 역할별 분담.
 
 ## 파일 소유권
 
@@ -49,9 +49,22 @@ docs/archive/          → 제거된 Postgres·모바일 설계 보관
 
 ## 현재 우선순위
 
-WBS 13·14·15·16·17·**18**은 완료했습니다. **WBS 18 장중 알림·점검 피드백 루프**까지 마쳤습니다 (`docs/development-roadmap.md` §18).
+WBS 13~**18**은 완료했습니다. **WBS 19 장중 오늘 할 일·알림 연동 심화** — 19.1~19.3 문서·백로그 정합 후 **19.4**부터 구현 (`docs/development-roadmap.md` §19).
 
-다음 구현은 `docs/personal-backlog.md` triage 후 신규 WBS 승격 시 진행합니다. 세션 규칙: **WBS ID 1개**, 완료 시 `npm test` 298개 통과.
+다음 구현은 `docs/personal-backlog.md` BL-28~33. 세션 규칙: **WBS ID 1개**, 완료 시 `npm test` 298개 통과.
+
+### WBS 19 (착수)
+
+| ID | 작업 | 역할 |
+|---|---|---|
+| ~~19.1~~ | ~~WBS·README·AGENTS 정합성~~ | @docs |
+| ~~19.2~~ | ~~AI 팀 WBS 19 스킬~~ | @backend |
+| ~~19.3~~ | ~~실사용 백로그 triage 6차~~ | @pm / @docs |
+| 19.4 | KIS/Naver 이슈→오늘 할 일 (BL-28) | @backend |
+| 19.5 | 장중 critical today digest (BL-29) | @backend |
+| 19.6 | observation-manual 점프 (BL-30) | @frontend |
+| 19.7 | 헬스 todayActionsSummary (BL-31) | @backend |
+| 19.8 | todayAction 타입·계약 (BL-32~33) | @qa / @cleanup |
 
 ### WBS 18 (완료)
 
@@ -133,6 +146,7 @@ WBS 15 전체 완료 — `.cursor/skills/wbs-15-evolution/SKILL.md` 참고용.
 
 | 스킬 | 경로 | 사용 시점 |
 |---|---|---|
+| WBS 19 today·알림 연동 | `.cursor/skills/wbs-19-evolution/` | WBS 19 진행 중 — 19.4부터 |
 | WBS 18 피드백 루프 | `.cursor/skills/wbs-18-evolution/` | WBS 18 완료 — 참고용 |
 | WBS 17 신뢰도 심화 | `.cursor/skills/wbs-17-evolution/` | WBS 17 완료 — 참고용 |
 | WBS 16 편의성 | `.cursor/skills/wbs-16-evolution/` | WBS 16 완료 — 참고용 |

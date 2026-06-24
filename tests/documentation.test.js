@@ -418,6 +418,27 @@ test('WBS 14 docs align README AGENTS roadmap and evolution skill', async () => 
   assert.match(regression, /298개 전부 통과/);
 });
 
+test('WBS 19 docs align README AGENTS roadmap after 19.1', async () => {
+  const readme = await fs.readFile(new URL('../README.md', import.meta.url), 'utf8');
+  const agents = await fs.readFile(new URL('../AGENTS.md', import.meta.url), 'utf8');
+  const roadmap = await fs.readFile(
+    new URL('../docs/development-roadmap.md', import.meta.url),
+    'utf8'
+  );
+  const backlog = await fs.readFile(
+    new URL('../docs/personal-backlog.md', import.meta.url),
+    'utf8'
+  );
+
+  assert.match(readme, /19\.1~19\.3 완료/);
+  assert.match(readme, /장중 오늘 할 일·알림 연동 심화/);
+  assert.match(agents, /WBS 19/);
+  assert.match(agents, /wbs-19-evolution/);
+  assert.match(roadmap, /19\.3.*완료/);
+  assert.match(roadmap, /WBS 19/);
+  assert.match(backlog, /BL-28/);
+});
+
 test('WBS 18 docs align README AGENTS roadmap after 18.1', async () => {
   const readme = await fs.readFile(new URL('../README.md', import.meta.url), 'utf8');
   const agents = await fs.readFile(new URL('../AGENTS.md', import.meta.url), 'utf8');
