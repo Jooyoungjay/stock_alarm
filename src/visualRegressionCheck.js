@@ -19,6 +19,7 @@ const visualScenarios = Object.freeze([
       '#watchTitle',
       '#openRegisterButton',
       '#portfolioSummaryBar',
+      '#quoteFreshnessBanner',
       '#todayActionPanel',
       '#stockList',
       '#alertList'
@@ -34,6 +35,7 @@ const visualScenarios = Object.freeze([
       '#watchTitle',
       '#openRegisterMobileButton',
       '#portfolioSummaryBar',
+      '#quoteFreshnessBanner',
       '#todayActionPanel',
       '#stockList',
       '.mobile-nav'

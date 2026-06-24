@@ -67,6 +67,21 @@ test('getLatestObservationManualSummary reads manual count from recent history',
   assert.equal(summary?.manual, 2);
 });
 
+test('buildSystemTodayActions includes observation failed summary', () => {
+  const actions = buildSystemTodayActions({
+    stocks: [],
+    observationHistoryRecent: [
+      {
+        generatedAt: '2026-06-24T09:00:00.000Z',
+        summary: { failed: 2, manual: 0 }
+      }
+    ],
+    telegramPollHealth: { status: 'ok', level: 'ok', label: '정상', detail: 'ok' }
+  });
+
+  assert.ok(actions.some((action) => action.type === 'observation-failed'));
+});
+
 test('formatTelegramTodayMessage reports empty state', () => {
   const message = formatTelegramTodayMessage([]);
   assert.match(message, /긴급 확인 항목이 없습니다/);

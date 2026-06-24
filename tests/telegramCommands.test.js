@@ -594,6 +594,24 @@ test('handleTelegramMessage today summarizes priority actions', async () => {
   assert.match(sent.at(-1), /\/status 005930/);
 });
 
+test('handleTelegramMessage check appends today action summary', async () => {
+  const store = await createStore();
+  const sent = [];
+  const options = {
+    sendTelegramMessage: async (_config, text) => {
+      sent.push(text);
+    },
+    runAlertCheck: async () => ({
+      results: [{ status: 'checked' }]
+    })
+  };
+
+  await handleTelegramMessage(store, config, message('/check'), options);
+
+  assert.match(sent.at(-1), /즉시 확인을 완료했습니다/);
+  assert.match(sent.at(-1), /오늘 확인할 일|오늘 할 일/);
+});
+
 test('handleTelegramMessage can report dividend diagnostics', async () => {
   const store = await createStore();
   const sent = [];

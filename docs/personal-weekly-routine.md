@@ -34,7 +34,7 @@
 
 | # | 항목 | 명령/동작 | 합격 기준 |
 |---|---|---|---|
-| W-01 | 전체 자동 테스트 | `npm test` | **295개** 전부 통과 |
+| W-01 | 전체 자동 테스트 | `npm test` | **298개** 전부 통과 |
 | W-02 | 서버 문법 | `node --check src/server.js` | 오류 없음 |
 | W-03 | 로컬 smoke | `npm run check:observation -- --base-url http://127.0.0.1:PORT` | READY (manual 항목은 장중 분리) |
 | W-04 | 헬스 | `Invoke-RestMethod http://127.0.0.1:PORT/api/health` | `ok=true`, `telegramConfigured`, `dataSchemaVersion: 2`, `telegramPollHealth.status`가 `ok` (또는 `nextAction` 확인), `quoteFreshnessSummary.needsAttention`이 0이거나 원인 파악 |
@@ -106,7 +106,7 @@ npm run check:observation -- --base-url http://127.0.0.1:PORT --live-session --s
 
 | # | 항목 | 명령/동작 |
 |---|---|---|
-| W-14 | 시각 회귀 | `npm run check:visual` (환경에 따라) |
+| W-14 | 시각 회귀 | `npm run check:visual` | `#quoteFreshnessBanner`·오늘 할 일 패널 포함 (WBS 18.6) |
 | W-15 | 외부 API 점검 | `npm run check:external-apis` (키 설정 시) |
 | W-16 | 백업 보관 | `data/backups/` 오래된 파일 정리 또는 외부 복사 |
 | W-17 | 점검 히스토리 정리 | 관리자 화면에서 오래된 observation 파일 prune |
@@ -125,7 +125,7 @@ npm run check:observation -- --base-url http://127.0.0.1:PORT --live-session --s
 ## 주간 체크리스트 (복사용)
 
 ```text
-[ ] W-01 npm test (295 pass)
+[ ] W-01 npm test (298 pass)
 [ ] W-02 node --check src/server.js
 [ ] W-03 check:observation READY
 [ ] W-04 /api/health ok + dataSchemaVersion 2 + telegramPollHealth + quoteFreshnessSummary

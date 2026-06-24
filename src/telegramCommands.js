@@ -262,6 +262,10 @@ function formatBriefingFromCommand(stocks, config, options = {}) {
 }
 
 async function formatTodayFromCommand(store, config, options = {}) {
+  return buildTelegramTodaySummary(store, config, options);
+}
+
+async function buildTelegramTodaySummary(store, config, options = {}) {
   const stocks = await store.listStocks();
   const rootDir = config.rootDir || options.rootDir || process.cwd();
   const dataDir = store?.dataDir || config.dataDir || path.join(rootDir, 'data');
@@ -1472,7 +1476,7 @@ async function runManualCheck(store, config, options) {
     {}
   );
 
-  return [
+  const lines = [
     '즉시 확인을 완료했습니다.',
     `전체: ${result.results.length}개`,
     counts.alert ? `알림: ${counts.alert}개` : '',
@@ -1480,9 +1484,15 @@ async function runManualCheck(store, config, options) {
     counts.recovered ? `회복: ${counts.recovered}개` : '',
     counts.high_updated ? `새 최고가: ${counts.high_updated}개` : '',
     counts.error ? `오류: ${counts.error}개` : ''
-  ]
-    .filter(Boolean)
-    .join('\n');
+  ].filter(Boolean);
+
+  const todaySummary = await buildTelegramTodaySummary(store, config, options);
+
+  if (todaySummary) {
+    lines.push('', todaySummary);
+  }
+
+  return lines.join('\n');
 }
 
 async function findStock(store, query) {

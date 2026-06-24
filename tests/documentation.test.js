@@ -415,7 +415,28 @@ test('WBS 14 docs align README AGENTS roadmap and evolution skill', async () => 
   assert.match(roadmap, /14\.8.*완료/);
   assert.match(roadmap, /15\.8.*완료/);
   assert.match(roadmap, /개인 운영 안정화와 레거시 정리 2차/);
-  assert.match(regression, /295개 전부 통과/);
+  assert.match(regression, /298개 전부 통과/);
+});
+
+test('WBS 18 docs align README AGENTS roadmap after 18.1', async () => {
+  const readme = await fs.readFile(new URL('../README.md', import.meta.url), 'utf8');
+  const agents = await fs.readFile(new URL('../AGENTS.md', import.meta.url), 'utf8');
+  const roadmap = await fs.readFile(
+    new URL('../docs/development-roadmap.md', import.meta.url),
+    'utf8'
+  );
+  const regression = await fs.readFile(
+    new URL('../docs/full-regression-test-scenarios.md', import.meta.url),
+    'utf8'
+  );
+
+  assert.match(readme, /18\.1~18\.8 완료/);
+  assert.match(readme, /장중 알림·점검 피드백 루프/);
+  assert.match(agents, /WBS 18 완료/);
+  assert.match(agents, /wbs-18-evolution/);
+  assert.match(roadmap, /18\.8.*완료/);
+  assert.match(roadmap, /WBS 18.*완료/);
+  assert.match(regression, /298개 전부 통과/);
 });
 
 test('WBS 17 docs align README AGENTS roadmap after 17.1', async () => {
@@ -442,7 +463,7 @@ test('WBS 17 docs align README AGENTS roadmap after 17.1', async () => {
   assert.match(roadmap, /17\.8.*완료/);
   assert.match(roadmap, /WBS 17.*완료/);
   assert.match(roadmap, /장중·원격 운영 신뢰도 심화/);
-  assert.match(regression, /295개 전부 통과/);
+  assert.match(regression, /298개 전부 통과/);
   assert.match(telegram, /\/today/);
 });
 
@@ -466,7 +487,7 @@ test('WBS 16 docs align README AGENTS roadmap after 16.1', async () => {
   assert.match(roadmap, /16\.9.*완료/);
   assert.match(roadmap, /WBS 16.*완료/);
   assert.match(roadmap, /개인 운영 편의성 개선/);
-  assert.match(regression, /295개 전부 통과/);
+  assert.match(regression, /298개 전부 통과/);
 });
 
 test('development roadmap defines WBS 17 trust deepening backlog', async () => {
@@ -551,7 +572,7 @@ test('personal regression scenario guide documents local telegram-focused covera
 
   assert.match(markdown, /개인용 회귀 테스트 시나리오/);
   assert.match(markdown, /WBS 13\.10/);
-  assert.match(markdown, /295개 전부 통과/);
+  assert.match(markdown, /298개 전부 통과/);
   assert.match(markdown, /npm test/);
   assert.match(markdown, /서버 실행\/종료 테스트/);
   assert.match(markdown, /사용자 웹앱 테스트/);

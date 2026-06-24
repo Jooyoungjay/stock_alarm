@@ -1,15 +1,10 @@
 import { classifyQuoteFreshness, summarizeQuoteFreshness } from './quoteFreshness.js';
 import { assessTelegramPollHealth } from './telegramPollHealth.js';
+import { formatTodayActionPriority } from './todayActionPriority.js';
 
 const TODAY_ACTION_LIMIT = 5;
 const TODAY_ACTION_MAX_PER_STOCK = 2;
 const SOLD_POSITION = 'sold';
-
-const priorityLabels = Object.freeze({
-  critical: '확인 필요',
-  warning: '주의',
-  info: '확인'
-});
 
 export function getLatestObservationManualSummary(recent = []) {
   if (!Array.isArray(recent) || !recent.length) {
@@ -25,6 +20,25 @@ export function getLatestObservationManualSummary(recent = []) {
 
   return {
     manual,
+    generatedAt: latest.generatedAt,
+    fileName: latest.fileName
+  };
+}
+
+export function getLatestObservationFailedSummary(recent = []) {
+  if (!Array.isArray(recent) || !recent.length) {
+    return null;
+  }
+
+  const latest = recent[0];
+  const failed = Number(latest.summary?.failed || 0);
+
+  if (!failed) {
+    return null;
+  }
+
+  return {
+    failed,
     generatedAt: latest.generatedAt,
     fileName: latest.fileName
   };
@@ -68,6 +82,22 @@ export function buildSystemTodayActions(context = {}) {
         detail: `오래됨 ${summary.stale} · 실패 ${summary.error} · 미확인 ${summary.missing} · 기준 ${summary.maxAgeMinutes}분`,
         meta: '시세 신선도',
         commandHint: '/status 로 종목별 상세 확인'
+      })
+    );
+  }
+
+  const failedSummary = getLatestObservationFailedSummary(context.observationHistoryRecent);
+
+  if (failedSummary) {
+    actions.push(
+      createTodayAction({
+        type: 'observation-failed',
+        priority: 'critical',
+        rank: 7,
+        title: '점검 실패 항목 확인',
+        detail: `실패 ${failedSummary.failed}개 · ${formatGeneratedAt(failedSummary.generatedAt)}`,
+        meta: '점검 히스토리',
+        commandHint: '웹 관리자 점검 히스토리에서 확인'
       })
     );
   }
@@ -237,7 +267,7 @@ function createTodayAction({
     stock,
     name: name || (stock ? formatStockName(stock) : title),
     priority,
-    priorityLabel: priorityLabels[priority] || priorityLabels.info,
+    priorityLabel: formatTodayActionPriority(priority),
     rank,
     title,
     detail,

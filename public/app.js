@@ -36,7 +36,7 @@ const TODAY_ACTION_SOON_DAYS = 7;
 const TODAY_ACTION_MAX_PER_STOCK = 2;
 const WATCH_VIEW_STORAGE_KEY = 'stock_alarm_watch_view';
 const STRIP_LEGACY_BACKUP_PREFERENCE_KEY = 'stock_alarm_strip_legacy_backup';
-const WEEKLY_ROUTINE_TEST_COUNT = 295;
+const WEEKLY_ROUTINE_TEST_COUNT = 298;
 const WATCH_FILTER_OPTIONS = Object.freeze([
   'all',
   'attention',
@@ -6614,7 +6614,8 @@ function renderTodayActionPanel(items) {
         focusAdminPanel(targetId);
 
         if (targetId === 'observationHistoryPanel') {
-          state.observationHistoryManualOnly = true;
+          state.observationHistoryManualOnly =
+            button.dataset.todayActionType === 'observation-manual';
           renderObservationHistory(state.observationHistory);
         }
       });
@@ -6676,6 +6677,22 @@ function buildSystemTodayActions(items) {
   }
 
   const manualSummary = getLatestObservationManualSummary();
+  const failedSummary = getLatestObservationFailedSummary();
+
+  if (isAdminMode() && failedSummary) {
+    actions.push(
+      createTodayAction({
+        type: 'observation-failed',
+        priority: 'critical',
+        rank: 7,
+        title: '점검 실패 항목 확인',
+        detail: `실패 ${failedSummary.failed}개 · ${formatDate(failedSummary.generatedAt)}`,
+        meta: '점검 히스토리',
+        adminTarget: 'observationHistoryPanel',
+        focusLabel: '점검 히스토리 보기'
+      })
+    );
+  }
 
   if (isAdminMode() && manualSummary) {
     actions.push(
@@ -6711,6 +6728,27 @@ function getLatestObservationManualSummary() {
 
   return {
     manual,
+    generatedAt: latest.generatedAt,
+    fileName: latest.fileName
+  };
+}
+
+function getLatestObservationFailedSummary() {
+  const recent = state.observationHistory?.recent;
+
+  if (!Array.isArray(recent) || !recent.length) {
+    return null;
+  }
+
+  const latest = recent[0];
+  const failed = Number(latest.summary?.failed || 0);
+
+  if (!failed) {
+    return null;
+  }
+
+  return {
+    failed,
     generatedAt: latest.generatedAt,
     fileName: latest.fileName
   };
@@ -7058,7 +7096,7 @@ function renderTodayActionItem(action) {
   } else if (action.filter) {
     actionButton = `<button type="button" class="btn btn-outline btn-sm" data-today-action-filter="${escapeHtml(action.filter)}">${escapeHtml(action.focusLabel || '필터 적용')}</button>`;
   } else if (action.adminTarget) {
-    actionButton = `<button type="button" class="btn btn-outline btn-sm" data-today-action-admin-target="${escapeHtml(action.adminTarget)}">${escapeHtml(action.focusLabel || '관리자에서 보기')}</button>`;
+    actionButton = `<button type="button" class="btn btn-outline btn-sm" data-today-action-admin-target="${escapeHtml(action.adminTarget)}" data-today-action-type="${escapeHtml(action.type)}">${escapeHtml(action.focusLabel || '관리자에서 보기')}</button>`;
   } else if (action.scrollTarget) {
     actionButton = `<button type="button" class="btn btn-outline btn-sm" data-today-action-scroll-target="${escapeHtml(action.scrollTarget)}">${escapeHtml(action.focusLabel || '패널 보기')}</button>`;
   }
