@@ -9,7 +9,7 @@ test('parseRoadmapMarkdown extracts roadmap metadata and next task', async () =>
   const roadmap = parseRoadmapMarkdown(markdown);
 
   assert.equal(roadmap.title, '개발 WBS 및 로드맵');
-  assert.equal(roadmap.dateLabel, '2026-06-22');
+  assert.equal(roadmap.dateLabel, '2026-06-24');
   assert.ok(roadmap.completedScope.some((item) => item.category === '공식 일봉 provider 실험'));
   assert.ok(roadmap.completedScope.some((item) => item.category === 'NXT provider 골격'));
   assert.ok(roadmap.completedScope.some((item) => item.category === '증권사 API adapter 검토'));
@@ -96,9 +96,9 @@ test('parseRoadmapMarkdown extracts roadmap metadata and next task', async () =>
   assert.ok(roadmap.completedScope.some((item) => item.category === 'Postgres 쿼리 어댑터'));
   assert.ok(roadmap.completedScope.some((item) => item.category === 'Postgres 연결 리허설'));
   assert.ok(roadmap.completedScope.some((item) => item.category === '개인 로컬 운영 전환 WBS'));
-  assert.ok(roadmap.sections.length >= 15);
+  assert.ok(roadmap.sections.length >= 16);
   assert.equal(roadmap.recommendedOrder[0], '~~개인 로컬 운영 전환 1차 정리~~ (13.1 완료)');
-  assert.equal(roadmap.nextTask.title, '개인 운영 안정화와 레거시 정리 2차');
+  assert.equal(roadmap.nextTask.title, '개인 운영 편의성 개선');
   assert.ok(roadmap.statusLegend.some((item) => item.status === 'pending' && item.label === '예정'));
   assert.ok(roadmap.summary.paused > 0);
   assert.ok(roadmap.summary.total > roadmap.summary.completed);

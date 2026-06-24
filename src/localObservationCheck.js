@@ -766,6 +766,8 @@ function checkAlertRuleGuide(staticFiles) {
 }
 
 function checkDividendApiDashboard(staticFiles) {
+  const guidanceSource = staticFiles.dividendFailureGuidanceJs || staticFiles.appJs;
+
   const ok = containsAll(staticFiles.indexHtml, [
     'dividendDiagnosticsPanel',
     '배당 provider 상태'
@@ -773,7 +775,9 @@ function checkDividendApiDashboard(staticFiles) {
     'buildDividendApiDashboard',
     'renderDividendApiDashboard',
     'dividend-provider-grid',
-    '다음 조치',
+    'dividendFailureGuidance'
+  ]) && containsAll(guidanceSource, [
+    'buildDividendFailureNextActions',
     'DATA_GO_KR_SERVICE_KEY',
     'OPEN_DART_API_KEY',
     'ALPHA_VANTAGE_API_KEY'
@@ -788,8 +792,10 @@ function checkDividendApiDashboard(staticFiles) {
     '배당 API 자동 검증',
     '최근 자동 검증 상태, provider별 결과, 다음 조치가 관리자 화면에서 보인다',
     ok ? 'passed' : 'failed',
-    ok ? '배당 API 자동 검증 대시보드와 provider별 다음 조치 연결을 확인했습니다.' : '배당 API 자동 검증 대시보드 연결을 찾지 못했습니다.',
-    ok ? '' : '관리자 운영 진단의 배당 API 요약, provider 카드, 다음 조치 표시를 확인합니다.'
+    ok
+      ? '배당 API 자동 검증 대시보드와 dividendFailureGuidance 다음 조치 연결을 확인했습니다.'
+      : '배당 API 자동 검증 대시보드 연결을 찾지 못했습니다.',
+    ok ? '' : '관리자 운영 진단의 배당 API 요약, provider 카드, dividendFailureGuidance.js를 확인합니다.'
   );
 }
 
@@ -1729,16 +1735,18 @@ function createResult(id, item, passCriteria, status, evidence, nextAction = '')
 }
 
 async function readStaticFiles(rootDir) {
-  const [appJs, indexHtml, stylesCss] = await Promise.all([
+  const [appJs, indexHtml, stylesCss, dividendFailureGuidanceJs] = await Promise.all([
     readOptionalFile(path.join(rootDir, 'public', 'app.js')),
     readOptionalFile(path.join(rootDir, 'public', 'index.html')),
-    readOptionalFile(path.join(rootDir, 'public', 'styles.css'))
+    readOptionalFile(path.join(rootDir, 'public', 'styles.css')),
+    readOptionalFile(path.join(rootDir, 'public', 'dividendFailureGuidance.js'))
   ]);
 
   return {
     appJs,
     indexHtml,
-    stylesCss
+    stylesCss,
+    dividendFailureGuidanceJs
   };
 }
 

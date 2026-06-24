@@ -41,6 +41,20 @@ test('runLocalObservationCheck summarizes read-only observation checks', async (
   assert.match(formatLocalObservationReport(result), /OBS-003/);
 });
 
+test('runLocalObservationCheck passes dividend dashboard wiring for production static files', async () => {
+  const rootDir = path.resolve(process.cwd());
+  const result = await runLocalObservationCheck({
+    rootDir,
+    baseUrl: 'http://127.0.0.1:3001',
+    adminToken: 'admin-token',
+    now: '2026-05-22T09:00:00.000Z',
+    fetchImpl: createObservationFetch()
+  });
+
+  const dividendCheck = result.results.find((item) => item.id === 'dividend-api-dashboard');
+  assert.equal(dividendCheck?.status, 'passed', dividendCheck?.detail || 'missing dividend check');
+});
+
 test('runLocalObservationCheck can verify manual quote and alert controls with a temporary stock', async () => {
   const rootDir = await createObservationFixture();
   const result = await runLocalObservationCheck({
@@ -507,9 +521,21 @@ async function createObservationFixture() {
       'function renderAlertRuleGuideComparison() {}',
       'function buildDividendApiDashboard() {}',
       'function renderDividendApiDashboard() {}',
+      'import { buildDividendFailureNextActions } from "./dividendFailureGuidance.js";',
       'const WATCH_VIEW_STORAGE_KEY = "stock_alarm_watch_view";',
       'const CSV_STOCK_FIELDS = [];',
-      'const a = "quote-quality maximumProfitAmount retracement 알림 재개 /api/backups/preview /api/stocks connectionBanner 다시 연결 캐시 초기화 Failed to fetch 필요 입력 계산식 투자 권유가 아니라 dividend-provider-grid 다음 조치 DATA_GO_KR_SERVICE_KEY OPEN_DART_API_KEY ALPHA_VANTAGE_API_KEY";'
+      'const a = "quote-quality maximumProfitAmount retracement 알림 재개 /api/backups/preview /api/stocks connectionBanner 다시 연결 캐시 초기화 Failed to fetch 필요 입력 계산식 투자 권유가 아니라 dividend-provider-grid 다음 조치 dividendFailureGuidance";'
+    ].join('\n')
+  );
+  await fs.writeFile(
+    path.join(rootDir, 'public', 'dividendFailureGuidance.js'),
+    [
+      'export function buildDividendFailureNextActions() { return []; }',
+      'const PROVIDER_SETUP_HINTS = {',
+      '  publicdata: "DATA_GO_KR_SERVICE_KEY",',
+      '  opendart: "OPEN_DART_API_KEY",',
+      '  alphavantage: "ALPHA_VANTAGE_API_KEY"',
+      '};'
     ].join('\n')
   );
   await fs.writeFile(

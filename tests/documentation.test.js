@@ -248,6 +248,51 @@ test('wbs 14 evolution skill documents session workflow and constraints', async 
   assert.match(agents, /wbs-14-evolution/);
 });
 
+test('wbs 16 evolution skill documents session workflow and constraints', async () => {
+  const skill = await fs.readFile(
+    new URL('../.cursor/skills/wbs-16-evolution/SKILL.md', import.meta.url),
+    'utf8'
+  );
+  const agents = await fs.readFile(new URL('../AGENTS.md', import.meta.url), 'utf8');
+  const readme = await fs.readFile(new URL('../README.md', import.meta.url), 'utf8');
+
+  assert.match(skill, /name: wbs-16-evolution/);
+  assert.match(skill, /세션당 WBS ID 하나/);
+  assert.match(skill, /16\.6/);
+  assert.match(skill, /16\.5/);
+  assert.match(skill, /npm test/);
+  assert.match(skill, /check:observation/);
+  assert.match(skill, /local-smoke-check/);
+  assert.match(skill, /JsonStore only/);
+  assert.match(skill, /wbs-15-evolution/);
+  assert.match(agents, /wbs-16-evolution/);
+  assert.match(readme, /wbs-16-evolution/);
+});
+
+test('personal backlog triages OBS items and maps WBS 16 candidates', async () => {
+  const backlog = await fs.readFile(
+    new URL('../docs/personal-backlog.md', import.meta.url),
+    'utf8'
+  );
+  const roadmap = await fs.readFile(
+    new URL('../docs/development-roadmap.md', import.meta.url),
+    'utf8'
+  );
+
+  assert.match(backlog, /16\.3 triage/);
+  assert.match(backlog, /BL-08.*완료/);
+  assert.match(backlog, /BL-13.*완료/);
+  assert.match(backlog, /BL-12.*16\.6/);
+  assert.match(backlog, /BL-16/);
+  assert.match(backlog, /16\.6/);
+  assert.match(backlog, /wbs-16-evolution/);
+  assert.match(backlog, /json-legacy-fields-deprecation/);
+  assert.match(backlog, /OBS-001~015/);
+  assert.match(roadmap, /16\.5.*완료/);
+  assert.match(roadmap, /16\.6.*예정/);
+  assert.match(roadmap, /personal-backlog\.md/);
+});
+
 test('personal backlog triages OBS items and maps WBS 15 candidates', async () => {
   const backlog = await fs.readFile(
     new URL('../docs/personal-backlog.md', import.meta.url),
@@ -270,6 +315,41 @@ test('personal backlog triages OBS items and maps WBS 15 candidates', async () =
   assert.match(backlog, /OBS-001~015/);
   assert.match(roadmap, /15\.8.*완료/);
   assert.match(roadmap, /personal-backlog\.md/);
+});
+
+test('WBS 16 operations docs align weekly routine telegram legacy and observation', async () => {
+  const routine = await fs.readFile(
+    new URL('../docs/personal-weekly-routine.md', import.meta.url),
+    'utf8'
+  );
+  const telegram = await fs.readFile(
+    new URL('../docs/personal-telegram-operations.md', import.meta.url),
+    'utf8'
+  );
+  const legacy = await fs.readFile(
+    new URL('../docs/json-legacy-fields-deprecation.md', import.meta.url),
+    'utf8'
+  );
+  const observation = await fs.readFile(
+    new URL('../docs/local-webapp-observation-2026-05-21.md', import.meta.url),
+    'utf8'
+  );
+  const roadmap = await fs.readFile(
+    new URL('../docs/development-roadmap.md', import.meta.url),
+    'utf8'
+  );
+
+  assert.match(routine, /telegramPollHealth/);
+  assert.match(routine, /stripLegacy/);
+  assert.match(routine, /시세 신선도/);
+  assert.match(routine, /16\.4/);
+  assert.match(telegram, /telegramPollHealth/);
+  assert.match(telegram, /TG-07/);
+  assert.match(legacy, /optional_migration/);
+  assert.match(legacy, /schemaVersion 2/);
+  assert.match(legacy, /removed.*완료/);
+  assert.doesNotMatch(observation, /종목\/알림\/기기/);
+  assert.match(roadmap, /16\.4.*완료/);
 });
 
 test('personal weekly routine documents npm test observation backup and telegram checks', async () => {
@@ -307,13 +387,60 @@ test('WBS 14 docs align README AGENTS roadmap and evolution skill', async () => 
   );
 
   assert.match(readme, /14\.1~14\.8.*완료/);
-  assert.match(readme, /WBS 15 완료/);
-  assert.match(agents, /13·14·15/);
+  assert.match(readme, /15\.1~15\.8.*완료/);
+  assert.match(readme, /WBS 16/);
+  assert.match(agents, /WBS 16/);
   assert.match(agents, /wbs-15-evolution/);
   assert.match(roadmap, /14\.8.*완료/);
   assert.match(roadmap, /15\.8.*완료/);
   assert.match(roadmap, /개인 운영 안정화와 레거시 정리 2차/);
-  assert.match(regression, /270개 전부 통과/);
+  assert.match(regression, /276개 전부 통과/);
+});
+
+test('WBS 16 docs align README AGENTS roadmap after 16.1', async () => {
+  const readme = await fs.readFile(new URL('../README.md', import.meta.url), 'utf8');
+  const agents = await fs.readFile(new URL('../AGENTS.md', import.meta.url), 'utf8');
+  const roadmap = await fs.readFile(
+    new URL('../docs/development-roadmap.md', import.meta.url),
+    'utf8'
+  );
+  const regression = await fs.readFile(
+    new URL('../docs/full-regression-test-scenarios.md', import.meta.url),
+    'utf8'
+  );
+
+  assert.match(readme, /16\.1~16\.5 완료/);
+  assert.match(readme, /16\.6/);
+  assert.match(readme, /개인 운영 편의성 개선/);
+  assert.match(agents, /16\.6/);
+  assert.match(agents, /wbs-16-evolution/);
+  assert.match(roadmap, /16\.1.*완료/);
+  assert.match(roadmap, /16\.5.*완료/);
+  assert.match(roadmap, /16\.6.*예정/);
+  assert.match(roadmap, /개인 운영 편의성 개선/);
+  assert.match(regression, /276개 전부 통과/);
+});
+
+test('development roadmap defines WBS 16 convenience improvement backlog', async () => {
+  const roadmap = await fs.readFile(
+    new URL('../docs/development-roadmap.md', import.meta.url),
+    'utf8'
+  );
+  const backlog = await fs.readFile(
+    new URL('../docs/personal-backlog.md', import.meta.url),
+    'utf8'
+  );
+
+  assert.match(roadmap, /### 16\. 개인 운영 편의성 개선/);
+  assert.match(roadmap, /16\.1.*완료/);
+  assert.match(roadmap, /16\.6.*텔레그램 원격 점검 강화/);
+  assert.match(roadmap, /16\.4.*운영 문서 정합/);
+  assert.match(roadmap, /세션당 WBS ID 하나/);
+  assert.match(roadmap, /16\.4.*완료/);
+  assert.match(roadmap, /16\.5.*완료/);
+  assert.match(backlog, /BL-08.*완료/);
+  assert.match(backlog, /BL-12.*16\.6/);
+  assert.match(backlog, /16\.1/);
 });
 
 test('personal kis naver alert operations documents noise policy and admin handling', async () => {
@@ -357,7 +484,7 @@ test('personal regression scenario guide documents local telegram-focused covera
 
   assert.match(markdown, /개인용 회귀 테스트 시나리오/);
   assert.match(markdown, /WBS 13\.10/);
-  assert.match(markdown, /270개 전부 통과/);
+  assert.match(markdown, /276개 전부 통과/);
   assert.match(markdown, /npm test/);
   assert.match(markdown, /서버 실행\/종료 테스트/);
   assert.match(markdown, /사용자 웹앱 테스트/);
