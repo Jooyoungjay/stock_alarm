@@ -21,6 +21,7 @@ import {
   sendTelegramMessage
 } from './telegram.js';
 import { assessTelegramPollHealth } from './telegramPollHealth.js';
+import { readEnrichedLastKisNaverAutoCompareSnapshot } from './kisNaverAutoCompare.js';
 import { readLocalObservationHistoryReport } from './localObservationCheck.js';
 import {
   buildTelegramTodayActions,
@@ -274,9 +275,11 @@ async function buildTelegramTodaySummary(store, config, options = {}) {
     dataDir,
     env: options.env
   });
+  const kisNaverAutoCompare = await readEnrichedLastKisNaverAutoCompareSnapshot(store);
   const actions = buildTelegramTodayActions({
     stocks,
     observationHistoryRecent: observationHistory.recent,
+    kisNaverAutoCompare,
     telegramConfigured: isTelegramConfigured(config),
     telegramCommandPollSeconds: config.telegramCommandPollSeconds,
     lastTelegramCommandPoll: options.lastTelegramCommandPoll ?? null,

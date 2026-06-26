@@ -232,6 +232,61 @@ export function buildKisNaverCompareIssueStateSummary(issues = []) {
   return summary;
 }
 
+export function summarizeKisNaverCompareOpenIssues(snapshot) {
+  if (!snapshot || typeof snapshot !== 'object' || Array.isArray(snapshot)) {
+    return null;
+  }
+
+  const alert =
+    snapshot.alert && typeof snapshot.alert === 'object' && !Array.isArray(snapshot.alert)
+      ? snapshot.alert
+      : null;
+
+  if (!alert) {
+    return null;
+  }
+
+  const openFromCount = Number(alert.openIssueCount);
+
+  if (Number.isFinite(openFromCount) && openFromCount > 0) {
+    return {
+      open: openFromCount,
+      total: Number(alert.issueStateSummary?.total) || openFromCount,
+      checkedAt: normalizeCheckedAt(snapshot.checkedAt || alert.attemptedAt)
+    };
+  }
+
+  const issues = Array.isArray(alert.issues) ? alert.issues : [];
+  const open = issues.filter((issue) => {
+    const status =
+      normalizeKisNaverCompareIssueStateStatus(issue?.resolution?.status) ||
+      KIS_NAVER_COMPARE_ISSUE_STATUSES.OPEN;
+
+    return status === KIS_NAVER_COMPARE_ISSUE_STATUSES.OPEN;
+  }).length;
+
+  if (!open) {
+    return null;
+  }
+
+  return {
+    open,
+    total: issues.length,
+    checkedAt: normalizeCheckedAt(snapshot.checkedAt || alert.attemptedAt)
+  };
+}
+
+function normalizeCheckedAt(value) {
+  const text = String(value || '').trim();
+
+  if (!text) {
+    return '';
+  }
+
+  const timestamp = Date.parse(text);
+  return Number.isFinite(timestamp) ? text : '';
+}
+
 function buildOpenIssueState(issueKey) {
   return {
     issueKey,

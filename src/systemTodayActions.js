@@ -1,4 +1,5 @@
 import { classifyQuoteFreshness, summarizeQuoteFreshness } from './quoteFreshness.js';
+import { summarizeKisNaverCompareOpenIssues } from './kisNaverCompareIssues.js';
 import { assessTelegramPollHealth } from './telegramPollHealth.js';
 import { formatTodayActionPriority } from './todayActionPriority.js';
 
@@ -114,6 +115,22 @@ export function buildSystemTodayActions(context = {}) {
         detail: `수동 ${manualSummary.manual}개 · ${formatGeneratedAt(manualSummary.generatedAt)}`,
         meta: '점검 히스토리',
         commandHint: '웹 관리자 점검 히스토리에서 확인'
+      })
+    );
+  }
+
+  const kisNaverSummary = summarizeKisNaverCompareOpenIssues(context.kisNaverAutoCompare);
+
+  if (kisNaverSummary) {
+    actions.push(
+      createTodayAction({
+        type: 'kis-naver-compare-open',
+        priority: 'warning',
+        rank: 9,
+        title: 'KIS/Naver 가격 비교 이슈',
+        detail: `미처리 ${kisNaverSummary.open}개${kisNaverSummary.total > kisNaverSummary.open ? ` · 전체 ${kisNaverSummary.total}개` : ''}${kisNaverSummary.checkedAt ? ` · ${formatGeneratedAt(kisNaverSummary.checkedAt)}` : ''}`,
+        meta: '가격 비교',
+        commandHint: '웹 관리자 KIS/Naver 가격 비교에서 확인'
       })
     );
   }

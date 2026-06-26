@@ -7,6 +7,7 @@ import {
   kisNaverCompareIssueStatesMetaKey,
   normalizeKisNaverCompareIssueStates,
   reopenResolvedKisNaverCompareIssues,
+  summarizeKisNaverCompareOpenIssues,
   updateKisNaverCompareIssueState
 } from '../src/kisNaverCompareIssues.js';
 
@@ -71,6 +72,45 @@ test('applyKisNaverCompareIssueStates decorates alert issues and summarizes stat
   });
   assert.equal(decorated.alert.openIssueCount, 1);
   assert.equal(decorated.alert.handledIssueCount, 2);
+});
+
+test('summarizeKisNaverCompareOpenIssues returns null when no open issues remain', () => {
+  const snapshot = applyKisNaverCompareIssueStates(
+    {
+      checkedAt: '2026-06-24T09:00:00.000Z',
+      alert: {
+        issues: [{ key: 'issue-1', title: '괴리' }]
+      }
+    },
+    {
+      'issue-1': { status: 'resolved', updatedAt: '2026-06-24T09:30:00.000Z' }
+    }
+  );
+
+  assert.equal(summarizeKisNaverCompareOpenIssues(snapshot), null);
+});
+
+test('summarizeKisNaverCompareOpenIssues counts open issues from enriched snapshot', () => {
+  const snapshot = applyKisNaverCompareIssueStates(
+    {
+      checkedAt: '2026-06-24T09:00:00.000Z',
+      alert: {
+        issues: [
+          { key: 'issue-1', title: '괴리' },
+          { key: 'issue-2', title: '실패' }
+        ]
+      }
+    },
+    {
+      'issue-1': { status: 'on_hold', updatedAt: '2026-06-24T09:10:00.000Z' }
+    }
+  );
+
+  const summary = summarizeKisNaverCompareOpenIssues(snapshot);
+
+  assert.equal(summary?.open, 1);
+  assert.equal(summary?.total, 2);
+  assert.equal(summary?.checkedAt, '2026-06-24T09:00:00.000Z');
 });
 
 test('normalizeKisNaverCompareIssueStates drops invalid entries', () => {

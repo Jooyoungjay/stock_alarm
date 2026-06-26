@@ -82,6 +82,27 @@ test('buildSystemTodayActions includes observation failed summary', () => {
   assert.ok(actions.some((action) => action.type === 'observation-failed'));
 });
 
+test('buildSystemTodayActions includes open KIS/Naver compare issues', () => {
+  const actions = buildSystemTodayActions({
+    stocks: [],
+    kisNaverAutoCompare: {
+      checkedAt: '2026-06-24T09:00:00.000Z',
+      alert: {
+        openIssueCount: 2,
+        issueStateSummary: { open: 2, total: 3 },
+        issues: []
+      }
+    },
+    telegramPollHealth: { status: 'ok', level: 'ok', label: '정상', detail: 'ok' }
+  });
+
+  const action = actions.find((item) => item.type === 'kis-naver-compare-open');
+
+  assert.ok(action);
+  assert.match(action.detail, /미처리 2개/);
+  assert.match(action.commandHint, /KIS\/Naver/);
+});
+
 test('formatTelegramTodayMessage reports empty state', () => {
   const message = formatTelegramTodayMessage([]);
   assert.match(message, /긴급 확인 항목이 없습니다/);

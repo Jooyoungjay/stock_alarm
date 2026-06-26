@@ -7,6 +7,7 @@ import {
 } from './kisNaverCompareAlertPolicy.js';
 import {
   KIS_NAVER_COMPARE_ISSUE_STATUSES,
+  applyKisNaverCompareIssueStates,
   decorateKisNaverCompareIssues,
   normalizeKisNaverCompareIssueKey,
   readKisNaverCompareIssueStates,
@@ -688,6 +689,17 @@ async function readLastKisNaverAutoCompareSnapshot(store) {
   }
 
   return store.getMetaValue(lastKisNaverAutoCompareMetaKey, null);
+}
+
+export async function readEnrichedLastKisNaverAutoCompareSnapshot(store) {
+  const snapshot = await readLastKisNaverAutoCompareSnapshot(store);
+
+  if (!snapshot) {
+    return null;
+  }
+
+  const issueStates = await readKisNaverCompareIssueStates(store);
+  return applyKisNaverCompareIssueStates(snapshot, issueStates);
 }
 
 async function readLastKisNaverAutoCompareAlert(store) {

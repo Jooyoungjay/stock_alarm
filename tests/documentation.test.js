@@ -430,13 +430,13 @@ test('WBS 19 docs align README AGENTS roadmap after 19.1', async () => {
     'utf8'
   );
 
-  assert.match(readme, /19\.1~19\.3 완료/);
+  assert.match(readme, /19\.1~19\.4 완료/);
   assert.match(readme, /장중 오늘 할 일·알림 연동 심화/);
   assert.match(agents, /WBS 19/);
   assert.match(agents, /wbs-19-evolution/);
-  assert.match(roadmap, /19\.3.*완료/);
+  assert.match(roadmap, /19\.4.*완료/);
   assert.match(roadmap, /WBS 19/);
-  assert.match(backlog, /BL-28/);
+  assert.match(backlog, /BL-28.*완료/);
 });
 
 test('WBS 18 docs align README AGENTS roadmap after 18.1', async () => {

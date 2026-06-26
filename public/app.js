@@ -6709,6 +6709,23 @@ function buildSystemTodayActions(items) {
     );
   }
 
+  const kisNaverSummary = summarizeKisNaverCompareOpenIssuesFromState();
+
+  if (isAdminMode() && kisNaverSummary) {
+    actions.push(
+      createTodayAction({
+        type: 'kis-naver-compare-open',
+        priority: 'warning',
+        rank: 9,
+        title: 'KIS/Naver 가격 비교 이슈',
+        detail: `미처리 ${kisNaverSummary.open}개${kisNaverSummary.total > kisNaverSummary.open ? ` · 전체 ${kisNaverSummary.total}개` : ''}${kisNaverSummary.checkedAt ? ` · ${formatDate(kisNaverSummary.checkedAt)}` : ''}`,
+        meta: '가격 비교',
+        adminTarget: 'kisNaverCompareHistoryPanel',
+        focusLabel: '가격 비교 보기'
+      })
+    );
+  }
+
   return actions;
 }
 
@@ -6751,6 +6768,46 @@ function getLatestObservationFailedSummary() {
     failed,
     generatedAt: latest.generatedAt,
     fileName: latest.fileName
+  };
+}
+
+function summarizeKisNaverCompareOpenIssuesFromState() {
+  const snapshot = state.lastKisNaverAutoCompare;
+
+  if (!snapshot || typeof snapshot !== 'object') {
+    return null;
+  }
+
+  const alert = snapshot.alert;
+
+  if (!alert || typeof alert !== 'object') {
+    return null;
+  }
+
+  const openFromCount = Number(alert.openIssueCount);
+
+  if (Number.isFinite(openFromCount) && openFromCount > 0) {
+    return {
+      open: openFromCount,
+      total: Number(alert.issueStateSummary?.total) || openFromCount,
+      checkedAt: snapshot.checkedAt || alert.attemptedAt || ''
+    };
+  }
+
+  const issues = Array.isArray(alert.issues) ? alert.issues : [];
+  const open = issues.filter((issue) => {
+    const status = String(issue?.resolution?.status || 'open').trim().toLowerCase();
+    return status === 'open';
+  }).length;
+
+  if (!open) {
+    return null;
+  }
+
+  return {
+    open,
+    total: issues.length,
+    checkedAt: snapshot.checkedAt || alert.attemptedAt || ''
   };
 }
 
