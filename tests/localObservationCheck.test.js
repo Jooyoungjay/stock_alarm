@@ -529,11 +529,14 @@ async function createObservationFixture() {
       'function buildDividendApiDashboard() {}',
       'function renderDividendApiDashboard() {}',
       'function buildSystemTodayActions() {}',
+      'function applyObservationHistoryTodayActionJump() {}',
+      'function getObservationHistoryFilterFromActionType() {}',
       'function focusStaleQuoteStocks() {}',
+      'const observationHistoryListFilter = "all";',
       'import { buildDividendFailureNextActions } from "./dividendFailureGuidance.js";',
       'const WATCH_VIEW_STORAGE_KEY = "stock_alarm_watch_view";',
       'const CSV_STOCK_FIELDS = [];',
-      'const a = "quote-quality maximumProfitAmount retracement 알림 재개 /api/backups/preview /api/stocks connectionBanner 다시 연결 캐시 초기화 Failed to fetch 필요 입력 계산식 투자 권유가 아니라 dividend-provider-grid 다음 조치 dividendFailureGuidance data-today-action-filter data-today-action-stock data-today-action-admin-target data-today-action-scroll-target";'
+      'const a = "quote-quality maximumProfitAmount retracement 알림 재개 /api/backups/preview /api/stocks connectionBanner 다시 연결 캐시 초기화 Failed to fetch 필요 입력 계산식 투자 권유가 아니라 dividend-provider-grid 다음 조치 dividendFailureGuidance getObservationHistoryFilterFromActionType observation-manual observation-failed telegram-poll-health quote-freshness-summary kis-naver-compare-open threshold-alert quote-error quote-missing quote-stale dividend-error data-today-action-filter data-today-action-stock data-today-action-admin-target data-today-action-type data-today-action-scroll-target data-observation-history-list-filter";'
     ].join('\n')
   );
   await fs.writeFile(

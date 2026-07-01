@@ -1,3 +1,8 @@
+import {
+  TODAY_ACTION_ADMIN_JUMP_TYPES,
+  TODAY_ACTION_OBSERVATION_TYPES
+} from './todayActionContract.js';
+
 export const OBSERVATION_STATIC_MARKERS = Object.freeze({
   userHome: Object.freeze([
     'watchTitle',
@@ -85,12 +90,20 @@ export const OBSERVATION_STATIC_MARKERS = Object.freeze({
   backupPreview: Object.freeze(['previewBackupItem', '/api/backups/preview']),
   todayActionControls: Object.freeze([
     'buildSystemTodayActions',
+    'applyObservationHistoryTodayActionJump',
+    'getObservationHistoryFilterFromActionType',
+    'observationHistoryListFilter',
+    ...TODAY_ACTION_ADMIN_JUMP_TYPES,
     'focusStaleQuoteStocks',
     'data-today-action-filter',
     'data-today-action-stock',
     'data-today-action-admin-target',
-    'data-today-action-scroll-target'
+    'data-today-action-type',
+    'data-today-action-scroll-target',
+    'data-observation-history-list-filter',
+    ...TODAY_ACTION_OBSERVATION_TYPES
   ]),
+  todayActionTypes: Object.freeze([...TODAY_ACTION_OBSERVATION_TYPES]),
   connectionFailure: Object.freeze([
     'connectionBanner',
     '\uB2E4\uC2DC \uC5F0\uACB0',

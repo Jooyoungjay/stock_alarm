@@ -270,7 +270,8 @@ const state = {
   observationIssues: null,
   observationHistory: null,
   observationHistoryDetail: null,
-  observationHistoryManualOnly: false,
+  observationHistoryListFilter: 'all',
+  observationHistoryDetailFilter: 'issues',
   observationRun: null,
   telegramPollHealth: null,
   lastTelegramCommandPoll: null,
@@ -730,9 +731,18 @@ elements.observationHistoryPanel?.addEventListener('click', async (event) => {
   const downloadButton = event.target.closest('[data-observation-history-download]');
   const deleteButton = event.target.closest('[data-observation-history-delete]');
   const pruneButton = event.target.closest('[data-observation-history-prune]');
+  const listFilterButton = event.target.closest('[data-observation-history-list-filter]');
   const manualFilterButton = event.target.closest('[data-observation-history-manual-filter]');
   const weeklyChecklistButton = event.target.closest('[data-copy-weekly-checklist]');
-  const button = actionSaveButton || detailButton || downloadButton || deleteButton || pruneButton || manualFilterButton || weeklyChecklistButton;
+  const button =
+    actionSaveButton ||
+    detailButton ||
+    downloadButton ||
+    deleteButton ||
+    pruneButton ||
+    listFilterButton ||
+    manualFilterButton ||
+    weeklyChecklistButton;
 
   if (!button) {
     return;
@@ -749,9 +759,15 @@ elements.observationHistoryPanel?.addEventListener('click', async (event) => {
       return;
     }
 
+    if (listFilterButton) {
+      await applyObservationHistoryListFilter(listFilterButton.dataset.observationHistoryListFilter || 'all');
+      return;
+    }
+
     if (manualFilterButton) {
-      state.observationHistoryManualOnly = manualFilterButton.dataset.observationHistoryManualFilter === 'true';
-      renderObservationHistory(state.observationHistory);
+      await applyObservationHistoryListFilter(
+        manualFilterButton.dataset.observationHistoryManualFilter === 'true' ? 'manual' : 'all'
+      );
       return;
     }
 
@@ -4469,6 +4485,100 @@ function formatObservationRunMessage(result) {
   return `점검 완료: 실패 ${result.summary?.failed || 0}개, 수동 ${result.summary?.manual || 0}개, 통과 ${result.summary?.passed || 0}개. ${saved}.`;
 }
 
+function renderObservationHistoryListFilters() {
+  const filter = state.observationHistoryListFilter || 'all';
+
+  return `
+    <div class="observation-history-list-filters" role="group" aria-label="점검 히스토리 필터">
+      <button type="button" class="btn btn-outline btn-sm secondary-button" data-observation-history-list-filter="all" ${filter === 'all' ? 'disabled' : ''}>전체</button>
+      <button type="button" class="btn btn-outline btn-sm secondary-button" data-observation-history-list-filter="failed" ${filter === 'failed' ? 'disabled' : ''}>실패만</button>
+      <button type="button" class="btn btn-outline btn-sm secondary-button" data-observation-history-list-filter="manual" ${filter === 'manual' ? 'disabled' : ''}>수동만</button>
+    </div>
+  `;
+}
+
+function filterObservationHistoryRecent(recent = [], listFilter = 'all') {
+  return (Array.isArray(recent) ? recent : []).filter((item) => {
+    if (listFilter === 'manual') {
+      return Number(item.summary?.manual || 0) > 0;
+    }
+
+    if (listFilter === 'failed') {
+      return Number(item.summary?.failed || 0) > 0;
+    }
+
+    return true;
+  });
+}
+
+function filterObservationDetailResults(results = [], detailFilter = 'issues') {
+  const items = Array.isArray(results) ? results : [];
+
+  if (detailFilter === 'manual') {
+    return items.filter((item) => item.status === 'manual');
+  }
+
+  if (detailFilter === 'failed') {
+    return items.filter((item) => item.status === 'failed');
+  }
+
+  const issueResults = items.filter((item) => item.status === 'failed' || item.status === 'manual');
+  return issueResults.length ? issueResults : items;
+}
+
+function getObservationHistoryFilterFromActionType(actionType) {
+  if (actionType === 'observation-manual') {
+    return { listFilter: 'manual', detailFilter: 'manual' };
+  }
+
+  if (actionType === 'observation-failed') {
+    return { listFilter: 'failed', detailFilter: 'failed' };
+  }
+
+  return { listFilter: 'all', detailFilter: 'issues' };
+}
+
+function findLatestObservationHistoryEntry(listFilter = 'all') {
+  const recent = Array.isArray(state.observationHistory?.recent) ? state.observationHistory.recent : [];
+  return filterObservationHistoryRecent(recent, listFilter)[0] || null;
+}
+
+async function applyObservationHistoryListFilter(listFilter = 'all', options = {}) {
+  const normalizedFilter = ['manual', 'failed'].includes(listFilter) ? listFilter : 'all';
+  state.observationHistoryListFilter = normalizedFilter;
+  state.observationHistoryDetailFilter =
+    normalizedFilter === 'manual' ? 'manual' : normalizedFilter === 'failed' ? 'failed' : 'issues';
+
+  if (options.openLatest !== false) {
+    const entry = findLatestObservationHistoryEntry(normalizedFilter);
+
+    if (entry?.fileName) {
+      state.observationHistoryDetail = await loadObservationHistoryDetail(entry.fileName);
+    } else {
+      state.observationHistoryDetail = null;
+    }
+  }
+
+  renderObservationHistory(state.observationHistory);
+}
+
+async function applyObservationHistoryTodayActionJump(actionType) {
+  const { listFilter, detailFilter } = getObservationHistoryFilterFromActionType(actionType);
+  state.observationHistoryListFilter = listFilter;
+  state.observationHistoryDetailFilter = detailFilter;
+
+  const entry = findLatestObservationHistoryEntry(listFilter);
+
+  if (entry?.fileName) {
+    state.observationHistoryDetail = await loadObservationHistoryDetail(entry.fileName);
+  } else {
+    state.observationHistoryDetail = null;
+  }
+
+  renderObservationHistory(state.observationHistory);
+  focusAdminPanel('observationHistoryPanel');
+}
+
 function renderObservationHistory(observationHistory) {
   if (!elements.observationHistoryPanel || !elements.observationHistorySummary) {
     return;
@@ -4479,8 +4589,9 @@ function renderObservationHistory(observationHistory) {
     return;
   }
 
-  const recent = (Array.isArray(observationHistory.recent) ? observationHistory.recent : []).filter(
-    (item) => !state.observationHistoryManualOnly || Number(item.summary?.manual || 0) > 0
+  const recent = filterObservationHistoryRecent(
+    Array.isArray(observationHistory.recent) ? observationHistory.recent : [],
+    state.observationHistoryListFilter
   );
   const manualSummary = observationHistory.manualSummary || null;
   const latest = observationHistory.latest || null;
@@ -4493,9 +4604,16 @@ function renderObservationHistory(observationHistory) {
     : '저장된 점검 기록이 없습니다.';
 
   if (!recent.length) {
+    const filterMessage =
+      state.observationHistoryListFilter === 'manual'
+        ? '수동 항목이 있는 점검 기록이 없습니다.'
+        : state.observationHistoryListFilter === 'failed'
+          ? '실패 항목이 있는 점검 기록이 없습니다.'
+          : '아직 저장된 점검 기록이 없습니다.';
+
     elements.observationHistoryPanel.innerHTML = `
       <div class="observation-history-empty">
-        <strong>아직 저장된 점검 기록이 없습니다.</strong>
+        <strong>${escapeHtml(filterMessage)}</strong>
         <span>장중 점검 후 아래 명령을 실행하면 이 카드에 기록이 쌓입니다.</span>
         <code>npm run check:observation -- --live-session --save-history</code>
         ${renderWeeklyChecklistCopyButton()}
@@ -4506,6 +4624,7 @@ function renderObservationHistory(observationHistory) {
 
   elements.observationHistoryPanel.innerHTML = `
     <div class="observation-history-toolbar">
+      ${renderObservationHistoryListFilters()}
       ${renderWeeklyChecklistCopyButton()}
     </div>
     <div class="observation-history-hero">
@@ -4643,8 +4762,8 @@ function renderObservationHistoryManualSummary(manualSummary) {
           <p>${escapeHtml(manualSummary.hint || '')}</p>
         </div>
         <div class="observation-history-actions">
-          <button type="button" class="btn btn-outline btn-sm secondary-button" data-observation-history-manual-filter="false" ${state.observationHistoryManualOnly ? '' : 'disabled'}>전체</button>
-          <button type="button" class="btn btn-outline btn-sm secondary-button" data-observation-history-manual-filter="true" ${state.observationHistoryManualOnly ? 'disabled' : ''}>수동만</button>
+          <button type="button" class="btn btn-outline btn-sm secondary-button" data-observation-history-manual-filter="false" ${state.observationHistoryListFilter === 'all' ? 'disabled' : ''}>전체</button>
+          <button type="button" class="btn btn-outline btn-sm secondary-button" data-observation-history-manual-filter="true" ${state.observationHistoryListFilter === 'manual' ? 'disabled' : ''}>수동만</button>
         </div>
       </div>
       ${lines ? `<ul class="observation-history-manual-list">${lines}</ul>` : '<div class="roadmap-note">최근 저장된 점검에 수동 항목이 없습니다.</div>'}
@@ -4825,8 +4944,7 @@ function renderObservationHistoryDetail(detail) {
   }
 
   const results = Array.isArray(detail.results) ? detail.results : [];
-  const issueResults = results.filter((item) => item.status === 'failed' || item.status === 'manual');
-  const visibleResults = issueResults.length ? issueResults : results;
+  const visibleResults = filterObservationDetailResults(results, state.observationHistoryDetailFilter);
 
   return `
     <section class="observation-history-detail" aria-label="선택한 점검 상세">
@@ -6609,15 +6727,19 @@ function renderTodayActionPanel(items) {
   elements.todayActionPanel
     .querySelectorAll('[data-today-action-admin-target]')
     .forEach((button) => {
-      button.addEventListener('click', () => {
+      button.addEventListener('click', async () => {
         const targetId = button.dataset.todayActionAdminTarget;
-        focusAdminPanel(targetId);
+        const actionType = button.dataset.todayActionType || '';
 
-        if (targetId === 'observationHistoryPanel') {
-          state.observationHistoryManualOnly =
-            button.dataset.todayActionType === 'observation-manual';
-          renderObservationHistory(state.observationHistory);
+        if (
+          targetId === 'observationHistoryPanel' &&
+          (actionType === 'observation-manual' || actionType === 'observation-failed')
+        ) {
+          await applyObservationHistoryTodayActionJump(actionType);
+          return;
         }
+
+        focusAdminPanel(targetId);
       });
     });
 
@@ -6689,7 +6811,7 @@ function buildSystemTodayActions(items) {
         detail: `실패 ${failedSummary.failed}개 · ${formatDate(failedSummary.generatedAt)}`,
         meta: '점검 히스토리',
         adminTarget: 'observationHistoryPanel',
-        focusLabel: '점검 히스토리 보기'
+        focusLabel: '실패 항목 보기'
       })
     );
   }
@@ -6704,7 +6826,7 @@ function buildSystemTodayActions(items) {
         detail: `수동 ${manualSummary.manual}개 · ${formatDate(manualSummary.generatedAt)}`,
         meta: '점검 히스토리',
         adminTarget: 'observationHistoryPanel',
-        focusLabel: '점검 히스토리 보기'
+        focusLabel: '수동 항목 보기'
       })
     );
   }
@@ -7118,7 +7240,7 @@ function limitTodayActions(actions) {
       break;
     }
 
-    const stockKey = action.stock?.id || action.stock?.symbol || action.name || action.id;
+    const stockKey = action.stock?.id || action.stock?.symbol || action.name || action.type;
     const count = stockCounts.get(stockKey) || 0;
 
     if (count >= TODAY_ACTION_MAX_PER_STOCK) {

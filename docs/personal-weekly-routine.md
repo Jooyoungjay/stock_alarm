@@ -37,7 +37,7 @@
 | W-01 | 전체 자동 테스트 | `npm test` | **298개** 전부 통과 |
 | W-02 | 서버 문법 | `node --check src/server.js` | 오류 없음 |
 | W-03 | 로컬 smoke | `npm run check:observation -- --base-url http://127.0.0.1:PORT` | READY (manual 항목은 장중 분리) |
-| W-04 | 헬스 | `Invoke-RestMethod http://127.0.0.1:PORT/api/health` | `ok=true`, `telegramConfigured`, `dataSchemaVersion: 2`, `telegramPollHealth.status`가 `ok` (또는 `nextAction` 확인), `quoteFreshnessSummary.needsAttention`이 0이거나 원인 파악 |
+| W-04 | 헬스 | `Invoke-RestMethod http://127.0.0.1:PORT/api/health` | `ok=true`, `telegramConfigured`, `dataSchemaVersion: 2`, `telegramPollHealth.status`가 `ok` (또는 `nextAction` 확인), `quoteFreshnessSummary.needsAttention`·`todayActionsSummary.needsAttention`이 0이거나 원인 파악 |
 
 W-04 예시:
 
@@ -48,6 +48,8 @@ $h.dataSchemaVersion    # 2
 $h.telegramPollHealth.status   # ok | stale | error
 $h.telegramPollHealth.detail
 $h.quoteFreshnessSummary.needsAttention
+$h.todayActionsSummary.needsAttention
+$h.todayActionsSummary.critical
 ```
 
 `ADMIN_TOKEN` 사용 시:
@@ -128,7 +130,7 @@ npm run check:observation -- --base-url http://127.0.0.1:PORT --live-session --s
 [ ] W-01 npm test (298 pass)
 [ ] W-02 node --check src/server.js
 [ ] W-03 check:observation READY
-[ ] W-04 /api/health ok + dataSchemaVersion 2 + telegramPollHealth + quoteFreshnessSummary
+[ ] W-04 /api/health ok + dataSchemaVersion 2 + telegramPollHealth + quoteFreshnessSummary + todayActionsSummary
 [ ] W-05 /backup 또는 관리자 백업 (stripLegacy 기본 체크)
 [ ] W-06 lastAutoBackup 확인
 [ ] W-07 /status 응답
@@ -143,7 +145,7 @@ npm run check:observation -- --base-url http://127.0.0.1:PORT --live-session --s
 
 | 항목 | 결과 |
 |---|---|
-| W-04 `quoteFreshnessSummary` | 반영 |
+| W-04 `quoteFreshnessSummary`·`todayActionsSummary` | 반영 |
 | W-08 `/today` | 반영 |
 | observation 마커 유지보수 | `src/localObservationStaticMarkers.js` + `tests/localObservationStaticMarkers.test.js` |
 | BL-17~18 | 해결 |

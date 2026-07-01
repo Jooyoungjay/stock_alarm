@@ -430,13 +430,29 @@ test('WBS 19 docs align README AGENTS roadmap after 19.1', async () => {
     'utf8'
   );
 
-  assert.match(readme, /19\.1~19\.4 완료/);
+  assert.match(readme, /19\.1~19\.8 완료/);
   assert.match(readme, /장중 오늘 할 일·알림 연동 심화/);
   assert.match(agents, /WBS 19/);
   assert.match(agents, /wbs-19-evolution/);
-  assert.match(roadmap, /19\.4.*완료/);
-  assert.match(roadmap, /WBS 19/);
-  assert.match(backlog, /BL-28.*완료/);
+  assert.match(roadmap, /19\.8.*완료/);
+  assert.match(roadmap, /WBS 19 완료/);
+  assert.match(backlog, /BL-33.*완료/);
+});
+
+test('WBS 19 todayAction contract markers and limits', async () => {
+  const markers = await fs.readFile(
+    new URL('../src/localObservationStaticMarkers.js', import.meta.url),
+    'utf8'
+  );
+  const contract = await fs.readFile(
+    new URL('../src/todayActionContract.js', import.meta.url),
+    'utf8'
+  );
+
+  assert.match(markers, /todayActionTypes/);
+  assert.match(markers, /todayActionContract\.js/);
+  assert.match(contract, /TODAY_ACTION_LIMIT = 5/);
+  assert.match(contract, /kis-naver-compare-open/);
 });
 
 test('WBS 18 docs align README AGENTS roadmap after 18.1', async () => {
@@ -1061,6 +1077,23 @@ test('admin backup and observation history expose stripLegacy default and weekly
   assert.match(script, /data-copy-weekly-checklist/);
   assert.match(script, /주간 체크리스트 복사/);
   assert.match(styles, /observation-history-toolbar/);
+});
+
+test('WBS 19 health todayActionsSummary contract', async () => {
+  const server = await fs.readFile(new URL('../src/server.js', import.meta.url), 'utf8');
+  const systemTodayActions = await fs.readFile(
+    new URL('../src/systemTodayActions.js', import.meta.url),
+    'utf8'
+  );
+  const operations = await fs.readFile(
+    new URL('../docs/personal-telegram-operations.md', import.meta.url),
+    'utf8'
+  );
+
+  assert.match(server, /todayActionsSummary/);
+  assert.match(server, /summarizeTodayActions/);
+  assert.match(systemTodayActions, /export function summarizeTodayActions/);
+  assert.match(operations, /todayActionsSummary/);
 });
 
 test('WBS 17 telegram today and observation marker contracts', async () => {

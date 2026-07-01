@@ -67,6 +67,12 @@ import {
 } from './localObservationCheck.js';
 import { isTelegramConfigured, sendTelegramMessage } from './telegram.js';
 import { pollTelegramCommands } from './telegramCommands.js';
+import { summarizeTodayActions } from './systemTodayActions.js';
+import {
+  buildTodayActionsContext,
+  lastTodayActionDigestAlertMetaKey,
+  runTodayActionDigest
+} from './todayActionDigest.js';
 import { normalizeSymbolInput, searchSymbols } from './symbols.js';
 
 const store = createStore(config, {
@@ -79,6 +85,7 @@ let lastCheck = null;
 let lastDividendRefresh = null;
 let lastDividendEventAlert = null;
 let lastDailyBriefing = null;
+let lastTodayActionDigest = null;
 let lastTelegramCommandPoll = null;
 let lastKisNaverAutoCompare = null;
 let lastAutoBackup = null;
@@ -86,6 +93,7 @@ let isChecking = false;
 let isRefreshingDividends = false;
 let isCheckingDividendEvents = false;
 let isSendingDailyBriefing = false;
+let isSendingTodayActionDigest = false;
 let isPollingTelegramCommands = false;
 let isRunningKisNaverAutoCompare = false;
 let isRunningAutoBackup = false;
@@ -276,6 +284,28 @@ async function runDailyBriefingOnce(options = {}) {
   }
 }
 
+async function runTodayActionDigestOnce(options = {}) {
+  if (isSendingTodayActionDigest) {
+    return {
+      checkedAt: new Date().toISOString(),
+      skipped: true,
+      reason: 'today_action_digest_already_running'
+    };
+  }
+
+  isSendingTodayActionDigest = true;
+
+  try {
+    lastTodayActionDigest = await runTodayActionDigest(store, config, {
+      ...options,
+      lastTelegramCommandPoll
+    });
+    return lastTodayActionDigest;
+  } finally {
+    isSendingTodayActionDigest = false;
+  }
+}
+
 async function runKisNaverAutoCompareOnce(options = {}) {
   if (isRunningKisNaverAutoCompare) {
     return {
@@ -404,6 +434,27 @@ async function getLastDailyBriefingSnapshot() {
         deliveryStatus: 'sent'
       }
     : null;
+}
+
+async function getLastTodayActionDigestSnapshot() {
+  if (lastTodayActionDigest) {
+    return lastTodayActionDigest;
+  }
+
+  if (typeof store.getMetaValue !== 'function') {
+    return null;
+  }
+
+  const previous = await store.getMetaValue(lastTodayActionDigestAlertMetaKey, null);
+
+  if (!previous) {
+    return null;
+  }
+
+  return {
+    deliveryStatus: 'sent',
+    ...previous
+  };
 }
 
 async function getLastKisNaverAutoCompareSnapshot() {
@@ -696,6 +747,7 @@ async function handleApi(request, response, url) {
       dividendRefreshSnapshot,
       dividendEventAlertSnapshot,
       dailyBriefingSnapshot,
+      todayActionDigestSnapshot,
       kisNaverAutoCompareSnapshot,
       autoBackupSnapshot,
       quoteProviderStats,
@@ -705,6 +757,7 @@ async function handleApi(request, response, url) {
       getLastDividendRefreshSnapshot(),
       getLastDividendEventAlertSnapshot(),
       getLastDailyBriefingSnapshot(),
+      getLastTodayActionDigestSnapshot(),
       getLastKisNaverAutoCompareSnapshot(),
       getLastAutoBackupSnapshot(),
       store.getQuoteProviderStats(),
@@ -712,6 +765,12 @@ async function handleApi(request, response, url) {
       store.listStocks()
     ]);
     const quoteFreshnessSummary = summarizeQuoteFreshness(stocks);
+    const todayActionsContext = await buildTodayActionsContext(store, config, {
+      stocks,
+      lastTelegramCommandPoll,
+      now: new Date()
+    });
+    const todayActionsSummary = summarizeTodayActions(todayActionsContext);
 
     sendJson(response, 200, {
       ok: true,
@@ -761,6 +820,9 @@ async function handleApi(request, response, url) {
       dailyBriefingCheckIntervalSeconds: config.dailyBriefingCheckIntervalSeconds,
       dailyBriefingWarningDistancePercent: config.dailyBriefingWarningDistancePercent,
       dailyBriefingTopLimit: config.dailyBriefingTopLimit,
+      todayActionDigestEnabled: config.todayActionDigestEnabled,
+      todayActionDigestCooldownMinutes: config.todayActionDigestCooldownMinutes,
+      todayActionDigestCheckIntervalSeconds: config.todayActionDigestCheckIntervalSeconds,
       telegramCommandPollSeconds: config.telegramCommandPollSeconds,
       lastTelegramCommandPoll,
       telegramPollHealth: assessTelegramPollHealth({
@@ -773,8 +835,10 @@ async function handleApi(request, response, url) {
       lastDividendEventAlert: dividendEventAlertSnapshot,
       lastAutoBackup: autoBackupSnapshot,
       lastDailyBriefing: dailyBriefingSnapshot,
+      lastTodayActionDigest: todayActionDigestSnapshot,
       quoteProviderStats,
       quoteFreshnessSummary,
+      todayActionsSummary,
       dataSchemaVersion: dataModelInfo.schemaVersion,
       dataModel: {
         schemaVersion: dataModelInfo.schemaVersion,
@@ -1479,6 +1543,9 @@ function listen(port, remainingAttempts = 20) {
       `Daily briefing ${config.dailyBriefingEnabled ? `at ${normalizeBriefingTime(config.dailyBriefingTime)}` : 'disabled'}`
     );
     console.log(
+      `Today action digest ${config.todayActionDigestEnabled !== false ? `every ${config.todayActionDigestCheckIntervalSeconds} seconds (market hours)` : 'disabled'}`
+    );
+    console.log(
       `KIS/Naver auto compare ${config.kisNaverAutoCompareEnabled ? `every ${config.kisNaverAutoCompareIntervalSeconds} seconds` : 'disabled'}`
     );
     console.log(
@@ -1524,6 +1591,16 @@ const dailyBriefingInterval = setInterval(() => {
     console.error('Daily briefing failed:', error);
   });
 }, config.dailyBriefingCheckIntervalSeconds * 1000);
+
+const todayActionDigestInterval = setInterval(() => {
+  runTodayActionDigestOnce().catch((error) => {
+    lastTodayActionDigest = {
+      checkedAt: new Date().toISOString(),
+      error: error.message
+    };
+    console.error('Today action digest failed:', error);
+  });
+}, config.todayActionDigestCheckIntervalSeconds * 1000);
 
 const telegramCommandInterval = setInterval(() => {
   runTelegramCommandPollOnce().catch((error) => {
@@ -1603,6 +1680,7 @@ async function shutdown() {
   clearInterval(dividendRefreshInterval);
   clearInterval(dividendEventAlertInterval);
   clearInterval(dailyBriefingInterval);
+  clearInterval(todayActionDigestInterval);
   clearInterval(telegramCommandInterval);
   if (kisNaverAutoCompareInterval) {
     clearInterval(kisNaverAutoCompareInterval);

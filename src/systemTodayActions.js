@@ -2,9 +2,11 @@ import { classifyQuoteFreshness, summarizeQuoteFreshness } from './quoteFreshnes
 import { summarizeKisNaverCompareOpenIssues } from './kisNaverCompareIssues.js';
 import { assessTelegramPollHealth } from './telegramPollHealth.js';
 import { formatTodayActionPriority } from './todayActionPriority.js';
+import {
+  TODAY_ACTION_LIMIT,
+  TODAY_ACTION_MAX_PER_STOCK
+} from './todayActionContract.js';
 
-const TODAY_ACTION_LIMIT = 5;
-const TODAY_ACTION_MAX_PER_STOCK = 2;
 const SOLD_POSITION = 'sold';
 
 export function getLatestObservationManualSummary(recent = []) {
@@ -142,11 +144,50 @@ export function buildStockTodayActions(stocks = [], options = {}) {
   return stocks.flatMap((stock) => buildStockTodayActionEntries(stock, options));
 }
 
-export function buildTelegramTodayActions(context = {}) {
+export function buildAllTodayActions(context = {}) {
   const stocks = Array.isArray(context.stocks) ? context.stocks : [];
   const systemActions = buildSystemTodayActions(context);
   const stockActions = buildStockTodayActions(stocks, context);
-  return limitTodayActions([...systemActions, ...stockActions]);
+
+  return [...systemActions, ...stockActions].filter(Boolean).sort(compareTodayActions);
+}
+
+export function buildTelegramTodayActions(context = {}) {
+  return limitTodayActions(buildAllTodayActions(context));
+}
+
+export function summarizeTodayActions(context = {}) {
+  const allActions = buildAllTodayActions(context);
+  const displayedActions = limitTodayActions(allActions);
+  const byType = {};
+  const counts = {
+    critical: 0,
+    warning: 0,
+    info: 0
+  };
+
+  for (const action of allActions) {
+    const priority = action.priority || 'info';
+
+    if (priority in counts) {
+      counts[priority] += 1;
+    } else {
+      counts.info += 1;
+    }
+
+    byType[action.type] = (byType[action.type] || 0) + 1;
+  }
+
+  return {
+    total: allActions.length,
+    displayed: displayedActions.length,
+    critical: counts.critical,
+    warning: counts.warning,
+    info: counts.info,
+    needsAttention: counts.critical + counts.warning,
+    byType,
+    top: displayedActions.map(toTodayActionSummaryItem)
+  };
 }
 
 export function formatTelegramTodayMessage(actions = []) {
@@ -342,4 +383,13 @@ function formatGeneratedAt(value) {
 
   const date = new Date(value);
   return Number.isFinite(date.getTime()) ? date.toLocaleString('ko-KR') : String(value);
+}
+
+function toTodayActionSummaryItem(action = {}) {
+  return {
+    type: action.type,
+    priority: action.priority,
+    title: action.title,
+    symbol: String(action.stock?.symbol || '').trim() || null
+  };
 }

@@ -72,11 +72,11 @@ OBS-001~015는 [관찰 리포트](local-webapp-observation-2026-05-21.md) 기준
 | ID | P | 내용 | WBS 후보 | 상태 |
 |---|---|---|---|---|
 | BL-28 | P3 | KIS/Naver 미해결 compare 이슈→오늘 할 일 | 19.4 | 완료 |
-| BL-29 | P2 | 장중 critical today action 텔레그램 digest·쿨다운 | 19.5 | 예정 |
-| BL-30 | P3 | observation-manual 오늘 할 일·히스토리 점프 | 19.6 | 예정 |
-| BL-31 | P3 | `/api/health` todayActionsSummary | 19.7 | 예정 |
-| BL-32 | P3 | todayAction 타입 observation 마커 | 19.8 | 예정 |
-| BL-33 | P3 | todayAction 중복·정렬 계약 테스트 | 19.8 | 예정 |
+| BL-29 | P2 | 장중 critical today action 텔레그램 digest·쿨다운 | 19.5 | 완료 |
+| BL-30 | P3 | observation-manual 오늘 할 일·히스토리 점프 | 19.6 | 완료 |
+| BL-31 | P3 | `/api/health` todayActionsSummary | 19.7 | 완료 |
+| BL-32 | P3 | todayAction 타입 observation 마커 | 19.8 | 완료 |
+| BL-33 | P3 | todayAction 중복·정렬 계약 테스트 | 19.8 | 완료 |
 
 재현되면 evidence(날짜·스크린샷·점검 파일명)를 적고, P1이면 @pm이 WBS 앞순위로 당깁니다.
 
@@ -88,12 +88,12 @@ OBS-001~015는 [관찰 리포트](local-webapp-observation-2026-05-21.md) 기준
 | ~~19.2~~ | AI 팀 WBS 19 스킬 | — | @backend | 완료 |
 | ~~19.3~~ | 실사용 백로그 triage 6차 | 이 표 | @pm / @docs | 완료 |
 | 19.4 | KIS/Naver 이슈→오늘 할 일 | BL-28 | @backend | 완료 |
-| 19.5 | 장중 critical today digest | BL-29 | @backend | 예정 |
-| 19.6 | observation-manual 점프 | BL-30 | @frontend | 예정 |
-| 19.7 | 헬스 todayActionsSummary | BL-31 | @backend | 예정 |
-| 19.8 | todayAction 타입·계약 | BL-32~33 | @qa / @cleanup | 예정 |
+| ~~19.5~~ | 장중 critical today digest | BL-29 | @backend | 완료 |
+| ~~19.6~~ | observation-manual 점프 | BL-30 | @frontend | 완료 |
+| 19.7 | 헬스 todayActionsSummary | BL-31 | @backend | 완료 |
+| 19.8 | todayAction 타입·계약 | BL-32~33 | @qa / @cleanup | 완료 |
 
-**다음 WBS:** WBS 19 — 19.5부터 구현.
+**다음 WBS:** WBS 19 완료 — 백로그 triage 후 신규 WBS.
 
 ## 보류·제외
 
@@ -149,5 +149,5 @@ OBS-001~015는 [관찰 리포트](local-webapp-observation-2026-05-21.md) 기준
 | 구분 | 결과 |
 |---|---|
 | OBS-001~015 | 재오픈 없음 |
-| 열린 BL | BL-28~33 (6건) — WBS 19.4~19.8에 1:1 매핑 |
-| 다음 구현 | 19.5 장중 critical today digest |
+| 열린 BL | 없음 — BL-28~33 모두 완료 |
+| 다음 구현 | 백로그 triage 후 신규 WBS |

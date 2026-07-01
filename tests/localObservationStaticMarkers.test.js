@@ -50,5 +50,7 @@ test('OBSERVATION_STATIC_MARKERS match public and guidance source files', async 
 test('OBSERVATION_STATIC_MARKERS cover stale-quote and today action wiring', () => {
   assert.ok(OBSERVATION_STATIC_MARKERS.positionStatusFilters.includes('data-watch-filter="stale-quote"'));
   assert.ok(OBSERVATION_STATIC_MARKERS.todayActionControls.includes('data-today-action-scroll-target'));
+  assert.ok(OBSERVATION_STATIC_MARKERS.todayActionControls.includes('data-today-action-type'));
+  assert.ok(OBSERVATION_STATIC_MARKERS.todayActionTypes.includes('kis-naver-compare-open'));
   assert.ok(OBSERVATION_STATIC_MARKERS.userHome.includes('todayActionPanel'));
 });

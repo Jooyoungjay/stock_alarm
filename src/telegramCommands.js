@@ -21,8 +21,7 @@ import {
   sendTelegramMessage
 } from './telegram.js';
 import { assessTelegramPollHealth } from './telegramPollHealth.js';
-import { readEnrichedLastKisNaverAutoCompareSnapshot } from './kisNaverAutoCompare.js';
-import { readLocalObservationHistoryReport } from './localObservationCheck.js';
+import { buildTodayActionsContext } from './todayActionDigest.js';
 import {
   buildTelegramTodayActions,
   formatTelegramTodayMessage
@@ -267,31 +266,8 @@ async function formatTodayFromCommand(store, config, options = {}) {
 }
 
 async function buildTelegramTodaySummary(store, config, options = {}) {
-  const stocks = await store.listStocks();
-  const rootDir = config.rootDir || options.rootDir || process.cwd();
-  const dataDir = store?.dataDir || config.dataDir || path.join(rootDir, 'data');
-  const observationHistory = await readLocalObservationHistoryReport({
-    rootDir,
-    dataDir,
-    env: options.env
-  });
-  const kisNaverAutoCompare = await readEnrichedLastKisNaverAutoCompareSnapshot(store);
-  const actions = buildTelegramTodayActions({
-    stocks,
-    observationHistoryRecent: observationHistory.recent,
-    kisNaverAutoCompare,
-    telegramConfigured: isTelegramConfigured(config),
-    telegramCommandPollSeconds: config.telegramCommandPollSeconds,
-    lastTelegramCommandPoll: options.lastTelegramCommandPoll ?? null,
-    telegramPollHealth: assessTelegramPollHealth({
-      telegramConfigured: isTelegramConfigured(config),
-      telegramCommandPollSeconds: config.telegramCommandPollSeconds,
-      lastTelegramCommandPoll: options.lastTelegramCommandPoll ?? null,
-      now: options.now
-    }),
-    now: options.now
-  });
-
+  const context = await buildTodayActionsContext(store, config, options);
+  const actions = buildTelegramTodayActions(context);
   return formatTelegramTodayMessage(actions);
 }
 

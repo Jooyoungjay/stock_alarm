@@ -20,12 +20,12 @@ description: Executes Stock Alarm WBS 19 market-hours today-action and alert int
 | 19.2 | AI 팀 WBS 19 스킬 | @backend | `.cursor/skills/wbs-19-evolution/` |
 | 19.3 | 실사용 백로그 triage 6차 | @pm / @docs | `docs/personal-backlog.md` |
 | 19.4 | KIS/Naver 이슈→오늘 할 일 | @backend | `src/systemTodayActions.js`, `src/kisNaverCompareIssues.js` |
-| 19.5 | 장중 critical today digest | @backend | `src/alertEngine.js`, `src/systemTodayActions.js` |
+| 19.5 | 장중 critical today digest | @backend | `src/todayActionDigest.js`, `src/server.js` |
 | 19.6 | observation-manual 점프 | @frontend | `public/app.js` |
 | 19.7 | 헬스 todayActionsSummary | @backend | `src/server.js`, `docs/personal-telegram-operations.md` |
 | 19.8 | todayAction 타입·계약 | @qa / @cleanup | `src/localObservationStaticMarkers.js`, `tests/` |
 
-Status: trust `docs/development-roadmap.md` §19.
+Status: WBS 19 complete — trust `docs/development-roadmap.md` §19.
 
 ## Session workflow
 

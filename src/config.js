@@ -146,6 +146,17 @@ export const config = {
     { min: 0.1, max: 100 }
   ),
   dailyBriefingTopLimit: toNumber(process.env.DAILY_BRIEFING_TOP_LIMIT, 5, { min: 1, max: 20 }),
+  todayActionDigestEnabled: toBoolean(process.env.TODAY_ACTION_DIGEST_ENABLED, true),
+  todayActionDigestCooldownMinutes: toNumber(
+    process.env.TODAY_ACTION_DIGEST_COOLDOWN_MINUTES,
+    60,
+    { min: 5, max: 1440 }
+  ),
+  todayActionDigestCheckIntervalSeconds: toNumber(
+    process.env.TODAY_ACTION_DIGEST_CHECK_INTERVAL_SECONDS,
+    300,
+    { min: 60, max: 3600 }
+  ),
   dividendEventAlertEnabled: toBoolean(process.env.DIVIDEND_EVENT_ALERT_ENABLED, true),
   dividendEventAlertCheckIntervalSeconds: toNumber(
     process.env.DIVIDEND_EVENT_ALERT_CHECK_INTERVAL_SECONDS,

@@ -2,10 +2,12 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs/promises';
 import {
+  buildAllTodayActions,
   buildSystemTodayActions,
   buildTelegramTodayActions,
   formatTelegramTodayMessage,
-  getLatestObservationManualSummary
+  getLatestObservationManualSummary,
+  summarizeTodayActions
 } from '../src/systemTodayActions.js';
 
 test('buildSystemTodayActions includes poll health and quote freshness summaries', () => {
@@ -106,4 +108,69 @@ test('buildSystemTodayActions includes open KIS/Naver compare issues', () => {
 test('formatTelegramTodayMessage reports empty state', () => {
   const message = formatTelegramTodayMessage([]);
   assert.match(message, /긴급 확인 항목이 없습니다/);
+});
+
+test('summarizeTodayActions reports priority counts and top items', () => {
+  const context = {
+    stocks: [
+      {
+        symbol: '005930',
+        displayName: '삼성전자',
+        active: true,
+        alertState: 'triggered',
+        lastCheckedAt: '2026-06-24T11:55:00.000Z',
+        lastPrice: 70000
+      },
+      {
+        symbol: '000660',
+        active: true,
+        lastCheckStatus: 'error',
+        lastError: 'timeout',
+        lastCheckedAt: '2026-06-24T11:55:00.000Z'
+      }
+    ],
+    observationHistoryRecent: [
+      {
+        generatedAt: '2026-06-24T09:00:00.000Z',
+        summary: { failed: 1, manual: 0 }
+      }
+    ],
+    telegramPollHealth: { status: 'ok', level: 'ok', label: '정상', detail: 'ok' },
+    now: Date.parse('2026-06-24T12:00:00.000Z')
+  };
+
+  const summary = summarizeTodayActions(context);
+
+  assert.ok(summary.total >= 3);
+  assert.ok(summary.critical >= 2);
+  assert.ok(summary.needsAttention >= summary.critical);
+  assert.equal(summary.displayed, buildTelegramTodayActions(context).length);
+  assert.equal(summary.top[0]?.type, 'threshold-alert');
+  assert.equal(summary.top[0]?.symbol, '005930');
+  assert.ok(summary.byType['threshold-alert'] >= 1);
+  assert.ok(summary.byType['observation-failed'] >= 1);
+});
+
+test('buildAllTodayActions keeps more than telegram display limit', () => {
+  const stocks = Array.from({ length: 8 }, (_, index) => ({
+    symbol: `00${index}00`,
+    active: true,
+    alertState: 'triggered',
+    lastCheckedAt: '2026-06-24T11:55:00.000Z',
+    lastPrice: 1000 + index
+  }));
+
+  const allActions = buildAllTodayActions({
+    stocks,
+    telegramPollHealth: { status: 'ok', level: 'ok', label: '정상', detail: 'ok' },
+    now: Date.parse('2026-06-24T12:00:00.000Z')
+  });
+  const displayed = buildTelegramTodayActions({
+    stocks,
+    telegramPollHealth: { status: 'ok', level: 'ok', label: '정상', detail: 'ok' },
+    now: Date.parse('2026-06-24T12:00:00.000Z')
+  });
+
+  assert.ok(allActions.length > displayed.length);
+  assert.equal(displayed.length, 5);
 });
