@@ -455,6 +455,32 @@ test('WBS 19 todayAction contract markers and limits', async () => {
   assert.match(contract, /kis-naver-compare-open/);
 });
 
+test('WBS 20 docs align README AGENTS roadmap after 20.1', async () => {
+  const readme = await fs.readFile(new URL('../README.md', import.meta.url), 'utf8');
+  const agents = await fs.readFile(new URL('../AGENTS.md', import.meta.url), 'utf8');
+  const roadmap = await fs.readFile(
+    new URL('../docs/development-roadmap.md', import.meta.url),
+    'utf8'
+  );
+  const backlog = await fs.readFile(
+    new URL('../docs/personal-backlog.md', import.meta.url),
+    'utf8'
+  );
+  const skill = await fs.readFile(
+    new URL('../.cursor/skills/wbs-20-evolution/SKILL.md', import.meta.url),
+    'utf8'
+  );
+
+  assert.match(readme, /20\.1~20\.3 완료/);
+  assert.match(readme, /개인 운영 회귀·문서 정합 3차/);
+  assert.match(agents, /WBS 20/);
+  assert.match(agents, /wbs-20-evolution/);
+  assert.match(roadmap, /20\.3.*완료/);
+  assert.match(roadmap, /BL-34/);
+  assert.match(backlog, /BL-34.*예정/);
+  assert.match(skill, /wbs-20-evolution/);
+});
+
 test('WBS 18 docs align README AGENTS roadmap after 18.1', async () => {
   const readme = await fs.readFile(new URL('../README.md', import.meta.url), 'utf8');
   const agents = await fs.readFile(new URL('../AGENTS.md', import.meta.url), 'utf8');

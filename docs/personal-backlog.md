@@ -1,14 +1,15 @@
 # 개인 실사용 백로그
 
-날짜 기준: 2026-06-24 (WBS 18.8 완료 · WBS 19.1~19.3 착수)
+날짜 기준: 2026-06-24 (WBS 19.8 완료 · WBS 20.1~20.3 착수)
 
 이 문서는 **개인 PC 로컬 운영** 중 발견한 불편·결함·개선 후보를 한곳에서 triage합니다. 단일 진실 공급원은 작업 승격 시 `docs/development-roadmap.md`(WBS)이고, 이 문서는 **입력 큐**입니다.
 
 관련 문서:
 
 - [로컬 웹앱 실사용 관찰 리포트](local-webapp-observation-2026-05-21.md) — OBS-001~015 기록
-- [개발 WBS 및 로드맵](development-roadmap.md) — §19 장중 오늘 할 일·알림 연동 심화
-- [AI 팀 WBS 19 스킬](../.cursor/skills/wbs-19-evolution/SKILL.md) — 19.2 완료 후 사용
+- [개발 WBS 및 로드맵](development-roadmap.md) — §20 개인 운영 회귀·문서 정합 3차
+- [AI 팀 WBS 20 스킬](../.cursor/skills/wbs-20-evolution/SKILL.md) — 20.2 완료 후 사용
+- [AI 팀 WBS 19 스킬](../.cursor/skills/wbs-19-evolution/SKILL.md) — WBS 19 완료 후 참고
 - [AI 팀 WBS 17 스킬](../.cursor/skills/wbs-17-evolution/SKILL.md) — WBS 17 완료 후 참고
 - [KIS/Naver 자동 비교 알림 운영](personal-kis-naver-alert-operations.md) — KA-01~04
 - [JSON 레거시 필드 정리 계획](json-legacy-fields-deprecation.md) — LF-01~04
@@ -66,11 +67,6 @@ OBS-001~015는 [관찰 리포트](local-webapp-observation-2026-05-21.md) 기준
 | BL-25 | P3 | 시각 회귀 신선도 배너 | 18.6 | 완료 |
 | BL-26 | P3 | 주간 루틴 visual·live 게이트 | 18.7 | 완료 |
 | BL-27 | P3 | todayAction 우선순위 공유 모듈 | 18.8 | 완료 |
-
-## 열린 백로그 (WBS 19)
-
-| ID | P | 내용 | WBS 후보 | 상태 |
-|---|---|---|---|---|
 | BL-28 | P3 | KIS/Naver 미해결 compare 이슈→오늘 할 일 | 19.4 | 완료 |
 | BL-29 | P2 | 장중 critical today action 텔레그램 digest·쿨다운 | 19.5 | 완료 |
 | BL-30 | P3 | observation-manual 오늘 할 일·히스토리 점프 | 19.6 | 완료 |
@@ -78,22 +74,34 @@ OBS-001~015는 [관찰 리포트](local-webapp-observation-2026-05-21.md) 기준
 | BL-32 | P3 | todayAction 타입 observation 마커 | 19.8 | 완료 |
 | BL-33 | P3 | todayAction 중복·정렬 계약 테스트 | 19.8 | 완료 |
 
+## 열린 백로그 (WBS 20)
+
+| ID | P | 내용 | WBS 후보 | 상태 |
+|---|---|---|---|---|
+| BL-34 | P3 | npm test·회귀 시나리오 321개 동기화 | 20.4 | 예정 |
+| BL-35 | P3 | todayAction digest 주간 루틴 W-18 | 20.5 | 예정 |
+| BL-36 | P3 | scripts-and-env `TODAY_ACTION_DIGEST_*` 분류 | 20.6 | 예정 |
+| BL-37 | P3 | 텔레그램·헬스·웹 todayAction parity 테스트 | 20.7 | 예정 |
+| BL-38 | P3 | 시각 회귀 todayAction·digest 마커 확장 | 20.8 | 예정 |
+
 재현되면 evidence(날짜·스크린샷·점검 파일명)를 적고, P1이면 @pm이 WBS 앞순위로 당깁니다.
 
-## WBS 19 ID ↔ 백로그 (19.3 확정)
+## WBS 20 ID ↔ 백로그 (20.3 확정)
 
 | WBS | 작업 | 백로그 | 역할 | 우선순위 |
 |---|---|---|---|---|
-| ~~19.1~~ | WBS·README·AGENTS 정합성 | — | @docs | 완료 |
-| ~~19.2~~ | AI 팀 WBS 19 스킬 | — | @backend | 완료 |
-| ~~19.3~~ | 실사용 백로그 triage 6차 | 이 표 | @pm / @docs | 완료 |
-| 19.4 | KIS/Naver 이슈→오늘 할 일 | BL-28 | @backend | 완료 |
-| ~~19.5~~ | 장중 critical today digest | BL-29 | @backend | 완료 |
-| ~~19.6~~ | observation-manual 점프 | BL-30 | @frontend | 완료 |
-| 19.7 | 헬스 todayActionsSummary | BL-31 | @backend | 완료 |
-| 19.8 | todayAction 타입·계약 | BL-32~33 | @qa / @cleanup | 완료 |
+| 20.1 | WBS·README·AGENTS 정합성 | — | @docs | 완료 |
+| 20.2 | AI 팀 WBS 20 스킬 | — | @backend | 완료 |
+| 20.3 | 실사용 백로그 triage 7차 | 이 표 | @pm / @docs | 완료 |
+| 20.4 | 회귀·테스트 수 문서 정합 | BL-34 | @docs | 예정 |
+| 20.5 | digest 주간 루틴 W-18 | BL-35 | @docs | 예정 |
+| 20.6 | env 분류 digest 반영 | BL-36 | @docs | 예정 |
+| 20.7 | todayAction parity 테스트 | BL-37 | @qa | 예정 |
+| 20.8 | 시각 회귀 todayAction 확장 | BL-38 | @qa | 예정 |
 
-**다음 WBS:** WBS 19 완료 — 백로그 triage 후 신규 WBS.
+**다음 WBS:** WBS 20 — 20.4부터 구현 (20.1~20.3 기획 후).
+
+## WBS 19 ID ↔ 백로그 (19.3 확정, 보관)
 
 ## 보류·제외
 
@@ -108,7 +116,7 @@ OBS-001~015는 [관찰 리포트](local-webapp-observation-2026-05-21.md) 기준
 
 1. 이 문서에 OBS-* 또는 BL-* 행 추가 (P, 내용, 재현, WBS 후보)
 2. 개발이 필요하면 @pm이 `development-roadmap.md`에 WBS 행 추가
-3. 구현 세션은 [wbs-19-evolution 스킬](../.cursor/skills/wbs-19-evolution/SKILL.md) — **ID 하나씩**
+3. 구현 세션은 [wbs-20-evolution 스킬](../.cursor/skills/wbs-20-evolution/SKILL.md) — **ID 하나씩**
 4. 해결 시 상태를 `완료`로 바꾸고 관찰 리포트 또는 점검 히스토리에 evidence 한 줄 링크
 
 ## 15.3 triage 요약 (보관)
@@ -144,10 +152,18 @@ OBS-001~015는 [관찰 리포트](local-webapp-observation-2026-05-21.md) 기준
 | WBS 18 BL-23~27 | 모두 완료 |
 | 다음 WBS | WBS 19 — BL-28~33 (6건) |
 
-## 19.3 triage 요약
+## 20.3 triage 요약
 
 | 구분 | 결과 |
 |---|---|
 | OBS-001~015 | 재오픈 없음 |
-| 열린 BL | 없음 — BL-28~33 모두 완료 |
-| 다음 구현 | 백로그 triage 후 신규 WBS |
+| 열린 BL | BL-34~38 (5건) — WBS 20.4~20.8에 1:1 매핑 |
+| 다음 구현 | 20.4 회귀·테스트 수 문서 정합 |
+
+## 19.3 triage 요약 (보관)
+
+| 구분 | 결과 |
+|---|---|
+| OBS-001~015 | 재오픈 없음 |
+| WBS 19 BL-28~33 | 모두 완료 |
+| 다음 WBS | WBS 20 — BL-34~38 (5건) |
