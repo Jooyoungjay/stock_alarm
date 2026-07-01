@@ -25,7 +25,7 @@ description: Executes Stock Alarm WBS 20 personal operations regression and docu
 | 20.7 | todayAction parity 테스트 | @qa | `tests/`, `src/systemTodayActions.js` |
 | 20.8 | 시각 회귀 todayAction 확장 | @qa | `src/visualRegressionCheck.js` |
 
-Status: trust `docs/development-roadmap.md` §20.
+Status: WBS 20 complete — **운영 유지 모드**. Trust `docs/development-roadmap.md` §운영 유지 모드.
 
 ## Session workflow
 

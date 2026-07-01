@@ -22,8 +22,9 @@ test('visual regression scenarios cover user and admin desktop and mobile screen
   );
   assert.ok(scenarios.find((scenario) => scenario.id === 'user-desktop').requiredSelectors.includes('#stockList'));
   assert.ok(scenarios.find((scenario) => scenario.id === 'user-desktop').requiredSelectors.includes('#todayActionPanel'));
-  assert.ok(scenarios.find((scenario) => scenario.id === 'admin-desktop').requiredSelectors.includes('#roadmapPanel'));
-  assert.ok(scenarios.find((scenario) => scenario.id === 'admin-desktop').requiredSelectors.includes('#observationIssuesPanel'));
+  assert.ok(scenarios.find((scenario) => scenario.id === 'user-desktop').requiredSelectors.includes('.today-action-box'));
+  assert.ok(scenarios.find((scenario) => scenario.id === 'admin-desktop').requiredSelectors.includes('#observationHistoryPanel'));
+  assert.ok(scenarios.find((scenario) => scenario.id === 'admin-desktop').requiredSelectors.includes('#kisNaverCompareHistoryPanel'));
 });
 
 test('runVisualRegressionCheck passes with a captured scenario set', async () => {

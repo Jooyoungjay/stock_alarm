@@ -98,7 +98,7 @@ test('parseRoadmapMarkdown extracts roadmap metadata and next task', async () =>
   assert.ok(roadmap.completedScope.some((item) => item.category === '개인 로컬 운영 전환 WBS'));
   assert.ok(roadmap.sections.length >= 20);
   assert.equal(roadmap.recommendedOrder[0], '~~개인 로컬 운영 전환 1차 정리~~ (13.1 완료)');
-  assert.equal(roadmap.nextTask.title, '개인 운영 회귀·문서 정합 3차');
+  assert.equal(roadmap.nextTask.title, '운영 유지 모드');
   assert.ok(roadmap.statusLegend.some((item) => item.status === 'pending' && item.label === '예정'));
   assert.ok(roadmap.summary.paused > 0);
   assert.ok(roadmap.summary.total > roadmap.summary.completed);

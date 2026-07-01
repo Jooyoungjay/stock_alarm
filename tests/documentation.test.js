@@ -415,7 +415,7 @@ test('WBS 14 docs align README AGENTS roadmap and evolution skill', async () => 
   assert.match(roadmap, /14\.8.*완료/);
   assert.match(roadmap, /15\.8.*완료/);
   assert.match(roadmap, /개인 운영 안정화와 레거시 정리 2차/);
-  assert.match(regression, /298개 전부 통과/);
+  assert.match(regression, /326개 전부 통과/);
 });
 
 test('WBS 19 docs align README AGENTS roadmap after 19.1', async () => {
@@ -471,14 +471,35 @@ test('WBS 20 docs align README AGENTS roadmap after 20.1', async () => {
     'utf8'
   );
 
-  assert.match(readme, /20\.1~20\.3 완료/);
-  assert.match(readme, /개인 운영 회귀·문서 정합 3차/);
-  assert.match(agents, /WBS 20/);
+  assert.match(readme, /20\.1~20\.8 완료/);
+  assert.match(readme, /운영 유지 모드/);
+  assert.match(agents, /운영 유지 모드/);
   assert.match(agents, /wbs-20-evolution/);
-  assert.match(roadmap, /20\.3.*완료/);
-  assert.match(roadmap, /BL-34/);
-  assert.match(backlog, /BL-34.*예정/);
-  assert.match(skill, /wbs-20-evolution/);
+  assert.match(roadmap, /20\.8.*완료/);
+  assert.match(roadmap, /운영 유지 모드/);
+  assert.match(backlog, /BL-38.*완료/);
+  assert.match(skill, /운영 유지 모드/);
+});
+
+test('WBS 20 parity and visual regression contracts', async () => {
+  const parity = await fs.readFile(
+    new URL('../tests/todayActionParity.test.js', import.meta.url),
+    'utf8'
+  );
+  const visual = await fs.readFile(
+    new URL('../src/visualRegressionCheck.js', import.meta.url),
+    'utf8'
+  );
+  const weekly = await fs.readFile(
+    new URL('../docs/personal-weekly-routine.md', import.meta.url),
+    'utf8'
+  );
+
+  assert.match(parity, /summarizeTodayActions matches buildTelegramTodayActions/);
+  assert.match(visual, /observationHistoryPanel/);
+  assert.match(visual, /today-action-box/);
+  assert.match(weekly, /W-18/);
+  assert.match(weekly, /lastTodayActionDigest/);
 });
 
 test('WBS 18 docs align README AGENTS roadmap after 18.1', async () => {
@@ -499,7 +520,7 @@ test('WBS 18 docs align README AGENTS roadmap after 18.1', async () => {
   assert.match(agents, /wbs-18-evolution/);
   assert.match(roadmap, /18\.8.*완료/);
   assert.match(roadmap, /WBS 18.*완료/);
-  assert.match(regression, /298개 전부 통과/);
+  assert.match(regression, /326개 전부 통과/);
 });
 
 test('WBS 17 docs align README AGENTS roadmap after 17.1', async () => {
@@ -526,7 +547,7 @@ test('WBS 17 docs align README AGENTS roadmap after 17.1', async () => {
   assert.match(roadmap, /17\.8.*완료/);
   assert.match(roadmap, /WBS 17.*완료/);
   assert.match(roadmap, /장중·원격 운영 신뢰도 심화/);
-  assert.match(regression, /298개 전부 통과/);
+  assert.match(regression, /326개 전부 통과/);
   assert.match(telegram, /\/today/);
 });
 
@@ -550,7 +571,7 @@ test('WBS 16 docs align README AGENTS roadmap after 16.1', async () => {
   assert.match(roadmap, /16\.9.*완료/);
   assert.match(roadmap, /WBS 16.*완료/);
   assert.match(roadmap, /개인 운영 편의성 개선/);
-  assert.match(regression, /298개 전부 통과/);
+  assert.match(regression, /326개 전부 통과/);
 });
 
 test('development roadmap defines WBS 17 trust deepening backlog', async () => {
@@ -635,7 +656,7 @@ test('personal regression scenario guide documents local telegram-focused covera
 
   assert.match(markdown, /개인용 회귀 테스트 시나리오/);
   assert.match(markdown, /WBS 13\.10/);
-  assert.match(markdown, /298개 전부 통과/);
+  assert.match(markdown, /326개 전부 통과/);
   assert.match(markdown, /npm test/);
   assert.match(markdown, /서버 실행\/종료 테스트/);
   assert.match(markdown, /사용자 웹앱 테스트/);

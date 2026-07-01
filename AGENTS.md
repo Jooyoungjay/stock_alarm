@@ -2,7 +2,7 @@
 
 이 저장소는 **개인 PC 로컬 실행 + 텔레그램 알림** MVP입니다. AI 에이전트는 아래 역할 중 하나로 동작합니다. 작업 시작 전 역할을 확인하고, **단일 진실 공급원**은 `docs/development-roadmap.md`(WBS)입니다.
 
-날짜 기준: 2026-06-24 — WBS 19 완료. WBS 20 진행 중.
+날짜 기준: 2026-06-24 — WBS 20 완료. **운영 유지 모드**.
 
 ## 역할 (@멘션)
 
@@ -15,7 +15,7 @@
 | **@cleanup** | WBS 13번(로컬 운영 전환·코드 정리) | WBS에 없는 신규 기능 |
 | **@docs** | `README.md`, `docs/` | 동작 변경 없는 문서만; 코드 변경 시 해당 역할에 위임 |
 
-역할을 지정하지 않으면 **@backend** 기본. WBS 20 작업은 **세션당 ID 하나**, 문서·범위는 **@pm** / 구현은 역할별 분담.
+역할을 지정하지 않으면 **@backend** 기본. 운영 유지 모드에서는 **한 번에 한 작업**, 문서·범위는 **@pm** / 구현은 역할별 분담.
 
 ## 파일 소유권
 
@@ -49,22 +49,30 @@ docs/archive/          → 제거된 Postgres·모바일 설계 보관
 
 ## 현재 우선순위
 
-WBS 13~**19**은 완료했습니다. **WBS 20 개인 운영 회귀·문서 정합 3차** — 20.1~20.3 완료, **20.4**부터 구현 (`docs/development-roadmap.md` §20).
+WBS 13~**20** 완료. **운영 유지 모드** — 신규 작업은 `docs/personal-backlog.md` triage 후 필요할 때만 진행 (`docs/development-roadmap.md` §운영 유지 모드).
 
-다음 구현은 `docs/personal-backlog.md` BL-34~38. 세션 규칙: **WBS ID 1개**, 완료 시 `npm test` 전부 통과.
+다음 구현은 열린 BL 없음. 세션 규칙: **한 번에 한 작업**, 완료 시 `npm test` **326개** 통과.
 
-### WBS 20 (착수)
+### WBS 20 (완료)
 
 | ID | 작업 | 역할 |
 |---|---|---|
 | ~~20.1~~ | ~~WBS·README·AGENTS 정합성~~ | @docs |
 | ~~20.2~~ | ~~AI 팀 WBS 20 스킬~~ | @backend |
 | ~~20.3~~ | ~~실사용 백로그 triage 7차~~ | @pm / @docs |
-| 20.4 | 회귀·테스트 수 문서 정합 (BL-34) | @docs |
-| 20.5 | digest 주간 루틴 W-18 (BL-35) | @docs |
-| 20.6 | env 분류 digest 반영 (BL-36) | @docs |
-| 20.7 | todayAction parity 테스트 (BL-37) | @qa |
-| 20.8 | 시각 회귀 todayAction 확장 (BL-38) | @qa |
+| ~~20.4~~ | ~~회귀·테스트 수 문서 정합 (BL-34)~~ | @docs |
+| ~~20.5~~ | ~~digest 주간 루틴 W-18 (BL-35)~~ | @docs |
+| ~~20.6~~ | ~~env 분류 digest 반영 (BL-36)~~ | @docs |
+| ~~20.7~~ | ~~todayAction parity 테스트 (BL-37)~~ | @qa |
+| ~~20.8~~ | ~~시각 회귀 todayAction 확장 (BL-38)~~ | @qa |
+
+### 운영 유지 모드
+
+| 항목 | 내용 |
+|---|---|
+| 신규 WBS | 사용자 요청 시에만 @pm이 로드맵 추가 |
+| 일상 점검 | [주간 루틴](docs/personal-weekly-routine.md) W-01~W-18 |
+| 입력 큐 | [personal-backlog.md](docs/personal-backlog.md) BL-* / OBS-* |
 
 ### WBS 19 (완료)
 
@@ -145,7 +153,7 @@ WBS 15 전체 완료 — `.cursor/skills/wbs-15-evolution/SKILL.md` 참고용.
 
 | 스킬 | 경로 | 사용 시점 |
 |---|---|---|
-| WBS 20 회귀·문서 정합 | `.cursor/skills/wbs-20-evolution/` | WBS 20 진행 중 — 20.4부터 |
+| WBS 20 회귀·문서 정합 | `.cursor/skills/wbs-20-evolution/` | WBS 20 완료 — 참고용 |
 | WBS 19 today·알림 연동 | `.cursor/skills/wbs-19-evolution/` | WBS 19 완료 — 참고용 |
 | WBS 18 피드백 루프 | `.cursor/skills/wbs-18-evolution/` | WBS 18 완료 — 참고용 |
 | WBS 17 신뢰도 심화 | `.cursor/skills/wbs-17-evolution/` | WBS 17 완료 — 참고용 |
@@ -164,7 +172,7 @@ WBS 15 전체 완료 — `.cursor/skills/wbs-15-evolution/SKILL.md` 참고용.
 
 ```powershell
 start-local.bat              # 서버 시작
-npm test                     # 298 tests
+npm test                     # 325 tests
 npm run check:observation      # 로컬 실사용 점검
 ```
 

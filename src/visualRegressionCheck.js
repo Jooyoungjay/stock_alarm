@@ -21,6 +21,7 @@ const visualScenarios = Object.freeze([
       '#portfolioSummaryBar',
       '#quoteFreshnessBanner',
       '#todayActionPanel',
+      '.today-action-box',
       '#stockList',
       '#alertList'
     ])
@@ -37,6 +38,7 @@ const visualScenarios = Object.freeze([
       '#portfolioSummaryBar',
       '#quoteFreshnessBanner',
       '#todayActionPanel',
+      '.today-action-box',
       '#stockList',
       '.mobile-nav'
     ])
@@ -53,6 +55,8 @@ const visualScenarios = Object.freeze([
       '#quoteDiagnosticsPanel',
       '#roadmapPanel',
       '#observationIssuesPanel',
+      '#observationHistoryPanel',
+      '#kisNaverCompareHistoryPanel',
       '#backupList'
     ])
   }),
@@ -67,6 +71,7 @@ const visualScenarios = Object.freeze([
       '#serverStatusPanel',
       '#roadmapPanel',
       '#observationIssuesPanel',
+      '#observationHistoryPanel',
       '#backupList'
     ])
   })
